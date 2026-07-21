@@ -38,6 +38,8 @@ Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Mana
 
 ## Why
 
+Oversharing was always a risk, but Microsoft 365 Copilot and other AI agents raise the stakes: they search and summarize across everything a signed-in user can already reach, including stale anonymous links, forgotten guest grants, and org-wide links nobody remembers creating. A sharing grant that used to require someone to stumble across a URL now surfaces through a chat prompt in seconds. Running this tool before turning on Copilot, or any AI agent with tenant-wide reach, is a way to find and close that exposure first.
+
 Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Site Collection Admin on every single OneDrive first - painful at scale, and it leaves a wide trail of temporary admin grants behind. This tool adds an app-only certificate mode that removes the per-OneDrive admin requirement entirely, with one shared scan engine covering both site-level sharing links and OneDrive access review, each with its own togglable rule set per tab.
 
 | Category | Pulled | Left alone |
