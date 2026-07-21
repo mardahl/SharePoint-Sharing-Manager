@@ -406,7 +406,7 @@ function Show-HelpModal {
     $t = $script:T
     $lines = @(
         @($t.ModalTitle, 'Navigation'),
-        @($t.Row, '  Tab / Shift+Tab      switch tab            1-5  jump to tab'),
+        @($t.Row, '  Tab / Shift+Tab      switch tab            1-5  jump to tab (not on Tenant tab)'),
         @($t.Row, '  Up / Down            move cursor           PgUp / PgDn  page'),
         @($t.Row, '  Home / End           jump to first / last entry'),
         @($t.CtxHi, '  Q  or  Ctrl+C        quit the application'),
@@ -428,7 +428,7 @@ function Show-HelpModal {
         @($t.Row, ''),
         @($t.ModalTitle, 'Tenant tab'),
         @($t.Row, '  Enter / R            load / refresh sharing posture'),
-        @($t.Row, '  1-5                  change a tenant sharing setting'),
+        @($t.Row, '  1-9                  change a tenant sharing setting (use Tab to leave this tab)'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Setup tab'),
         @($t.Row, '  D                    register delegated app         C  register cert app'),

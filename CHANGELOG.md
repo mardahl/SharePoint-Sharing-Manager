@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.0.2] - 2026-07-21
+
+- Fix: OneDrive/site scans could abort with `The property 'Email' cannot be
+  found on this object` - a sharing-link grantee whose identity only
+  resolved to a `SiteUser` (no linked Entra ID `User`, e.g. an unredeemed
+  guest invite) tripped `Set-StrictMode`'s null-property check in
+  `Get-GuestGrantees`. Both `SiteUser` and `User` are now null-guarded
+  before use.
+- Fix: pressing `1`-`5` on the Tenant tab jumped tabs instead of changing a
+  tenant sharing setting - the tab-switch digit shortcut and the Tenant
+  setting picker shared the same `1`-`5` key range, and the global tab
+  switcher (which runs first) always won, making `Invoke-TenantSetting`
+  unreachable from the keyboard. The Tenant tab now owns its digit range;
+  use `Tab`/`Shift+Tab` to switch away from it.
+- Added: 4 tenant hardening settings for org-wide sharing claims and EEEU
+  (Everyone Except External Users) grants in the People Picker -
+  `ShowEveryoneClaim`, `ShowAllUsersClaim`, `ShowEveryoneExceptExternalUsersClaim`,
+  `AllowEveryoneExceptExternalUsersClaimInPrivateSite` - settings `6`-`9` on
+  the Tenant tab.
+
 ## [1.0.1] - 2026-07-21
 
 Fixes app-only certificate registration, which was broken on PnP.PowerShell

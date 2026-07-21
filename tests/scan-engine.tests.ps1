@@ -25,6 +25,14 @@ Invoke-SsmTest 'Guest grantees extracted from users-link' {
     Assert-Equal 1 $g.Count
     Assert-Equal 'g@x.com' $g[0]
 }
+Invoke-SsmTest 'Guest grantee with unresolved User identity (SiteUser only) does not throw' {
+    $link = [pscustomobject]@{ GrantedToIdentitiesV2 = @(
+        [pscustomobject]@{ SiteUser = [pscustomobject]@{ LoginName = 'i:0#.f|membership|g_x.com#ext#@t.onmicrosoft.com' }; User = $null }
+    )}
+    $g = @(Get-GuestGrantees -Link $link)
+    Assert-Equal 1 $g.Count
+    Assert-Equal 'i:0#.f|membership|g_x.com#ext#@t.onmicrosoft.com' $g[0]
+}
 Invoke-SsmTest 'Link categories: anonymous / organization / internal users-link' {
     $r = Get-LinkCategory -Scope 'anonymous' -Link ([pscustomobject]@{})
     Assert-Equal 'AnonymousLink' $r.Key

@@ -7,7 +7,14 @@ $script:TenantSettings = @(
     @{ N=2; Prop='OneDriveSharingCapability';         Values=@('Disabled','ExistingExternalUserSharingOnly','ExternalUserSharingOnly','ExternalUserAndGuestSharing') },
     @{ N=3; Prop='DefaultSharingLinkType';            Values=@('None','Direct','Internal','AnonymousAccess') },
     @{ N=4; Prop='DefaultLinkPermission';             Values=@('None','View','Edit') },
-    @{ N=5; Prop='RequireAnonymousLinksExpireInDays'; Values=@() }   # numeric, free input
+    @{ N=5; Prop='RequireAnonymousLinksExpireInDays'; Values=@() },  # numeric, free input
+    # Org-wide sharing claims + EEEU (Everyone Except External Users) grants in the People
+    # Picker - hiding/disabling these stops users from re-creating the org-wide/EEEU grants
+    # this tool's scan engine finds and revokes (see 35-scan-engine.ps1).
+    @{ N=6; Prop='ShowEveryoneClaim';                              Values=@('True','False') },
+    @{ N=7; Prop='ShowAllUsersClaim';                              Values=@('True','False') },
+    @{ N=8; Prop='ShowEveryoneExceptExternalUsersClaim';           Values=@('True','False') },
+    @{ N=9; Prop='AllowEveryoneExceptExternalUsersClaimInPrivateSite'; Values=@('True','False') }
 )
 
 function Get-TenantPosture {
@@ -19,6 +26,10 @@ function Get-TenantPosture {
         DefaultSharingLinkType            = [string]$t.DefaultSharingLinkType
         DefaultLinkPermission             = [string]$t.DefaultLinkPermission
         RequireAnonymousLinksExpireInDays = [string]$t.RequireAnonymousLinksExpireInDays
+        ShowEveryoneClaim                              = [string]$t.ShowEveryoneClaim
+        ShowAllUsersClaim                              = [string]$t.ShowAllUsersClaim
+        ShowEveryoneExceptExternalUsersClaim           = [string]$t.ShowEveryoneExceptExternalUsersClaim
+        AllowEveryoneExceptExternalUsersClaimInPrivateSite = [string]$t.AllowEveryoneExceptExternalUsersClaimInPrivateSite
         CheckedAt                         = Get-Date
     }
     $script:Tabs[2].Loaded = $true

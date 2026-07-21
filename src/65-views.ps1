@@ -383,10 +383,14 @@ function Add-TenantView {
         @{ Key = '3'; Label = 'DefaultSharingLinkType';              Value = $p.DefaultSharingLinkType;             Note = 'Link type pre-selected in the sharing dialog.' }
         @{ Key = '4'; Label = 'DefaultLinkPermission';               Value = $p.DefaultLinkPermission;              Note = 'Permission pre-selected in the sharing dialog.' }
         @{ Key = '5'; Label = 'RequireAnonymousLinksExpireInDays';   Value = $p.RequireAnonymousLinksExpireInDays;  Note = 'Days before anonymous links auto-expire (-1 = never).' }
+        @{ Key = '6'; Label = 'ShowEveryoneClaim';                    Value = $p.ShowEveryoneClaim;                  Note = 'Show "Everyone" in People Picker (False = hidden, recommended).' }
+        @{ Key = '7'; Label = 'ShowAllUsersClaim';                    Value = $p.ShowAllUsersClaim;                  Note = 'Show "All Users (x)" org-wide claims in People Picker.' }
+        @{ Key = '8'; Label = 'ShowEveryoneExceptExternalUsersClaim'; Value = $p.ShowEveryoneExceptExternalUsersClaim; Note = 'Show "Everyone except external users" (EEEU) in People Picker.' }
+        @{ Key = '9'; Label = 'AllowEEEUClaimInPrivateSite';          Value = $p.AllowEveryoneExceptExternalUsersClaimInPrivateSite; Note = 'Allow EEEU claim in private sites specifically.' }
     )
     foreach ($r in $rows) {
         if ($row -gt ($H - 3)) { break }
-        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + ('{0}  ' -f $r.Key) + $t.CtxHi + (Get-PadCell $r.Label 36) + $t.Row + ': ' + $r.Value); $row++
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + ('{0}  ' -f $r.Key) + $t.CtxHi + (Get-PadCell $r.Label 38) + $t.Row + ': ' + $r.Value); $row++
         if ($row -le ($H - 2)) { Add-FrameLine -Sb $Sb -Row $row -Content ($pad + '   ' + $t.Muted + $r.Note); $row++ }
         $row++
     }
@@ -482,7 +486,7 @@ function Get-TabHints {
                      @('S','scan'),@('T','rules'),@('U','add url'),@('I','import csv'),
                      @('Enter','open/load'),@('E','export'),@('?','help'),@('Q','quit'))
         }
-        'Tenant' { return @(@('Enter','load'),@('1-5','change setting'),@('R','refresh'),@('?','help'),@('Q','quit')) }
+        'Tenant' { return @(@('Enter','load'),@('1-9','change setting'),@('R','refresh'),@('?','help'),@('Q','quit')) }
         'Setup'  { return @(@('D','delegated app'),@('C','cert app'),@('W','renew cert'),@('X','edit config'),@('?','help'),@('Q','quit')) }
         'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('?','help'),@('Q','quit')) }
     }

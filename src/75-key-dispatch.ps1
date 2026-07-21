@@ -164,7 +164,7 @@ function Invoke-TenantKey {
         }
         return
     }
-    if ($K.KeyChar -ge '1' -and $K.KeyChar -le '5') {
+    if ($K.KeyChar -ge '1' -and $K.KeyChar -le '9') {
         if (Get-Command Invoke-TenantSetting -ErrorAction SilentlyContinue) {
             Invoke-TenantSetting -Setting ([int][string]$K.KeyChar)
         } else {
@@ -242,7 +242,10 @@ function Invoke-KeyDispatch {
         $script:UI.Tab = ($script:UI.Tab + $delta + $script:Tabs.Count) % $script:Tabs.Count
         return
     }
-    if ($K.KeyChar -ge '1' -and $K.KeyChar -le [char]([int][char]'0' + $script:Tabs.Count)) {
+    # Digit keys jump to a tab by position, EXCEPT on tabs that use digits for
+    # their own numbered menu (currently only Tenant, for its setting picker) -
+    # those tabs own the whole digit namespace and are reachable via Tab/Shift+Tab.
+    if ($tab['Kind'] -ne 'Tenant' -and $K.KeyChar -ge '1' -and $K.KeyChar -le [char]([int][char]'0' + $script:Tabs.Count)) {
         $script:UI.Tab = [int][string]$K.KeyChar - 1
         return
     }

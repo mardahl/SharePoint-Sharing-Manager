@@ -102,7 +102,7 @@ First run: open the **Setup** tab and pick an auth mode -
 | | `E` | Export |
 | | `Esc` | Back to target list |
 | Tenant | `Enter` | Load posture |
-| | `1`-`5` | Change a setting |
+| | `1`-`9` | Change a setting (this tab owns the digit keys - use `Tab`/`Shift+Tab` to switch tabs) |
 | | `R` | Refresh |
 | Setup | `D` | Register delegated app |
 | | `C` | Register app-only certificate app |

@@ -20,8 +20,8 @@ function Get-GuestGrantees {
     $out = @()
     foreach ($g in @($Link.GrantedToIdentitiesV2)) {
         if (-not $g) { continue }
-        $ln = $g.SiteUser.LoginName
-        $em = $g.User.Email
+        $ln = if ($g.SiteUser) { $g.SiteUser.LoginName } else { $null }
+        $em = if ($g.User) { $g.User.Email } else { $null }
         if     ($ln -and $ln -like '*#ext#*') { $out += ($em ? $em : $ln) }
         elseif ($em -and $em -match 'guest#') { $out += $em }
     }
