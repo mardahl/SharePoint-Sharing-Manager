@@ -56,7 +56,7 @@ function Register-SsmDelegatedApp {
         Save-SsmAuth
         Show-MsgModal -Title 'Registered' -Lines @("Client Id: $appId", 'Saved to config. Delegated mode is now active.')
     } catch {
-        Write-SsmLog -Message ("Delegated app registration failed: {0}" -f $_.Exception.Message) -Level ERROR
+        Write-SsmErrorLog -Context 'Delegated app registration failed' -ErrorRecord $_
         Show-MsgModal -Title 'Failed' -Lines @($_.Exception.Message) -Kind Error
     }
 }
@@ -109,7 +109,7 @@ function Register-SsmAppOnlyApp {
             'If consent was not granted yet, a Global Admin must approve the',
             'consent URL printed in the console before connections will work.')
     } catch {
-        Write-SsmLog -Message ("App-only registration failed: {0}" -f $_.Exception.Message) -Level ERROR
+        Write-SsmErrorLog -Context 'App-only registration failed' -ErrorRecord $_
         Show-MsgModal -Title 'Failed' -Lines @($_.Exception.Message) -Kind Error
     }
 }
@@ -148,7 +148,7 @@ function Update-SsmCertificate {
         Save-SsmAuth
         Show-MsgModal -Title 'Renewed' -Lines @(("New certificate active until {0}." -f $script:Auth.CertExpires))
     } catch {
-        Write-SsmLog -Message ("Certificate renewal failed: {0}" -f $_.Exception.Message) -Level ERROR
+        Write-SsmErrorLog -Context 'Certificate renewal failed' -ErrorRecord $_
         Show-MsgModal -Title 'Failed' -Lines @(
             $_.Exception.Message, '',
             'Fallback: run Register-PnPAzureADApp again (C) or add a certificate',

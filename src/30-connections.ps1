@@ -48,7 +48,7 @@ function Connect-SsmSite {
         Write-SsmLog -Message ("Connected to {0}" -f $norm) -Level OK
         return $true
     } catch {
-        Write-SsmLog -Message ("Connect failed for {0}: {1}" -f $norm, $_.Exception.Message) -Level ERROR
+        Write-SsmErrorLog -Context ("Connect failed for {0}" -f $norm) -ErrorRecord $_
         $script:Conn.Url = ''
         return $false
     }
