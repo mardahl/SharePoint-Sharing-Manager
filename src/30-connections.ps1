@@ -16,4 +16,59 @@ function Get-ConnectParams {
     return $p
 }
 
+function Connect-SsmSite {
+    # Connect (or reuse) a PnP connection to a specific site/OneDrive URL.
+    param([string]$Url)
+    if (-not (Install-SsmModule)) { return $false }
+    if (-not (Test-SsmAuthReady)) {
+        Show-MsgModal -Title 'Not configured' -Lines @(
+            'No usable sign-in configuration.',
+            'Go to the Setup tab (4) to register an app or enter a Client Id.') -Kind Warn
+        return $false
+    }
+    $norm = $Url.TrimEnd('/')
+    if ($script:Conn.Url -eq $norm) { return $true }
+    try {
+        $p = Get-ConnectParams -Url $norm
+        if ($script:Auth.AuthMode -eq 'Delegated') {
+            # Interactive auth needs the main buffer for the browser prompt message
+            Invoke-OnMainBuffer { Write-Host ("Signing in to {0} ..." -f $norm) -ForegroundColor Yellow }
+        }
+        Connect-PnPOnline @p -ErrorAction Stop
+        $script:Conn.Url = $norm
+        $script:Conn.Admin = ($norm -like '*-admin.sharepoint.com*')
+        if ($script:Auth.AuthMode -eq 'AppOnly') {
+            $script:Conn.Account = 'app:' + $script:Auth.ClientId.Substring(0, 8)
+        } else {
+            # Delegated: read the signed-in user's identity off the connected web.
+            try { $script:Conn.Account = (Get-PnPProperty -ClientObject (Get-PnPWeb) -Property CurrentUser).Email }
+            catch { $script:Conn.Account = 'delegated' }
+            if (-not $script:Conn.Account) { $script:Conn.Account = 'delegated' }
+        }
+        Write-SsmLog -Message ("Connected to {0}" -f $norm) -Level OK
+        return $true
+    } catch {
+        Write-SsmLog -Message ("Connect failed for {0}: {1}" -f $norm, $_.Exception.Message) -Level ERROR
+        $script:Conn.Url = ''
+        return $false
+    }
+}
+
+function Connect-SsmAdmin {
+    # Connect to the tenant admin site (for Get-PnPTenantSite / Set-PnPTenant).
+    if (-not $script:Auth.AdminUrl) {
+        $u = Show-InputModal -Title 'Tenant admin URL' -Prompt 'e.g. https://contoso-admin.sharepoint.com'
+        if (-not $u) { return $false }
+        $script:Auth.AdminUrl = $u.Trim().TrimEnd('/')
+        Save-SsmAuth
+    }
+    return (Connect-SsmSite -Url $script:Auth.AdminUrl)
+}
+
+function Disconnect-SsmConnection {
+    try { Disconnect-PnPOnline -ErrorAction SilentlyContinue } catch {}
+    $script:Conn.Url = ''; $script:Conn.Admin = $false; $script:Conn.Account = ''
+    Write-SsmLog -Message 'Disconnected.'
+}
+
 #endregion
