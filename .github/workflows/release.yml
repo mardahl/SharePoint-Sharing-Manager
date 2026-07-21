@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build single-file artifact
+        shell: pwsh
+        run: ./build/New-SingleFile.ps1
+
+      - name: Build release zip
+        run: |
+          stage="SharePoint-Sharing-Manager-${GITHUB_REF_NAME}"
+          mkdir "$stage"
+          cp dist/SharePoint-Sharing-Manager.ps1 Launch-Sharing-Manager.bat README.md LICENSE CHANGELOG.md "$stage/"
+          zip -r "${stage}.zip" "$stage"
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v ver="$ver" '
+            $0 ~ "^## \\[" ver "\\]" { flag=1; next }
+            flag && /^## \[/ { exit }
+            flag { print }
+          ' CHANGELOG.md > notes.md
+          gh release upload "$GITHUB_REF_NAME" SharePoint-Sharing-Manager-*.zip --clobber \
+            || gh release create "$GITHUB_REF_NAME" SharePoint-Sharing-Manager-*.zip --notes-file notes.md

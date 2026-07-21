@@ -3,6 +3,9 @@ SSM-Exports/
 SharePoint-Sharing-Manager_*.log
 *.pfx
 
+# Build artifacts
+dist/
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
