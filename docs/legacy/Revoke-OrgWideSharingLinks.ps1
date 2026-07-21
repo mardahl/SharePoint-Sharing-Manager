@@ -59,7 +59,7 @@ Import-Module $module -ErrorAction Stop
 # --- Which app to sign in with: the -ClientId parameter first, otherwise the saved config ---
 function Resolve-ClientId([string]$ClientId, [string]$ConfigPath, [string]$Tenant) {
     if ($ClientId) {
-        # Save it so the parameter can be left off next time (both scripts read this same file).
+        # Save it so the parameter can be left off next time (Revoke-OneDrive-NonMemberAccess.ps1 reads this same file).
         try { @{ ClientId = $ClientId } | ConvertTo-Json | Set-Content -LiteralPath $ConfigPath -Encoding UTF8 }
         catch { Write-Host "Couldn't write $ConfigPath - using the id for this run only." -ForegroundColor DarkYellow }
         return $ClientId

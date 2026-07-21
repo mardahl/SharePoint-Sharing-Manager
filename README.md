@@ -33,7 +33,7 @@ A portable PowerShell **terminal UI** that finds and revokes unwanted sharing ac
 
 ## Why
 
-Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Site Collection Admin on every single OneDrive first - painful at scale, and it leaves a wide trail of temporary admin grants behind. This tool adds an app-only certificate mode that removes the per-OneDrive admin requirement entirely, and folds two single-purpose cleanup scripts into one shared scan engine with a togglable rule set per tab.
+Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Site Collection Admin on every single OneDrive first - painful at scale, and it leaves a wide trail of temporary admin grants behind. This tool adds an app-only certificate mode that removes the per-OneDrive admin requirement entirely, with one shared scan engine covering both site-level sharing links and OneDrive access review, each with its own togglable rule set per tab.
 
 | Category | Pulled | Left alone |
 |---|---|---|
@@ -134,7 +134,7 @@ App-only mode requests **application** permissions `Sites.FullControl.All` (Shar
 
 ## Caveats
 
-Known limitations, carried over from the source cleanup scripts:
+Known limitations:
 
 - A specific-people link that includes a guest is removed in full; internal members on the same link lose it too (the item and any other grants stay).
 - Guest detection on specific-people links depends on the link exposing an external grantee; a follow-up report-only pass is the verification.
@@ -156,7 +156,7 @@ No telemetry. Authentication is delegated to PnP.PowerShell / MSAL. Logs and CSV
 
 ## Credits
 
-Grown out of two single-purpose hardening scripts; TUI framework shared with [Exchange-SOA-Manager](https://github.com/mardahl/Exchange-SOA-Manager).
+Combines and supersedes the standalone [Revoke-OrgWideSharingLinks](docs/legacy/Revoke-OrgWideSharingLinks.ps1) and [Revoke-OneDrive-NonMemberAccess](docs/legacy/Revoke-OneDrive-NonMemberAccess.ps1) scripts, kept in `docs/legacy/` for reference. TUI framework shared with [Exchange-SOA-Manager](https://github.com/mardahl/Exchange-SOA-Manager).
 
 ## License
 
