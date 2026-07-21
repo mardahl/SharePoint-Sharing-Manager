@@ -46,7 +46,7 @@ body:
     attributes:
       label: PowerShell version
       description: Output of `$PSVersionTable.PSVersion`
-      placeholder: "5.1.26100.x / 7.5.x"
+      placeholder: "7.4.x / 7.5.x"
     validations:
       required: true
 
