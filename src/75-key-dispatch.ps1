@@ -249,7 +249,7 @@ function Invoke-KeyDispatch {
     if ($K.KeyChar -eq '?') { Show-HelpModal; return }
     $upper = [char]::ToUpper($K.KeyChar)
     if ($upper -eq 'Q') { $script:UI.Quit = $true; return }
-    if ($upper -eq 'W') {
+    if ($upper -eq 'W' -and $tab['Kind'] -ne 'Setup') {
         if ($script:Conn.Url) {
             if (Show-ConfirmModal -Title 'Disconnect' -Lines @('Disconnect the current PnP session?')) {
                 # Keep targets/findings loaded; only the connection state resets.
