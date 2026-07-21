@@ -44,6 +44,9 @@ $script:RuleCategories = [ordered]@{
     Everyone      = 'Everyone grant'
 }
 
+# System libraries skipped by INVARIANT URL leaf (language-independent)
+$script:ExcludedUrlNames = @('SiteAssets','SitePages','Style Library','FormServerTemplates','Teams Wiki Data')
+
 # UI state
 $script:UI = @{
     Quit       = $false
