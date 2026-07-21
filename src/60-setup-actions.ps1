@@ -6,13 +6,19 @@ function Get-SsmObjectProp {
     # ponytail: StrictMode -Version 2 throws on direct dot-access to a
     # missing property (the brief's `$obj.Foo ?? $obj.Bar` chains would
     # break instead of falling back). Check existence first, then read.
+    # Also multi-object-output-safe: some PnP registration cmdlets emit an
+    # informational string alongside the result object, so a single
+    # assignment can collapse to an array. Scan every element for the first
+    # matching, non-empty property value.
     param($InputObject, [string[]]$Name)
-    if (-not $InputObject) { return $null }
-    $names = @($InputObject.PSObject.Properties.Name)
-    foreach ($n in $Name) {
-        if ($names -contains $n) {
-            $v = $InputObject.PSObject.Properties[$n].Value
-            if ($v) { return $v }
+    foreach ($obj in @($InputObject)) {
+        if (-not $obj) { continue }
+        $names = @($obj.PSObject.Properties.Name)
+        foreach ($n in $Name) {
+            if ($names -contains $n) {
+                $v = $obj.PSObject.Properties[$n].Value
+                if ($v) { return $v }
+            }
         }
     }
     return $null
@@ -78,7 +84,6 @@ function Register-SsmAppOnlyApp {
             $splat = @{
                 ApplicationName                  = 'SharePoint-Sharing-Manager'
                 Tenant                            = $tenant
-                Interactive                       = $true
                 ValidYears                        = 1
                 SharePointApplicationPermissions  = 'Sites.FullControl.All'
                 GraphApplicationPermissions       = 'Sites.FullControl.All'
@@ -133,7 +138,7 @@ function Update-SsmCertificate {
             $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx (Join-Path $outDir "renewed-$stamp.pfx") -OutCert (Join-Path $outDir "renewed-$stamp.cer")
             Write-Host 'New certificate generated. Uploading to the app registration...' -ForegroundColor Yellow
             Connect-PnPOnline -Url ("https://{0}" -f ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '.sharepoint.com')) -Interactive -ClientId $script:Auth.ClientId
-            $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.CertificateBase64Encoded }; proof = $null }
+            $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
             Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $script:Auth.ClientId) -Content $keyCreds
             $script:RenewedCert = $cert
         }
