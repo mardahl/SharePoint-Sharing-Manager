@@ -25,7 +25,7 @@ file per region under `src/` - please keep that shape.
    operator.
 5. **Safety UX is not optional.** Destructive operations need a confirmation
    modal; revoke and tenant hardening operations need a *typed* confirmation
-   (`REVOKE` / `DISABLE`). BEFORE/AFTER CSV evidence is written for every
+   (`REVOKE` / `APPLY`). BEFORE/AFTER CSV evidence is written for every
    scan and revoke run.
 
 ## Dev setup

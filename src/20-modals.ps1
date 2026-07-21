@@ -402,9 +402,7 @@ function Write-ProgressModal {
 }
 
 function Show-HelpModal {
-    # NOTE: placeholder key help. Task 10 (Get-TabHints / Invoke-KeyDispatch)
-    # defines the authoritative per-tab key table; this body should be
-    # reconciled against it once that task lands.
+    # Static per-tab key reference; keep in sync with Get-TabHints in 65-views.ps1 if hotkeys change.
     $t = $script:T
     $lines = @(
         @($t.ModalTitle, 'Navigation'),
