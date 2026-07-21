@@ -8,6 +8,10 @@
 
 A portable PowerShell **terminal UI** that finds and revokes unwanted sharing across **SharePoint Online sites and OneDrives** - anonymous links, org-wide links, guest links, and direct grants to guests, "Everyone" and "Everyone except external users" (EEEU) - then locks the tenant down so it stays clean.
 
+## TL;DR
+
+Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest), extract, double-click `Launch-Sharing-Manager.bat` (or run `pwsh ./SharePoint-Sharing-Manager.ps1`), then pick an auth mode on the **Setup** tab. Full steps in [Quick start](#quick-start).
+
 ```
  SharePoint Sharing Manager  v1.0.0        ● https://contoso-my.sharepoint.com/personal/jane_contoso_com
   1 Sites   2 OneDrives   3 Tenant   4 Setup   5 Log
@@ -22,6 +26,7 @@ A portable PowerShell **terminal UI** that finds and revokes unwanted sharing ac
 
 ---
 
+- [TL;DR](#tldr)
 - [Why](#why)
 - [Features](#features)
 - [Quick start](#quick-start)
