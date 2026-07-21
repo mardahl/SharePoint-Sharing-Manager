@@ -16,7 +16,7 @@ A portable PowerShell **terminal UI** that finds and revokes unwanted sharing ac
  [ ] Anonymous link         File    Q4-Budget.xlsx          (anonymous)               -
  [ ] Guest grant            Web     personal_jane           bob@fabrikam.com          -
  [ ] EEEU grant              Library HR Documents            Everyone except external  -
- [ ] Org-wide link          Folder  Shared with Sales        (organization)            -
+ [ ] Organization link      Folder  Shared with Sales        (organization)            -
  Spc select  A all  N none  / find  F filter  R revoke selected  E export  Esc back  ? help  Q quit
 ```
 
