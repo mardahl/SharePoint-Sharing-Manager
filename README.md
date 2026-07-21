@@ -5,6 +5,8 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555)](#requirements)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Downloads](https://img.shields.io/github/downloads/mardahl/SharePoint-Sharing-Manager/total)](https://github.com/mardahl/SharePoint-Sharing-Manager/releases)
+![Visitors](https://hits.sh/github.com/mardahl/SharePoint-Sharing-Manager.svg)
 
 A portable PowerShell **terminal UI** that finds and revokes unwanted sharing across **SharePoint Online sites and OneDrives** - anonymous links, org-wide links, guest links, and direct grants to guests, "Everyone" and "Everyone except external users" (EEEU) - then locks the tenant down so it stays clean.
 
