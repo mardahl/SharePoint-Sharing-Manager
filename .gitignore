@@ -1,0 +1,11 @@
+# Tool output (contains directory data - never commit)
+SSM-Exports/
+SharePoint-Sharing-Manager_*.log
+*.pfx
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.worktrees/
