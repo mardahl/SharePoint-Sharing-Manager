@@ -287,7 +287,7 @@ function Invoke-TabScan {
             break
         } catch {
             $t.Status = 'ScanFailed'
-            Write-SsmLog -Message ("Scan failed for {0}: {1}" -f $t.Url, $_.Exception.Message) -Level ERROR
+            Write-SsmErrorLog -Context ("Scan failed for {0}" -f $t.Url) -ErrorRecord $_
         } finally {
             Stop-LoadSpinner
         }

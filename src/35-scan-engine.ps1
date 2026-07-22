@@ -103,7 +103,8 @@ function Invoke-SiteScan {
 
     $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
-        $rootUrl = (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl
+        try { $rootUrl = (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl }
+        catch { Write-SsmErrorLog -Context ("Skipping library '{0}' - could not read its root folder" -f $lib.Title) -ErrorRecord $_; continue }
         if ($rootUrl.Split('/')[-1] -in $script:ExcludedUrlNames) { continue }
         $listId = $lib.Id.ToString()
         $total = 0; try { $total = [int](Get-PnPProperty -ClientObject $lib -Property ItemCount) } catch {}
@@ -139,6 +140,9 @@ function Invoke-SiteScan {
             if ($Progress -and ($idx % 25 -eq 0 -or $idx -eq $unique.Count)) {
                 & $Progress -Count $idx -Label ("Checking shared items in '{0}': {1} / {2}" -f $lib.Title, $idx, $unique.Count)
             }
+            # Fault-isolate each item: one item with an unexpected shape must not
+            # abort the whole scan. Log it in full (for diagnosis) and carry on.
+            try {
             $isFolder = ($it.FSObjType -eq 1)
             $loc = if ($isFolder) { 'Folder' } else { 'File' }
             $fileRef = $it.FileRef
@@ -168,6 +172,9 @@ function Invoke-SiteScan {
             # 2) Direct grants on the item (EEEU / Everyone / guest granted directly, not via a link)
             if ($scanGrants) {
                 Add-GrantsRest "$base/_api/web/lists(guid'$listId')/items($($it.Id))/roleassignments?$raSelect" $site $loc $name $fileRef $listId $it.Id $Categories $bag
+            }
+            } catch {
+                Write-SsmErrorLog -Context ("Skipping item {0} in '{1}' - unexpected error while checking its sharing" -f $it.Id, $lib.Title) -ErrorRecord $_
             }
         }
     }

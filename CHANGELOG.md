@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-07-22
+
+- Fix: a single item or library with an unexpected shape aborted the entire
+  OneDrive/site scan (e.g. `Argument types do not match`). Under
+  `Set-StrictMode` the scan was less tolerant than the original standalone
+  scripts, which log a problem and carry on. Scanning is now fault-isolated:
+  a problematic item or library is logged in full and skipped, and the rest
+  of the scan completes.
+- Improved: scan failures now log full exception detail (type, inner
+  exceptions, category, and script stack trace with the exact file and line)
+  via `Write-SsmErrorLog`, instead of only the top-level message - so the
+  offending item/line is identifiable from the log file alone.
+
 ## [1.0.3] - 2026-07-22
 
 - Fix: saved sign-in configuration (`~/.sharepoint-sharing-manager.json`,
