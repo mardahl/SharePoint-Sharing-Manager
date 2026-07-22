@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-22
+
+- Fix: saved sign-in configuration (`~/.sharepoint-sharing-manager.json`,
+  including auth mode, tenant, certificate thumbprint/path) was never
+  loaded back on startup - `Initialize-SsmAuth` existed but nothing called
+  it, so `$script:Auth` always started from empty defaults regardless of
+  what was previously saved.
+- Fix: the tenant admin site URL is now derived from the tenant name
+  (`https://<tenant>-admin.sharepoint.com`) instead of a separate manual
+  prompt, since the tenant name is already known from setup/registration.
+  Combined with the fix above, the admin URL is now actually remembered
+  across restarts.
+- Docs: noted the admin-URL derivation as a known limitation for tenants
+  whose SharePoint hostname doesn't follow the standard pattern (vanity
+  domains, some multi-geo setups) - override `AdminUrl` via the Setup tab's
+  config editor in that case.
+
 ## [1.0.2] - 2026-07-21
 
 - Fix: OneDrive/site scans could abort with `The property 'Email' cannot be

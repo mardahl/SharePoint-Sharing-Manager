@@ -56,10 +56,14 @@ function Connect-SsmSite {
 
 function Connect-SsmAdmin {
     # Connect to the tenant admin site (for Get-PnPTenantSite / Set-PnPTenant).
+    # AdminUrl is derived from Tenant (contoso.onmicrosoft.com -> https://
+    # contoso-admin.sharepoint.com) rather than asked for separately - the
+    # tenant name is already known from setup/registration.
     if (-not $script:Auth.AdminUrl) {
-        $u = Show-InputModal -Title 'Tenant admin URL' -Prompt 'e.g. https://contoso-admin.sharepoint.com'
-        if (-not $u) { return $false }
-        $script:Auth.AdminUrl = $u.Trim().TrimEnd('/')
+        $tenant = Get-SsmTenantInput
+        if (-not $tenant) { return $false }
+        $prefix = $tenant -replace '\.onmicrosoft\.com$', ''
+        $script:Auth.AdminUrl = "https://$prefix-admin.sharepoint.com"
         Save-SsmAuth
     }
     return (Connect-SsmSite -Url $script:Auth.AdminUrl)

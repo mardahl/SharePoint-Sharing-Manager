@@ -41,7 +41,7 @@
     .\SharePoint-Sharing-Manager.ps1
 
 .NOTES
-    Version : 1.0.2
+    Version : 1.0.3
     License : MIT
 
 .LINK
@@ -73,6 +73,8 @@ foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filt
     . $f.FullName
 }
 # ==== END SRC LOAD ====
+
+Initialize-SsmAuth
 
 # ============================================================================
 #region Main

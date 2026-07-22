@@ -150,6 +150,7 @@ Known limitations:
 - EEEU/Everyone nested inside a site permission group is group membership, not a direct grant, and is not removed.
 - Sharing links on list items outside document libraries are not handled.
 - Cleanup does not prevent new sharing - use the Tenant tab's hardening toggles for that.
+- The SharePoint admin site URL is derived from the tenant name as `https://<tenant>-admin.sharepoint.com`; tenants where the SharePoint hostname doesn't follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 
 ## References
 
