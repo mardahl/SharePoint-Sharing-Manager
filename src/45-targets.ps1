@@ -46,12 +46,21 @@ function Get-TenantTargets {
     # OneDrive tab: personal sites (SPSPERS template); Sites tab: everything else.
     param([bool]$OneDrive)
     if (-not (Connect-SsmAdmin)) { return @() }
-    $sites = @(Get-PnPTenantSite -IncludeOneDriveSites:$OneDrive -ErrorAction Stop)
+    # -Detailed is required for LockState to be populated reliably; without it
+    # the property comes back uninitialized. LockState 'Unlock' = accessible;
+    # anything else (NoAccess/ReadOnly/NoAdditions) is a locked or deprovisioned
+    # site that would only 403 on scan, so filter it out here.
+    $sites = @(Get-PnPTenantSite -IncludeOneDriveSites:$OneDrive -Detailed -ErrorAction Stop)
     $out = @()
+    $locked = 0
     foreach ($s in $sites) {
         $isPersonal = ($s.Template -like 'SPSPERS*')
         if ($OneDrive -ne $isPersonal) { continue }
+        if ([string]$s.LockState -ne 'Unlock') { $locked++; continue }
         $out += (New-Target -Url $s.Url -Title $s.Title -Template $s.Template)
+    }
+    if ($locked -gt 0) {
+        Write-SsmLog -Message ("Filtered out {0} locked/inaccessible {1} (LockState not Unlock)." -f $locked, ($OneDrive ? 'OneDrives' : 'sites')) -Level WARN
     }
     Write-SsmLog -Message ("Enumerated {0} {1} from the tenant." -f $out.Count, ($OneDrive ? 'OneDrives' : 'sites'))
     return $out

@@ -286,8 +286,13 @@ function Invoke-TabScan {
             Stop-LoadSpinner
             break
         } catch {
-            $t.Status = 'ScanFailed'
-            Write-SsmErrorLog -Context ("Scan failed for {0}" -f $t.Url) -ErrorRecord $_
+            if (Test-SsmSiteLocked -ErrorRecord $_) {
+                $t.Status = 'Skipped'
+                Write-SsmLog -Message ("Skipped {0} - site is locked or inaccessible (deprovisioned OneDrive / LockState NoAccess)." -f $t.Url) -Level WARN
+            } else {
+                $t.Status = 'ScanFailed'
+                Write-SsmErrorLog -Context ("Scan failed for {0}" -f $t.Url) -ErrorRecord $_
+            }
         } finally {
             Stop-LoadSpinner
         }

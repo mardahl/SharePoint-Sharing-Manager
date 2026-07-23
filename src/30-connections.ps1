@@ -76,6 +76,26 @@ function Connect-SsmAdmin {
     return (Connect-SsmSite -Url $script:Auth.AdminUrl)
 }
 
+function Test-SsmSiteLocked {
+    # True when an error record is the SPO front-door "site inaccessible" block:
+    # HTTP 403 Forbidden with an EMPTY response content-type. That signature
+    # means the site is locked (LockState=NoAccess) or deprovisioned - typically
+    # a OneDrive still pending deletion after the user was removed. A genuine
+    # app-permission 403 returns a NON-empty (JSON/XML) body, so it won't match.
+    # Connect-PnPOnline only acquires a token and succeeds; the lock only shows
+    # on the first real CSOM call (e.g. Get-PnPWeb), which is why it lands here.
+    param($ErrorRecord)
+    $ex = $ErrorRecord.Exception
+    while ($ex) {
+        $m = [string]$ex.Message
+        if ($m -match 'content type of the response is\s*""' -and $m -match 'Forbidden') {
+            return $true
+        }
+        $ex = $ex.InnerException
+    }
+    return $false
+}
+
 function Disconnect-SsmConnection {
     try { Disconnect-PnPOnline -ErrorAction SilentlyContinue } catch {}
     $script:Conn.Url = ''; $script:Conn.Admin = $false; $script:Conn.Account = ''

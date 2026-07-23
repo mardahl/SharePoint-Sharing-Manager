@@ -36,6 +36,7 @@ function Get-StatusBadge {
         'Findings'      { $style = $t.Warn;    $glyph = [string]$g.Dot;  $text = 'Findings'   }
         'ConnectFailed' { $style = $t.Danger;  $glyph = [string]$g.Dot;  $text = 'Conn fail'  }
         'ScanFailed'    { $style = $t.Danger;  $glyph = [string]$g.Dot;  $text = 'Scan fail'  }
+        'Skipped'       { $style = $t.Muted;   $glyph = [string]$g.Ring; $text = 'Skipped'    }
         'Revoked'       { $style = $t.Cloud;   $glyph = [string]$g.Dot;  $text = 'Revoked'    }
     }
     return $style + (Get-PadCell ($glyph + ' ' + $text) $Width) + $script:T.Row

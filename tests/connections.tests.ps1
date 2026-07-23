@@ -29,3 +29,22 @@ Invoke-SsmTest 'Connect-SsmAdmin derives AdminUrl from Tenant (no manual URL pro
     Assert-Equal 'https://contoso-admin.sharepoint.com' $script:Auth.AdminUrl
     Assert-Equal 'https://contoso-admin.sharepoint.com' $script:CalledUrl
 }
+
+function New-SsmErr { param($Message) [System.Management.Automation.ErrorRecord]::new([System.Exception]::new($Message), 'id', 'NotSpecified', $null) }
+Invoke-SsmTest 'Test-SsmSiteLocked: matches 403 + empty content-type (locked/deprovisioned site)' {
+    $er = New-SsmErr 'Unexpected response from the server. The content type of the response is "". The status code is "Forbidden".'
+    Assert-Equal 'True' (Test-SsmSiteLocked -ErrorRecord $er)
+}
+Invoke-SsmTest 'Test-SsmSiteLocked: does NOT match a real permission 403 (non-empty JSON body)' {
+    $er = New-SsmErr 'Unexpected response from the server. The content type of the response is "application/json". The status code is "Forbidden".'
+    Assert-Equal 'False' (Test-SsmSiteLocked -ErrorRecord $er)
+}
+Invoke-SsmTest 'Test-SsmSiteLocked: does NOT match unrelated errors' {
+    $er = New-SsmErr 'The remote name could not be resolved.'
+    Assert-Equal 'False' (Test-SsmSiteLocked -ErrorRecord $er)
+}
+Invoke-SsmTest 'Test-SsmSiteLocked: matches when signature is on an inner exception' {
+    $inner = [System.Exception]::new('The content type of the response is "". The status code is "Forbidden".')
+    $er = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new('outer', $inner), 'id', 'NotSpecified', $null)
+    Assert-Equal 'True' (Test-SsmSiteLocked -ErrorRecord $er)
+}
