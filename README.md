@@ -68,6 +68,8 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **CSV export** of any view; CSV import of target URLs
 - **Timestamped log file** plus an in-app log viewer
 - **Per-site failure isolation** - a site that will not connect or scan is logged and the run continues
+- **Persistent scan cache with manual restore** - scan results survive a restart and can be reloaded on demand
+- **Bulk revocation across drives and across the full findings list** - revoke every finding on a set of selected targets, or every finding in the aggregate view, in one confirmed pass
 
 ## Quick start
 
@@ -90,15 +92,19 @@ First run: open the **Setup** tab and pick an auth mode -
 | | `/` | Live search |
 | | `F` | Cycle status filter |
 | | `S` | Scan selected |
+| | `X` | Scan all not-yet-scanned targets |
 | | `T` | Toggle rule categories |
+| | `G` | All findings (aggregate view across drives) |
+| | `R` | Revoke all findings on selected targets |
 | | `U` | Add URL |
 | | `I` | Import CSV |
 | | `Enter` | Open/load |
+| | `L` | Restore the saved scan session |
 | | `E` | Export |
 | Sites / OneDrives (findings) | `Space` | Toggle selection (`A` all, `N` none) |
 | | `/` | Live search |
 | | `F` | Cycle category filter |
-| | `R` | Revoke selected (typed `REVOKE` confirmation) |
+| | `R` | Revoke selected (typed `REVOKE` confirmation); in the all-findings view, revokes across every affected site with one confirmation |
 | | `E` | Export |
 | | `Esc` | Back to target list |
 | Tenant | `Enter` | Load posture |
@@ -140,6 +146,8 @@ App-only mode requests **application** permissions `Sites.FullControl.All` (Shar
 | `SSM-Exports/<tab>_targets_<timestamp>.csv` / `SSM-Exports/<tab>_findings_<timestamp>.csv` | View exports |
 | `~/.sharepoint-sharing-manager.json` | Sign-in configuration (auth mode, client id, tenant, cert thumbprint/path) |
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode (PFX on non-Windows) |
+| `SSM-Cache/session.json` | Cached scan results (targets + findings) for restore; contains directory data |
+| `SSM-Cache/README.txt` | Sensitivity notice for the cache directory |
 
 ## Caveats
 
@@ -151,6 +159,7 @@ Known limitations:
 - Sharing links on list items outside document libraries are not handled.
 - Cleanup does not prevent new sharing - use the Tenant tab's hardening toggles for that.
 - The SharePoint admin site URL is derived from the tenant name as `https://<tenant>-admin.sharepoint.com`; tenants where the SharePoint hostname doesn't follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
+- The scan cache holds one session per machine (`SSM-Cache/session.json`); restoring it loads whatever was scanned last, which may be stale relative to the tenant's current sharing state - rescan before acting on old results. Scan-all (`X`) scans one target at a time.
 
 ## References
 

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- Add: scan results are now cached to `SSM-Cache/session.json` after every
+  scan (including scan-all) and can be reloaded with `L` on the Sites/
+  OneDrives target list, so a restart no longer means re-scanning everything.
+  The cache directory carries a `README.txt` noting that it holds directory
+  data and should be treated as sensitive.
+- Add: `G` on the Sites/OneDrives target list opens an all-findings view that
+  aggregates findings from every scanned target in that tab, with a `Site`
+  column identifying which target each finding came from.
+- Add: `R` now revokes in bulk from two places - on the target list it
+  revokes every finding on the selected targets, and in the all-findings
+  aggregate view it revokes every selected finding across every affected
+  site. Both prompt once with the typed `REVOKE` confirmation regardless of
+  how many sites are touched.
+- Add: `X` on the Sites/OneDrives target list scans every not-yet-scanned
+  target in one run, saving the cache incrementally so an interrupted
+  scan-all resumes from where it left off instead of restarting.
+
 ## [1.1.1] - 2026-07-23
 
 - Fix: `Invoke-SiteScan` threw `System.ArgumentException: Argument types do

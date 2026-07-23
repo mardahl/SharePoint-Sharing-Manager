@@ -577,12 +577,14 @@ function Get-TabHints {
     switch ($Tab['Kind']) {
         'Targets' {
             if ($Tab['Mode'] -eq 'Findings') {
+                $revokeHint = if ($Tab['FTab']['Aggregate']) { 'revoke all sites' } else { 'revoke selected' }
                 return @(@('Spc','select'),@('A','all'),@('N','none'),@('/','find'),@('F','filter'),
-                         @('R','revoke selected'),@('E','export'),@('Esc','back'),@('?','help'),@('Q','quit'))
+                         @('R',$revokeHint),@('E','export'),@('Esc','back'),@('?','help'),@('Q','quit'))
             }
             return @(@('Spc','select'),@('A','all'),@('N','none'),@('/','find'),@('F','filter'),
-                     @('S','scan'),@('T','rules'),@('U','add url'),@('I','import csv'),
-                     @('Enter','open/load'),@('E','export'),@('?','help'),@('Q','quit'))
+                     @('S','scan'),@('X','scan all'),@('T','rules'),@('G','all findings'),
+                     @('R','revoke selected'),@('U','add url'),@('I','import csv'),
+                     @('Enter','open/load'),@('L','restore'),@('E','export'),@('?','help'),@('Q','quit'))
         }
         'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('1-5','tab'),@('?','help'),@('Q','quit')) }
         'Setup'  { return @(@('D','delegated app'),@('C','cert app'),@('W','renew cert'),@('X','edit config'),@('?','help'),@('Q','quit')) }
