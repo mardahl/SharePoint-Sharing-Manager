@@ -118,6 +118,11 @@ function Add-TargetsView {
         [void]$lines.Add(@(($t.CtxHi + $head), $head.Length))
         [void]$lines.Add(@('', 0))
         [void]$lines.Add(@(($t.Row + $hint), $hint.Length))
+        if ($script:UI.RestoreInfo) {
+            [void]$lines.Add(@('', 0))
+            $rmsg = ("Cached session available ({0} targets, saved {1}) - press L to restore." -f $script:UI.RestoreInfo.Count, $script:UI.RestoreInfo.SavedAt)
+            [void]$lines.Add(@(($script:T.Good + $rmsg), $rmsg.Length))
+        }
         if (-not (Test-SsmAuthReady)) {
             [void]$lines.Add(@('', 0))
             $warn = 'Sign-in is not configured - see the Setup tab (4).'

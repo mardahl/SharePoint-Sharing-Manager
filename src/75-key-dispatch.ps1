@@ -108,6 +108,16 @@ function Invoke-TargetsKey {
             Invoke-BulkRevoke -Findings $findings -Tab $Tab
             return
         }
+        'L' {
+            if (-not $script:UI.RestoreInfo) { Show-MsgModal -Title 'Restore' -Lines @('No saved session cache to restore.'); return }
+            if (Restore-SsmCache) {
+                $script:UI.RestoreInfo = $null
+                Show-MsgModal -Title 'Restored' -Lines @('Scan cache restored from disk.')
+            } else {
+                Show-MsgModal -Title 'Restore failed' -Lines @('Could not read the session cache. See the Log tab.') -Kind Error
+            }
+            return
+        }
     }
 }
 

@@ -76,6 +76,11 @@ foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filt
 
 Initialize-SsmAuth
 
+$script:UI.RestoreInfo = Test-SsmCacheAvailable
+if ($script:UI.RestoreInfo) {
+    Write-SsmLog -Message ("Session cache available: {0} target(s) from {1}. Press L on a target tab to restore." -f $script:UI.RestoreInfo.Count, $script:UI.RestoreInfo.SavedAt)
+}
+
 # ============================================================================
 #region Main
 # ============================================================================
