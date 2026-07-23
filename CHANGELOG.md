@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-23
+
+- Fix: `Invoke-SiteScan` threw `System.ArgumentException: Argument types do
+  not match` and aborted the scan whenever a OneDrive/site had zero findings
+  (or exactly one). Its two `return @($bag)` statements wrapped a
+  `System.Collections.Generic.List[object]` with the array-subexpression
+  operator, which fails on PowerShell 7.6 for list counts of 0 or 1. Changed
+  to `$bag.ToArray()`, the same idiom already used elsewhere in the codebase.
+
 ## [1.1.0] - 2026-07-23
 
 - Change: the Tenant tab is now a navigable list instead of a numeric menu.

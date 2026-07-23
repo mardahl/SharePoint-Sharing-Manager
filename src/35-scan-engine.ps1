@@ -99,7 +99,7 @@ function Invoke-SiteScan {
         Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag
     }
 
-    if (-not ($scanGrants -or $scanLinks)) { return @($bag) }
+    if (-not ($scanGrants -or $scanLinks)) { return $bag.ToArray() }
 
     $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
@@ -178,7 +178,7 @@ function Invoke-SiteScan {
             }
         }
     }
-    return @($bag)
+    return $bag.ToArray()
 }
 
 #endregion
