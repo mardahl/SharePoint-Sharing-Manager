@@ -31,10 +31,17 @@ function Connect-SsmSite {
     try {
         $p = Get-ConnectParams -Url $norm
         if ($script:Auth.AuthMode -eq 'Delegated') {
-            # Interactive auth needs the main buffer for the browser prompt message
-            Invoke-OnMainBuffer { Write-Host ("Signing in to {0} ..." -f $norm) -ForegroundColor Yellow }
+            # Interactive auth needs the main buffer so the browser/consent
+            # prompt and any console messages are visible instead of hidden
+            # behind the alternate-screen TUI. Run the connect there too, not
+            # just the "Signing in" line.
+            Invoke-OnMainBuffer {
+                Write-Host ("Signing in to {0} ..." -f $norm) -ForegroundColor Yellow
+                Connect-PnPOnline @p -ErrorAction Stop
+            }
+        } else {
+            Connect-PnPOnline @p -ErrorAction Stop
         }
-        Connect-PnPOnline @p -ErrorAction Stop
         $script:Conn.Url = $norm
         $script:Conn.Admin = ($norm -like '*-admin.sharepoint.com*')
         if ($script:Auth.AuthMode -eq 'AppOnly') {

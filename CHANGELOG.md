@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-07-23
+
+- Fix: pressing `Enter` on an empty Sites or OneDrives list froze the TUI with
+  no feedback. Enter on an empty list enumerates targets from the tenant
+  (`Connect` + `Get-PnPTenantSite`), a blocking single-threaded call - but
+  unlike the scan path it drew no progress modal or spinner, so the main loop
+  stopped reading keys and repainting and the interface appeared to hang doing
+  nothing. Enumeration now shows the same spinner/progress modal as scanning,
+  so it is visibly working and the spinner keeps animating while the call
+  blocks.
+- Fix: delegated interactive sign-in ran `Connect-PnPOnline` on the
+  alternate-screen buffer, so any browser/consent prompt or console message
+  was hidden behind the TUI. The interactive connect now runs on the main
+  buffer (like the "Signing in" line already did), so the prompt is visible.
+
 ## [1.0.4] - 2026-07-22
 
 - Fix: a single item or library with an unexpected shape aborted the entire

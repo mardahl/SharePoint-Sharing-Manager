@@ -41,8 +41,19 @@ function Invoke-TargetsKey {
         }
         'Enter' {
             if ($view.Count -eq 0) {
-                # Empty list: Enter enumerates targets from the tenant.
-                Add-TargetsToTab -Tab $Tab -Targets (Get-TenantTargets -OneDrive $Tab['OneDrive'])
+                # Empty list: Enter enumerates targets from the tenant. This is a
+                # blocking, single-threaded call (connect + Get-PnPTenantSite), so
+                # show a spinner/progress modal the same way the scan path does -
+                # otherwise the TUI just freezes on its last frame with no feedback.
+                Start-LoadSpinner
+                Write-ProgressModal -Title 'Enumerating tenant' -Done 0 -Total 0 -Label ($Tab['OneDrive'] ? 'Loading OneDrives...' : 'Loading sites...') -Ok 0 -Failed 0
+                try {
+                    $targets = Get-TenantTargets -OneDrive $Tab['OneDrive']
+                } finally {
+                    Stop-LoadSpinner
+                }
+                Add-TargetsToTab -Tab $Tab -Targets $targets
+                $script:UI.Dirty = $true
                 return
             }
             if ($Tab['Cursor'] -lt $view.Count) {
