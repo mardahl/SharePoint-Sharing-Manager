@@ -324,12 +324,23 @@ function Invoke-TabScanAll {
         try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] } finally { Stop-LoadSpinner }
         Add-TargetsToTab -Tab $Tab -Targets $targets
     }
-    foreach ($it in @($Tab['Items'])) { $it.Selected = ($it.Status -eq 'NotScanned') }
-    if (@($Tab['Items'] | Where-Object { $_.Selected }).Count -eq 0) {
+    $items = @($Tab['Items'])
+    if ($items.Count -eq 0) {
+        Show-MsgModal -Title 'Scan all' -Lines @('No targets found. Check your connection/sign-in and try again.')
+        return
+    }
+    $prevSelected = @{}
+    foreach ($it in $items) { $prevSelected[$it] = $it.Selected; $it.Selected = ($it.Status -eq 'NotScanned') }
+    if (@($items | Where-Object { $_.Selected }).Count -eq 0) {
+        foreach ($it in $items) { $it.Selected = $prevSelected[$it] }
         Show-MsgModal -Title 'Scan all' -Lines @('No unscanned targets remain. Everything here is already scanned.')
         return
     }
-    Invoke-TabScan -Tab $Tab
+    try {
+        Invoke-TabScan -Tab $Tab
+    } finally {
+        foreach ($it in $items) { $it.Selected = $prevSelected[$it] }
+    }
 }
 
 function Enter-FindingsMode {
