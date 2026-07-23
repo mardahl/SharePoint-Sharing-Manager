@@ -13,3 +13,14 @@ Invoke-SsmTest 'Revoke order: links first, leaf before web' {
     Assert-Equal 'lib' $o[3].Name
     Assert-Equal 'w'   $o[4].Name
 }
+Invoke-SsmTest 'Group-FindingsBySite groups by Site' {
+    $f = @(
+        [pscustomobject]@{ Site='https://x/a'; Name='f1' },
+        [pscustomobject]@{ Site='https://x/b'; Name='f2' },
+        [pscustomobject]@{ Site='https://x/a'; Name='f3' }
+    )
+    $groups = @(Group-FindingsBySite -Findings $f)
+    Assert-Equal 2 $groups.Count
+    $a = $groups | Where-Object { $_.Name -eq 'https://x/a' }
+    Assert-Equal 2 @($a.Group).Count
+}

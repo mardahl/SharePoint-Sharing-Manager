@@ -66,4 +66,14 @@ function Get-TenantTargets {
     return $out
 }
 
+function Get-TabFindings {
+    # Every finding across all targets in a tab (same object references).
+    param($Tab)
+    $out = @()
+    foreach ($it in @($Tab['Items'])) {
+        if (@($it.Findings).Count -gt 0) { $out += @($it.Findings) }
+    }
+    return $out
+}
+
 #endregion

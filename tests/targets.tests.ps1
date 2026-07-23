@@ -23,4 +23,15 @@ Invoke-SsmTest 'Add-TargetsToTab dedupes by URL' {
     Add-TargetsToTab -Tab $tab -Targets @((New-Target -Url 'https://a'), (New-Target -Url 'https://a/'), (New-Target -Url 'https://b'))
     Assert-Equal 2 @($tab.Items).Count
 }
+Invoke-SsmTest 'Get-TabFindings flattens findings across targets' {
+    $tab = @{ Items = @(
+        @{ Url='https://x/a'; Findings=@([pscustomobject]@{ Site='https://x/a'; Name='f1' }) },
+        @{ Url='https://x/b'; Findings=@() },
+        @{ Url='https://x/c'; Findings=@(
+            [pscustomobject]@{ Site='https://x/c'; Name='f2' },
+            [pscustomobject]@{ Site='https://x/c'; Name='f3' }) }
+    ) }
+    $all = @(Get-TabFindings -Tab $tab)
+    Assert-Equal 3 $all.Count
+}
 Remove-Item -LiteralPath $csv -ErrorAction SilentlyContinue

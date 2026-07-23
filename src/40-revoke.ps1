@@ -13,6 +13,12 @@ function Get-RevokeOrder {
         @{ Expression = { $depth[$_.Location] } })
 }
 
+function Group-FindingsBySite {
+    # Group findings by their source Site URL for per-site bulk revocation.
+    param($Findings)
+    return @(@($Findings) | Group-Object -Property Site)
+}
+
 #endregion
 
 # ============================================================================
