@@ -54,3 +54,53 @@ function ConvertFrom-SsmCacheObject {
 }
 
 #endregion
+
+# ============================================================================
+#region Session cache - disk IO
+# ============================================================================
+
+function Save-SsmCache {
+    # Persist the Targets tabs to session.json (atomic). Best-effort: never throws.
+    try {
+        if (-not (Test-Path -LiteralPath $script:CacheDir)) {
+            New-Item -ItemType Directory -Path $script:CacheDir -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $script:CacheDir 'README.txt') -Value $script:CacheWarning -Encoding UTF8
+        }
+        $json = ConvertTo-SsmCacheObject -Tabs $script:Tabs | ConvertTo-Json -Depth 8
+        $tmp  = $script:CacheFile + '.tmp'
+        Set-Content -LiteralPath $tmp -Value $json -Encoding UTF8
+        Move-Item -LiteralPath $tmp -Destination $script:CacheFile -Force
+    } catch {
+        Write-SsmLog -Message ("Cache save failed: {0}" -f $_.Exception.Message) -Level WARN
+    }
+}
+
+function Test-SsmCacheAvailable {
+    # Return { Count, SavedAt } when a readable cache exists, else $null.
+    if (-not (Test-Path -LiteralPath $script:CacheFile)) { return $null }
+    try {
+        $cache = Get-Content -LiteralPath $script:CacheFile -Raw | ConvertFrom-Json
+        $count = 0
+        foreach ($ct in @($cache.Tabs)) { $count += @($ct.Items).Count }
+        return [pscustomobject]@{ Count = $count; SavedAt = [string]$cache.SavedAt }
+    } catch { return $null }
+}
+
+function Restore-SsmCache {
+    # Load session.json into $script:Tabs. Returns $true on success.
+    if (-not (Test-Path -LiteralPath $script:CacheFile)) { return $false }
+    try {
+        $cache = Get-Content -LiteralPath $script:CacheFile -Raw | ConvertFrom-Json
+        ConvertFrom-SsmCacheObject -Cache $cache -Tabs $script:Tabs
+        if (Get-Command Update-TabView -ErrorAction SilentlyContinue) {
+            foreach ($tab in @($script:Tabs)) { if ($tab['Kind'] -eq 'Targets') { Update-TabView -Tab $tab } }
+        }
+        Write-SsmLog -Message 'Restored scan cache from disk.' -Level OK
+        return $true
+    } catch {
+        Write-SsmLog -Message ("Cache restore failed: {0}" -f $_.Exception.Message) -Level WARN
+        return $false
+    }
+}
+
+#endregion

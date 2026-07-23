@@ -14,6 +14,14 @@ $script:LogFile   = Join-Path $script:Root ("SharePoint-Sharing-Manager_{0}.log"
 $script:ExportDir = Join-Path $script:Root 'SSM-Exports'
 $script:LogBuffer = New-Object System.Collections.ArrayList
 $script:Spinner   = $null
+$script:CacheDir     = Join-Path $script:Root 'SSM-Cache'
+$script:CacheFile    = Join-Path $script:CacheDir 'session.json'
+$script:CacheWarning = @(
+    'This directory holds cached SharePoint/OneDrive scan results.'
+    'session.json contains directory data - site paths, principal names,'
+    'and guest email addresses. Treat it as sensitive; it is protected by'
+    'filesystem permissions only, not encryption. Delete it when no longer needed.'
+) -join [Environment]::NewLine
 
 # Auth/config state (populated from ~/.sharepoint-sharing-manager.json in 25-config)
 $script:Auth = @{
@@ -56,6 +64,7 @@ $script:UI = @{
     Tab        = 0          # index into $script:Tabs
     SearchMode = $false
     LogScroll  = 0          # 0 = pinned to bottom
+    RestoreInfo = $null    # set at startup by Test-SsmCacheAvailable
 }
 
 function New-TargetsTab {

@@ -30,3 +30,30 @@ Invoke-SsmTest 'Cache round-trips a target and finding' {
     Assert-Equal 'True'  $dstTabs[0].Loaded
     Assert-Equal 'OrgLink' $dstTabs[0].Categories[0]
 }
+
+Invoke-SsmTest 'Save then restore via disk round-trips' {
+    $script:Version = '9.9.9'
+    $script:CacheDir  = Join-Path ([IO.Path]::GetTempPath()) ("ssmcache-{0}" -f [guid]::NewGuid())
+    $script:CacheFile = Join-Path $script:CacheDir 'session.json'
+    $script:CacheWarning = 'test-warning'
+    $script:Tabs = @(
+        @{ Kind='Targets'; Name='OneDrives'; Categories=[System.Collections.ArrayList]@('OrgLink')
+           Items=@(@{ Url='https://x/personal/a'; Title='a'; Template='SPSPERS'
+                      Status='Clean'; FindingCount=0; Findings=@(); Selected=$false }) }
+    )
+    Save-SsmCache
+    Assert-Equal 'True' ([string](Test-Path -LiteralPath $script:CacheFile))
+
+    $avail = Test-SsmCacheAvailable
+    Assert-Equal 1 $avail.Count
+
+    $script:Tabs = @(
+        @{ Kind='Targets'; Name='OneDrives'; Categories=[System.Collections.ArrayList]@(); Items=@(); Loaded=$false }
+    )
+    $ok = Restore-SsmCache
+    Assert-Equal 'True' ([string]$ok)
+    Assert-Equal 'https://x/personal/a' $script:Tabs[0].Items[0].Url
+    Assert-Equal 'Clean' $script:Tabs[0].Items[0].Status
+
+    Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
+}
