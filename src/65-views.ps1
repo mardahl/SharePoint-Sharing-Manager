@@ -332,6 +332,44 @@ function Invoke-FindingsRevoke {
     Update-FindingsView -Tab $Tab
 }
 
+function Update-TabTargetStatuses {
+    # Recompute per-target FindingCount/Status from live RevokeStatus values.
+    param($Tab)
+    foreach ($it in @($Tab['Items'])) {
+        $remaining = @(@($it.Findings) | Where-Object { $_.RevokeStatus -ne 'Removed' -and $_.RevokeStatus -ne 'AlreadyRevoked' })
+        $it.FindingCount = $remaining.Count
+        if (@($it.Findings).Count -gt 0 -and $remaining.Count -eq 0) { $it.Status = 'Revoked' }
+    }
+}
+
+function Invoke-BulkRevoke {
+    # Revoke an explicit set of findings, grouped by site, with one typed
+    # confirmation and a per-site connect/revoke/save loop.
+    param($Findings, $Tab)
+    $sel = @($Findings)
+    if ($sel.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('Nothing selected.'); return }
+    $groups = Group-FindingsBySite -Findings $sel
+    $lines  = @(("Remove {0} link(s)/grant(s) across {1} site(s):" -f $sel.Count, $groups.Count), '')
+    foreach ($g in $groups) { $lines += ("  {0}: {1}" -f $g.Name, @($g.Group).Count) }
+    $lines += @('', 'Files and folders are never deleted. This cannot be undone.')
+    if (-not (Show-TypedConfirmModal -Title 'Bulk revoke sharing' -Word 'REVOKE' -Lines $lines)) { return }
+
+    $totalRemoved = 0; $siteReport = @()
+    foreach ($g in $groups) {
+        if (-not (Connect-SsmSite -Url $g.Name)) {
+            $siteReport += ("{0}: connect failed" -f $g.Name); continue
+        }
+        $removed = Invoke-Revoke -Findings @($g.Group)
+        [void](Export-FindingsCsv -Findings @($g.Group) -SiteUrl $g.Name -Phase 'REVOKED')
+        $totalRemoved += $removed
+        $siteReport += ("{0}: removed {1} of {2}" -f $g.Name, $removed, @($g.Group).Count)
+        if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
+    }
+    Update-TabTargetStatuses -Tab $Tab
+    Show-ReportModal -Title 'Bulk revoke complete' -Lines (@(("Removed {0} of {1} across {2} site(s)." -f $totalRemoved, $sel.Count, $groups.Count), '') + $siteReport)
+    Update-TabView -Tab $Tab
+}
+
 function Show-CategoryToggleModal {
     # Space toggles a category, Enter accepts. Simple numbered input loop
     # built on the ported src/20-modals.ps1 primitives (Write-ModalFrame
