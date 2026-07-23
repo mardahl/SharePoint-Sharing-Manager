@@ -180,14 +180,16 @@ function Add-TargetsView {
 }
 
 function Get-FindingsLayout {
-    param([int]$W)
-    # ' ' sel(3) ' ' Category(20) '  ' Loc(7) '  ' Name(flex 40%) '  ' Principal(flex 60%) '  ' Status(12)
-    $fixed = 1 + 3 + 1 + 20 + 2 + 7 + 2 + 2 + 2 + 12
+    param([int]$W, [bool]$Aggregate = $false)
+    $siteW = if ($Aggregate) { 22 } else { 0 }
+    $siteFixed = if ($Aggregate) { $siteW + 2 } else { 0 }
+    # ' ' sel(3) ' ' [Site(22) '  '] Category(20) '  ' Loc(7) '  ' Name(flex 40%) '  ' Principal(flex 60%) '  ' Status(12)
+    $fixed = 1 + 3 + 1 + $siteFixed + 20 + 2 + 7 + 2 + 2 + 2 + 12
     $flex = $W - $fixed - 1
     if ($flex -lt 20) { $flex = 20 }
     $nameW = [int]($flex * 0.4)
     $principalW = $flex - $nameW
-    return @{ Category = 20; Loc = 7; Name = $nameW; Principal = $principalW; Status = 12 }
+    return @{ Site = $siteW; Category = 20; Loc = 7; Name = $nameW; Principal = $principalW; Status = 12 }
 }
 
 function Add-FindingsView {
@@ -200,8 +202,10 @@ function Add-FindingsView {
     if (-not [string]::IsNullOrEmpty($ft['Search'])) { $ctx += ('   search:"' + $ft['Search'] + '"') }
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)
 
-    $col = Get-FindingsLayout -W $W
-    $head = ' ' + (Get-PadCell 'sel' 3) + ' ' + (Get-PadCell 'Category' $col.Category) + '  ' + (Get-PadCell 'Loc' $col.Loc) + '  ' + (Get-PadCell 'Name' $col.Name) + '  ' + (Get-PadCell 'Principal' $col.Principal) + '  ' + (Get-PadCell 'Status' $col.Status)
+    $agg = [bool]$ft['Aggregate']
+    $col = Get-FindingsLayout -W $W -Aggregate $agg
+    $siteHead = if ($agg) { (Get-PadCell 'Site' $col.Site) + '  ' } else { '' }
+    $head = ' ' + (Get-PadCell 'sel' 3) + ' ' + $siteHead + (Get-PadCell 'Category' $col.Category) + '  ' + (Get-PadCell 'Loc' $col.Loc) + '  ' + (Get-PadCell 'Name' $col.Name) + '  ' + (Get-PadCell 'Principal' $col.Principal) + '  ' + (Get-PadCell 'Status' $col.Status)
     Add-FrameLine -Sb $Sb -Row 4 -Content ($t.ColHead + $head)
 
     $top = 5; $bottom = $H - 1
@@ -233,6 +237,10 @@ function Add-FindingsView {
             else { $line += $t.SelMark + ' ' + $chk + ' ' + $t.Row }
         } else {
             $line += ' ' + $chk + ' '
+        }
+        if ($agg) {
+            $siteTag = ($item.Site.TrimEnd('/') -split '/')[-1]
+            $line += (Get-PadCell $siteTag $col.Site) + '  '
         }
         $line += (Get-PadCell $item.Category $col.Category) + '  '
         $line += (Get-PadCell $item.Location $col.Loc) + '  '
@@ -307,6 +315,16 @@ function Enter-FindingsMode {
     Update-FindingsView -Tab $Tab
 }
 
+function Enter-AggregateMode {
+    # Findings mode spanning every scanned target in the tab.
+    param($Tab)
+    $all = @(Get-TabFindings -Tab $Tab)
+    if ($all.Count -eq 0) { Show-MsgModal -Title 'All findings' -Lines @('No findings yet. Scan targets first (S or X).'); return }
+    $Tab['Mode'] = 'Findings'
+    $Tab['FTab'] = @{ Target = @{ Url = ('All ' + $Tab['Noun']) }; Items = $all; View = @(); Cursor = 0; Scroll = 0; Search = ''; Filter = 'All'; Aggregate = $true }
+    Update-FindingsView -Tab $Tab
+}
+
 function Exit-FindingsMode {
     param($Tab)
     $Tab['Mode'] = 'Targets'; $Tab['FTab'] = $null
@@ -316,7 +334,13 @@ function Exit-FindingsMode {
 function Invoke-FindingsRevoke {
     # Revoke selected findings on the drilled target, typed confirmation first.
     param($Tab)
-    $ft = $Tab['FTab']; $target = $ft['Target']
+    $ft = $Tab['FTab']
+    if ($ft['Aggregate']) {
+        Invoke-BulkRevoke -Findings @($ft['Items'] | Where-Object { $_.Selected }) -Tab $Tab
+        Update-FindingsView -Tab $Tab
+        return
+    }
+    $target = $ft['Target']
     $sel = @($ft['Items'] | Where-Object { $_.Selected })
     if ($sel.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('Nothing selected.'); return }
     $byCat = ($sel | Group-Object Category | ForEach-Object { "  {0}: {1}" -f $_.Name, $_.Count })

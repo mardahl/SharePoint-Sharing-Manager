@@ -97,6 +97,7 @@ function Invoke-TargetsKey {
             return
         }
         'E' { Export-ViewCsv -Tab $Tab; return }
+        'G' { Enter-AggregateMode -Tab $Tab; return }
     }
 }
 
