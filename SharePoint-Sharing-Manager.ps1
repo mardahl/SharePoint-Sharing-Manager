@@ -41,7 +41,7 @@
     .\SharePoint-Sharing-Manager.ps1
 
 .NOTES
-    Version : 1.1.1
+    Version : 1.2.0
     License : MIT
 
 .LINK

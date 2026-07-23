@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] - 2026-07-23
 
 - Add: scan results are now cached to `SSM-Cache/session.json` after every
   scan (including scan-all) and can be reloaded with `L` on the Sites/
