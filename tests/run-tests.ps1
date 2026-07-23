@@ -10,7 +10,7 @@ $script:LogFile = Join-Path ([IO.Path]::GetTempPath()) 'ssm-test.log'
 function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') }
 
 # Pure-logic files only - keep in sync as files gain PnP-free helpers
-foreach ($f in @('25-config','30-connections','35-scan-engine','40-revoke','45-targets','50-csv','55-tenant-actions','75-key-dispatch')) {
+foreach ($f in @('25-config','30-connections','35-scan-engine','40-revoke','45-targets','50-csv','55-tenant-actions','70-cache','75-key-dispatch')) {
     $p = Join-Path $root "src/$f.ps1"
     if (Test-Path $p) { . $p }
 }
