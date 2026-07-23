@@ -303,9 +303,28 @@ function Invoke-TabScan {
             }
         } finally {
             Stop-LoadSpinner
+            if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
         }
     }
     Update-TabView -Tab $Tab
+}
+
+function Invoke-TabScanAll {
+    # Enumerate if empty, then scan every NotScanned target. Cache is saved
+    # after each target by Invoke-TabScan, so an interrupted run resumes.
+    param($Tab)
+    if (-not $Tab['Loaded'] -or @($Tab['Items']).Count -eq 0) {
+        Start-LoadSpinner
+        Write-ProgressModal -Title 'Enumerating tenant' -Done 0 -Total 0 -Label ($Tab['OneDrive'] ? 'Loading OneDrives...' : 'Loading sites...') -Ok 0 -Failed 0
+        try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] } finally { Stop-LoadSpinner }
+        Add-TargetsToTab -Tab $Tab -Targets $targets
+    }
+    foreach ($it in @($Tab['Items'])) { $it.Selected = ($it.Status -eq 'NotScanned') }
+    if (@($Tab['Items'] | Where-Object { $_.Selected }).Count -eq 0) {
+        Show-MsgModal -Title 'Scan all' -Lines @('No unscanned targets remain. Everything here is already scanned.')
+        return
+    }
+    Invoke-TabScan -Tab $Tab
 }
 
 function Enter-FindingsMode {

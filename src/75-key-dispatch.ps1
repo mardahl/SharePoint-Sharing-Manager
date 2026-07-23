@@ -77,6 +77,7 @@ function Invoke-TargetsKey {
             return
         }
         'S' { Invoke-TabScan -Tab $Tab; return }
+        'X' { Invoke-TabScanAll -Tab $Tab; return }
         'T' { Show-CategoryToggleModal -Tab $Tab; return }
         'U' {
             $u = Show-InputModal -Title 'Add target URL' -Prompt 'Site or OneDrive URL:'
