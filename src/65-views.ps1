@@ -376,23 +376,30 @@ function Add-TenantView {
     $margin = 4
     $row = 5
     $pad = ' ' * $margin
+    $cursor = if ($tabState.ContainsKey('Cursor')) { [int]$tabState['Cursor'] } else { 0 }
 
     $rows = @(
-        @{ Key = '1'; Label = 'SharingCapability';                  Value = $p.SharingCapability;                  Note = 'Tenant-wide external sharing level for SharePoint sites.' }
-        @{ Key = '2'; Label = 'OneDriveSharingCapability';           Value = $p.OneDriveSharingCapability;          Note = 'External sharing level for OneDrive for Business.' }
-        @{ Key = '3'; Label = 'DefaultSharingLinkType';              Value = $p.DefaultSharingLinkType;             Note = 'Link type pre-selected in the sharing dialog.' }
-        @{ Key = '4'; Label = 'DefaultLinkPermission';               Value = $p.DefaultLinkPermission;              Note = 'Permission pre-selected in the sharing dialog.' }
-        @{ Key = '5'; Label = 'RequireAnonymousLinksExpireInDays';   Value = $p.RequireAnonymousLinksExpireInDays;  Note = 'Days before anonymous links auto-expire (-1 = never).' }
-        @{ Key = '6'; Label = 'ShowEveryoneClaim';                    Value = $p.ShowEveryoneClaim;                  Note = 'Show "Everyone" in People Picker (False = hidden, recommended).' }
-        @{ Key = '7'; Label = 'ShowAllUsersClaim';                    Value = $p.ShowAllUsersClaim;                  Note = 'Show "All Users (x)" org-wide claims in People Picker.' }
-        @{ Key = '8'; Label = 'ShowEveryoneExceptExternalUsersClaim'; Value = $p.ShowEveryoneExceptExternalUsersClaim; Note = 'Show "Everyone except external users" (EEEU) in People Picker.' }
-        @{ Key = '9'; Label = 'AllowEEEUClaimInPrivateSite';          Value = $p.AllowEveryoneExceptExternalUsersClaimInPrivateSite; Note = 'Allow EEEU claim in private sites specifically.' }
+        @{ Label = 'SharingCapability';                  Value = $p.SharingCapability;                  Note = 'Tenant-wide external sharing level for SharePoint sites.' }
+        @{ Label = 'OneDriveSharingCapability';           Value = $p.OneDriveSharingCapability;          Note = 'External sharing level for OneDrive for Business.' }
+        @{ Label = 'DefaultSharingLinkType';              Value = $p.DefaultSharingLinkType;             Note = 'Link type pre-selected in the sharing dialog.' }
+        @{ Label = 'DefaultLinkPermission';               Value = $p.DefaultLinkPermission;              Note = 'Permission pre-selected in the sharing dialog.' }
+        @{ Label = 'RequireAnonymousLinksExpireInDays';   Value = $p.RequireAnonymousLinksExpireInDays;  Note = 'Days before anonymous links auto-expire (-1 = never).' }
+        @{ Label = 'ShowEveryoneClaim';                    Value = $p.ShowEveryoneClaim;                  Note = 'Show "Everyone" in People Picker (False = hidden, recommended).' }
+        @{ Label = 'ShowAllUsersClaim';                    Value = $p.ShowAllUsersClaim;                  Note = 'Show "All Users (x)" org-wide claims in People Picker.' }
+        @{ Label = 'ShowEveryoneExceptExternalUsersClaim'; Value = $p.ShowEveryoneExceptExternalUsersClaim; Note = 'Show "Everyone except external users" (EEEU) in People Picker.' }
+        @{ Label = 'AllowEEEUClaimInPrivateSite';          Value = $p.AllowEveryoneExceptExternalUsersClaimInPrivateSite; Note = 'Allow EEEU claim in private sites specifically.' }
     )
+    $idx = 0
     foreach ($r in $rows) {
         if ($row -gt ($H - 3)) { break }
-        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + ('{0}  ' -f $r.Key) + $t.CtxHi + (Get-PadCell $r.Label 38) + $t.Row + ': ' + $r.Value); $row++
+        $isCur = ($idx -eq $cursor)
+        $arrow = [string]$script:G.Arrow
+        $marker = if ($isCur) { $t.CtxHi + $arrow + ' ' } else { ' ' * ($arrow.Length + 1) }
+        $labelStyle = if ($isCur) { $t.CursorFg } else { $t.CtxHi }
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $marker + $labelStyle + (Get-PadCell $r.Label 38) + $t.Reset + $t.Row + ': ' + $r.Value); $row++
         if ($row -le ($H - 2)) { Add-FrameLine -Sb $Sb -Row $row -Content ($pad + '   ' + $t.Muted + $r.Note); $row++ }
         $row++
+        $idx++
     }
 }
 
@@ -486,7 +493,7 @@ function Get-TabHints {
                      @('S','scan'),@('T','rules'),@('U','add url'),@('I','import csv'),
                      @('Enter','open/load'),@('E','export'),@('?','help'),@('Q','quit'))
         }
-        'Tenant' { return @(@('Enter','load'),@('1-9','change setting'),@('R','refresh'),@('?','help'),@('Q','quit')) }
+        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('1-5','tab'),@('?','help'),@('Q','quit')) }
         'Setup'  { return @(@('D','delegated app'),@('C','cert app'),@('W','renew cert'),@('X','edit config'),@('?','help'),@('Q','quit')) }
         'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('?','help'),@('Q','quit')) }
     }

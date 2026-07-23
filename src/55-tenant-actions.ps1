@@ -18,8 +18,17 @@ $script:TenantSettings = @(
 )
 
 function Get-TenantPosture {
-    if (-not (Connect-SsmAdmin)) { return $false }
-    $t = Get-PnPTenant -ErrorAction Stop
+    # Connect + Get-PnPTenant are blocking single-threaded calls, so drive the
+    # same spinner/progress modal the target-enumeration path uses - otherwise
+    # the TUI freezes on its last frame with no feedback while it connects.
+    Start-LoadSpinner
+    Write-ProgressModal -Title 'Tenant' -Done 0 -Total 0 -Label 'Reading tenant sharing posture...' -Ok 0 -Failed 0
+    try {
+        if (-not (Connect-SsmAdmin)) { return $false }
+        $t = Get-PnPTenant -ErrorAction Stop
+    } finally {
+        Stop-LoadSpinner
+    }
     $script:Tabs[2].Posture = @{
         SharingCapability                 = [string]$t.SharingCapability
         OneDriveSharingCapability         = [string]$t.OneDriveSharingCapability
@@ -47,13 +56,15 @@ function Invoke-TenantSetting {
     $s = $script:TenantSettings | Where-Object { $_.N -eq $Setting }
     if (-not $s) { return }
     $current = $script:Tabs[2].Posture[$s.Prop]
-    $prompt = if ($s.Values.Count -gt 0) { 'One of: ' + ($s.Values -join ' | ') } else { 'Number of days (0 = no requirement)' }
-    $new = Show-InputModal -Title $s.Prop -Prompt $prompt -Default $current
-    if (-not $new -or $new -eq $current) { return }
-    if ($s.Values.Count -gt 0 -and $s.Values -notcontains $new) {
-        Show-MsgModal -Title 'Invalid value' -Lines @("'$new' is not one of:", ($s.Values -join ', ')) -Kind Warn
-        return
+    # Fixed-value settings get a navigable picker so the operator selects a
+    # valid value instead of typing a raw string; only the numeric expiry
+    # setting (empty Values) falls back to free-text input.
+    if ($s.Values.Count -gt 0) {
+        $new = Show-ListModal -Title $s.Prop -Prompt 'Select a value:' -Options $s.Values -Default $current
+    } else {
+        $new = Show-InputModal -Title $s.Prop -Prompt 'Number of days (0 = no requirement)' -Default $current
     }
+    if (-not $new -or $new -eq $current) { return }
     $ok = Show-TypedConfirmModal -Title 'Change tenant setting' -Word 'APPLY' -Lines @(
         ("{0}: {1} {2} {3}" -f $s.Prop, $current, [string]$script:G.Arrow, $new), '',
         'This changes sharing behavior for the WHOLE tenant.')

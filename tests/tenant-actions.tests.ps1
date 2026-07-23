@@ -26,11 +26,10 @@ Invoke-SsmTest 'TenantSettings covers the org-wide/EEEU claim hardening settings
     }
 }
 
-Invoke-SsmTest 'Digit key on the Tenant tab picks a setting, does not jump tabs' {
+Invoke-SsmTest 'Digit key on the Tenant tab jumps tabs (menu no longer captures digits)' {
     Reset-TestUiState
     Invoke-KeyDispatch -K (New-TestKey '2')
-    Assert-Equal 2 $script:UI.Tab   # still on Tenant (index 2), not switched to OneDrives (index 1)
-    Assert-Equal 'Load the posture first (Enter).' $script:LastMsgModal
+    Assert-Equal 1 $script:UI.Tab   # jumped to OneDrives (index 1), tab switching not blocked
 }
 
 Invoke-SsmTest 'Digit key on a non-Tenant tab still jumps tabs' {
@@ -38,4 +37,12 @@ Invoke-SsmTest 'Digit key on a non-Tenant tab still jumps tabs' {
     $script:UI.Tab = 3   # Setup tab
     Invoke-KeyDispatch -K (New-TestKey '1')
     Assert-Equal 0 $script:UI.Tab   # jumped to Sites (index 0)
+}
+
+Invoke-SsmTest 'Down arrow on the Tenant tab moves the setting cursor' {
+    Reset-TestUiState
+    $script:Tabs[2]['Cursor'] = 0
+    $down = [System.ConsoleKeyInfo]::new([char]0, [System.ConsoleKey]::DownArrow, $false, $false, $false)
+    Invoke-KeyDispatch -K $down
+    Assert-Equal 1 $script:Tabs[2]['Cursor']
 }

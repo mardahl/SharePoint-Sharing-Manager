@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-23
+
+- Change: the Tenant tab is now a navigable list instead of a numeric menu.
+  Its `1`-`9` shortcuts had taken over the digit keys, so the main-menu digit
+  shortcuts (`1`-`5` jump to a tab) did nothing while the Tenant tab was
+  focused. Digits now switch tabs from every tab; the Tenant settings are
+  driven with Up/Down to move the cursor and `Enter` to load the posture or
+  change the highlighted setting (`R` still refreshes).
+- Add: loading the tenant sharing posture now shows the same spinner/progress
+  modal as the scan and target-enumeration paths. `Connect` + `Get-PnPTenant`
+  is a blocking single-threaded call, so previously the TUI froze on its last
+  frame with no feedback while it connected; it is now visibly working.
+- Add: fixed-value tenant settings (e.g. `SharingCapability`,
+  `DefaultLinkPermission`, the People Picker claim toggles) are changed with a
+  navigable value picker instead of free-text entry, so the operator selects a
+  valid value with the arrow keys and `Enter` and can no longer type an
+  invalid string. Only `RequireAnonymousLinksExpireInDays` (numeric) keeps
+  text input.
+
 ## [1.0.5] - 2026-07-23
 
 - Fix: pressing `Enter` on an empty Sites or OneDrives list froze the TUI with

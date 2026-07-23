@@ -2,7 +2,7 @@
 #region Globals & State
 # ============================================================================
 
-$script:Version = '1.0.5'
+$script:Version = '1.1.0'
 $script:ESC     = [char]27
 $script:IsWin   = ($PSVersionTable.PSVersion.Major -lt 6) -or ($null -ne (Get-Variable -Name IsWindows -ErrorAction SilentlyContinue) -and $IsWindows)
 
@@ -83,7 +83,7 @@ function New-TargetsTab {
 $script:Tabs = @(
     (New-TargetsTab -Name 'Sites'     -Noun 'sites'     -OneDrive $false -Preset @('OrgLink')),
     (New-TargetsTab -Name 'OneDrives' -Noun 'OneDrives' -OneDrive $true  -Preset @($script:RuleCategories.Keys)),
-    @{ Kind = 'Tenant'; Name = 'Tenant'; Loaded = $false; Posture = $null },
+    @{ Kind = 'Tenant'; Name = 'Tenant'; Loaded = $false; Posture = $null; Cursor = 0 },
     @{ Kind = 'Setup';  Name = 'Setup' },
     @{ Kind = 'Log';    Name = 'Log' }
 )

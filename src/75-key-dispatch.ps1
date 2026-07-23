@@ -161,26 +161,41 @@ function Invoke-FindingsKey {
 }
 
 function Invoke-TenantKey {
-    # NOTE: Get-TenantPosture / Invoke-TenantSetting are Task 11 interfaces,
-    # not yet defined at the time this task lands. PowerShell resolves
-    # function calls at execution time, not parse time, so referencing them
-    # here is safe; guard with Get-Command so the tab is still usable (with
-    # a clear message) if this file is exercised before Task 11 lands.
+    # The Tenant tab is a navigable list: Up/Down move the cursor over the
+    # sharing settings, Enter loads the posture (when unloaded) or opens the
+    # value picker for the highlighted setting. Digit keys are intentionally
+    # NOT captured here, so they stay available for tab switching in the main
+    # menu (see Invoke-KeyDispatch).
+    #
+    # NOTE: Get-TenantPosture / Invoke-TenantSetting live in Task 11's file.
+    # PowerShell resolves calls at execution time, so guard with Get-Command so
+    # the tab stays usable (with a clear message) if exercised before it lands.
     param([System.ConsoleKeyInfo]$K)
-    if ($K.Key -eq 'Enter' -or [char]::ToUpper($K.KeyChar) -eq 'R') {
-        if (Get-Command Get-TenantPosture -ErrorAction SilentlyContinue) {
-            Get-TenantPosture
-        } else {
-            Show-MsgModal -Title 'Tenant' -Lines @('Tenant posture loading is not yet available (lands in Task 11).') -Kind Warn
+    $tab = $script:Tabs[2]
+    $count = @($script:TenantSettings).Count
+    if ($count -lt 1) { $count = 9 }
+    if (-not $tab.ContainsKey('Cursor')) { $tab['Cursor'] = 0 }
+
+    switch ($K.Key) {
+        'UpArrow'   { if ($tab['Cursor'] -gt 0) { $tab['Cursor']-- }; $script:UI.Dirty = $true; return }
+        'DownArrow' { if ($tab['Cursor'] -lt ($count - 1)) { $tab['Cursor']++ }; $script:UI.Dirty = $true; return }
+        'Home'      { $tab['Cursor'] = 0; $script:UI.Dirty = $true; return }
+        'End'       { $tab['Cursor'] = $count - 1; $script:UI.Dirty = $true; return }
+        'Enter' {
+            if (-not $tab['Loaded']) {
+                if (Get-Command Get-TenantPosture -ErrorAction SilentlyContinue) { Get-TenantPosture }
+                else { Show-MsgModal -Title 'Tenant' -Lines @('Tenant posture loading is not yet available (lands in Task 11).') -Kind Warn }
+            } elseif (Get-Command Invoke-TenantSetting -ErrorAction SilentlyContinue) {
+                Invoke-TenantSetting -Setting ([int]$tab['Cursor'] + 1)
+            } else {
+                Show-MsgModal -Title 'Tenant' -Lines @('Changing tenant settings is not yet available (lands in Task 11).') -Kind Warn
+            }
+            return
         }
-        return
     }
-    if ($K.KeyChar -ge '1' -and $K.KeyChar -le '9') {
-        if (Get-Command Invoke-TenantSetting -ErrorAction SilentlyContinue) {
-            Invoke-TenantSetting -Setting ([int][string]$K.KeyChar)
-        } else {
-            Show-MsgModal -Title 'Tenant' -Lines @('Changing tenant settings is not yet available (lands in Task 11).') -Kind Warn
-        }
+    if ([char]::ToUpper($K.KeyChar) -eq 'R') {
+        if (Get-Command Get-TenantPosture -ErrorAction SilentlyContinue) { Get-TenantPosture }
+        else { Show-MsgModal -Title 'Tenant' -Lines @('Tenant posture loading is not yet available (lands in Task 11).') -Kind Warn }
         return
     }
 }
@@ -253,10 +268,10 @@ function Invoke-KeyDispatch {
         $script:UI.Tab = ($script:UI.Tab + $delta + $script:Tabs.Count) % $script:Tabs.Count
         return
     }
-    # Digit keys jump to a tab by position, EXCEPT on tabs that use digits for
-    # their own numbered menu (currently only Tenant, for its setting picker) -
-    # those tabs own the whole digit namespace and are reachable via Tab/Shift+Tab.
-    if ($tab['Kind'] -ne 'Tenant' -and $K.KeyChar -ge '1' -and $K.KeyChar -le [char]([int][char]'0' + $script:Tabs.Count)) {
+    # Digit keys jump to a tab by position. The Tenant tab no longer captures
+    # digits for its own menu (it is arrow-navigated now), so digits switch
+    # tabs from every tab.
+    if ($K.KeyChar -ge '1' -and $K.KeyChar -le [char]([int][char]'0' + $script:Tabs.Count)) {
         $script:UI.Tab = [int][string]$K.KeyChar - 1
         return
     }

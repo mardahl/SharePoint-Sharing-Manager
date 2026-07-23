@@ -235,6 +235,39 @@ function Show-InputModal {
     }
 }
 
+function Show-ListModal {
+    # Navigable single-select picker. Arrows move, Enter picks, Esc cancels.
+    # Returns the chosen string, or $null when cancelled. Used where a setting
+    # only accepts a fixed set of values, so operators never type a raw value.
+    param([string]$Title, [string]$Prompt, [string[]]$Options, [string]$Default = '')
+    $sel = [Array]::IndexOf($Options, $Default)
+    if ($sel -lt 0) { $sel = 0 }
+    while ($true) {
+        Write-Screen
+        $body = New-Object System.Collections.ArrayList
+        foreach ($ln in (ConvertTo-ModalLines -Lines @($Prompt) -Width 60)) { [void]$body.Add($ln) }
+        [void]$body.Add(@($script:T.Row, ''))
+        for ($i = 0; $i -lt $Options.Count; $i++) {
+            if ($i -eq $sel) {
+                [void]$body.Add(@($script:T.CursorFg, ('  ' + [string]$script:G.Arrow + ' ' + $Options[$i])))
+            } else {
+                [void]$body.Add(@($script:T.Row, ('     ' + $Options[$i])))
+            }
+        }
+        [void](Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Up/Down move   Enter select   Esc cancel' -BorderStyle $script:T.Border -MinWidth 66)
+        $k = Read-ModalKey
+        if (($k.Modifiers -band [ConsoleModifiers]::Control) -and $k.Key -eq 'C') { $script:UI.Dirty = $true; return $null }
+        switch ($k.Key) {
+            'UpArrow'   { if ($sel -gt 0) { $sel-- } }
+            'DownArrow' { if ($sel -lt ($Options.Count - 1)) { $sel++ } }
+            'Home'      { $sel = 0 }
+            'End'       { $sel = $Options.Count - 1 }
+            'Enter'     { $script:UI.Dirty = $true; return $Options[$sel] }
+            'Escape'    { $script:UI.Dirty = $true; return $null }
+        }
+    }
+}
+
 function Show-ReportModal {
     # Scrollable result list. $Lines are strings or @($style,$text) pairs.
     param([string]$Title, [object[]]$Lines, [string]$Hint = 'Up/Down scroll   Enter close')
@@ -406,7 +439,7 @@ function Show-HelpModal {
     $t = $script:T
     $lines = @(
         @($t.ModalTitle, 'Navigation'),
-        @($t.Row, '  Tab / Shift+Tab      switch tab            1-5  jump to tab (not on Tenant tab)'),
+        @($t.Row, '  Tab / Shift+Tab      switch tab            1-5  jump to tab'),
         @($t.Row, '  Up / Down            move cursor           PgUp / PgDn  page'),
         @($t.Row, '  Home / End           jump to first / last entry'),
         @($t.CtxHi, '  Q  or  Ctrl+C        quit the application'),
@@ -427,8 +460,9 @@ function Show-HelpModal {
         @($t.Row, '  E                    export findings to CSV         Esc  back to targets'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Tenant tab'),
-        @($t.Row, '  Enter / R            load / refresh sharing posture'),
-        @($t.Row, '  1-9                  change a tenant sharing setting (use Tab to leave this tab)'),
+        @($t.Row, '  Up / Down            move between sharing settings'),
+        @($t.Row, '  Enter                load posture, or change the highlighted setting'),
+        @($t.Row, '  R                    refresh the sharing posture'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Setup tab'),
         @($t.Row, '  D                    register delegated app         C  register cert app'),
