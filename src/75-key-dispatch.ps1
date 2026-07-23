@@ -98,6 +98,15 @@ function Invoke-TargetsKey {
         }
         'E' { Export-ViewCsv -Tab $Tab; return }
         'G' { Enter-AggregateMode -Tab $Tab; return }
+        'R' {
+            $selTargets = @($Tab['Items'] | Where-Object { $_.Selected })
+            if ($selTargets.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('No targets selected. Space selects a drive.'); return }
+            $findings = @()
+            foreach ($tt in $selTargets) { if (@($tt.Findings).Count -gt 0) { $findings += @($tt.Findings) } }
+            if ($findings.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('Selected targets have no findings to revoke.'); return }
+            Invoke-BulkRevoke -Findings $findings -Tab $Tab
+            return
+        }
     }
 }
 
