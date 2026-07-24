@@ -2,6 +2,36 @@
 #region Key dispatch
 # ============================================================================
 
+function Get-SsmUrlLauncher {
+    # Pure: choose the browser-launch command for a URL given platform flags.
+    # Windows shell-associates the https URL directly (Exe = the URL, no args);
+    # macOS/Linux pass the URL as an argument to open / xdg-open.
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][bool]$IsWin,
+        [Parameter(Mandatory)][bool]$IsMac
+    )
+    if ($IsWin) { return @{ Exe = $Url;        Args = @() } }
+    if ($IsMac) { return @{ Exe = 'open';      Args = @($Url) } }
+    return             @{ Exe = 'xdg-open'; Args = @($Url) }
+}
+
+function Open-SsmUrl {
+    # Launch the default browser to $Url on any platform. Best-effort:
+    # surfaces failures through the standard error modal.
+    param([Parameter(Mandatory)][string]$Url)
+    $isMac = [bool]($PSVersionTable.PSVersion.Major -ge 6 -and
+              (Get-Variable -Name IsMacOS -ErrorAction SilentlyContinue) -and $IsMacOS)
+    $l = Get-SsmUrlLauncher -Url $Url -IsWin $script:IsWin -IsMac $isMac
+    try {
+        if (@($l.Args).Count -gt 0) { Start-Process $l.Exe -ArgumentList $l.Args }
+        else                        { Start-Process $l.Exe }
+        Write-SsmLog -Message ("Opened URL in browser: {0}" -f $Url)
+    } catch {
+        Show-MsgModal -Title 'About' -Lines @('Could not open the browser:', $_.Exception.Message) -Kind Error
+    }
+}
+
 function Invoke-TargetsKey {
     param($Tab, [System.ConsoleKeyInfo]$K)
 
