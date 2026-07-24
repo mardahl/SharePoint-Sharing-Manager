@@ -68,21 +68,36 @@ Wire into `Write-Screen`'s kind switch (`src/65-views.ps1:624`):
 ## Browser launch helper
 
 The Log tab already opens a file with an OS-detect `Start-Process` block
-(`src/75-key-dispatch.ps1:259`). Factor that OS branching into a small shared
-helper so both the About keys and (optionally) the Log tab can call it.
+(`src/75-key-dispatch.ps1:259`). The OS branching is the only risk-bearing
+logic here, so split it into a **pure** selector plus a thin launcher wrapper.
+The selector takes explicit platform flags (no ambient globals) so it can be
+unit-tested deterministically on any host — the repo's test runner is a
+custom assert-based harness (`tests/run-tests.ps1`), not Pester, and has no
+mocking of cmdlets.
 
 ```powershell
+# Pure: returns the launcher command for a URL given platform flags.
+# Windows shell-associates the https URL directly (Exe = the URL, no args);
+# macOS/Linux pass the URL as an argument to open / xdg-open.
+function Get-SsmUrlLauncher {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][bool]$IsWin,
+        [Parameter(Mandatory)][bool]$IsMac
+    )
+    if ($IsWin) { return @{ Exe = $Url;        Args = @() } }
+    if ($IsMac) { return @{ Exe = 'open';      Args = @($Url) } }
+    return                @{ Exe = 'xdg-open'; Args = @($Url) }
+}
+
 function Open-SsmUrl {
     param([Parameter(Mandatory)][string]$Url)
+    $isMac = [bool]($PSVersionTable.PSVersion.Major -ge 6 -and
+              (Get-Variable -Name IsMacOS -ErrorAction SilentlyContinue) -and $IsMacOS)
+    $l = Get-SsmUrlLauncher -Url $Url -IsWin $script:IsWin -IsMac $isMac
     try {
-        if ($script:IsWin) {
-            Start-Process $Url
-        } elseif ($PSVersionTable.PSVersion.Major -ge 6 -and
-                  (Get-Variable -Name IsMacOS -ErrorAction SilentlyContinue) -and $IsMacOS) {
-            Start-Process open -ArgumentList $Url
-        } else {
-            Start-Process xdg-open -ArgumentList $Url
-        }
+        if ($l.Args.Count -gt 0) { Start-Process $l.Exe -ArgumentList $l.Args }
+        else                     { Start-Process $l.Exe }
         Write-SsmLog -Message ("Opened URL in browser: {0}" -f $Url)
     } catch {
         Show-MsgModal -Title 'About' -Lines @('Could not open the browser:', $_.Exception.Message) -Kind Error
@@ -90,15 +105,10 @@ function Open-SsmUrl {
 }
 ```
 
-Note: Windows uses `Start-Process $Url` (shell-associates the https URL);
-macOS/Linux pass the URL as an argument to `open` / `xdg-open`. This mirrors
-the existing Log-tab logic which uses the file path directly on Windows and as
-an argument elsewhere.
-
-Placement: define `Open-SsmUrl` alongside the key-dispatch functions in
-`src/75-key-dispatch.ps1` (or reuse from the Log handler). Refactoring the Log
-tab's inline block to call `Open-SsmUrl` is optional and out of scope unless
-trivial; the URLs there are file paths, so it can stay as-is.
+Placement: define both functions alongside the key-dispatch functions in
+`src/75-key-dispatch.ps1` (already dot-sourced by the test runner). Refactoring
+the Log tab's inline file-open block to call these is out of scope; the URLs
+there are file paths and it works as-is.
 
 ## Key handling
 
@@ -156,10 +166,13 @@ Its header comment says to keep it in sync with `Get-TabHints`. Two edits:
 ## Testing
 
 - The About view is a static render — no automated test.
-- `Open-SsmUrl` has OS-branch logic. Add one Pester self-check following the
-  repo layout (`tests/*.tests.ps1`, run via `tests/run-tests.ps1`) — e.g.
-  `tests/open-url.tests.ps1` — that verifies it selects the correct launcher
-  per platform, mocking `Start-Process`. Keep it minimal; no fixtures.
+- `Get-SsmUrlLauncher` is a pure function carrying the OS-branch logic. Add a
+  test file `tests/about.tests.ps1` in the repo's assert-based style
+  (`Invoke-SsmTest` / `Assert-Equal`, matching `tests/csv.tests.ps1`) asserting
+  all three branches: Windows → exe is the URL with no args; macOS → `open` +
+  URL arg; Linux → `xdg-open` + URL arg. No mocking needed since the function
+  takes explicit platform flags. The runner already dot-sources
+  `src/75-key-dispatch.ps1`.
 - Manual verification: launch the app, press `6` (or Tab to About), confirm the
   screen renders, press `G` and `R`, confirm the browser opens the correct URLs
   and a log line is written.
@@ -174,7 +187,7 @@ Its header comment says to keep it in sync with `Get-TabHints`. Two edits:
 - `src/00-globals.ps1` — add the About tab entry.
 - `src/65-views.ps1` — `Add-AboutView`, `Write-Screen` switch, `Get-TabHints`
   About case + Tenant hint fix.
-- `src/75-key-dispatch.ps1` — `Open-SsmUrl` helper, `Invoke-AboutKey`,
-  `Invoke-KeyDispatch` switch case.
+- `src/75-key-dispatch.ps1` — `Get-SsmUrlLauncher` + `Open-SsmUrl` helpers,
+  `Invoke-AboutKey`, `Invoke-KeyDispatch` switch case.
 - `src/20-modals.ps1` — help modal: About section + `1-5`→`1-6` fix.
-- `tests/open-url.tests.ps1` — one self-check for `Open-SsmUrl`.
+- `tests/about.tests.ps1` — assert-based test for `Get-SsmUrlLauncher`.
