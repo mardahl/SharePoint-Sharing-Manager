@@ -439,7 +439,7 @@ function Show-HelpModal {
     $t = $script:T
     $lines = @(
         @($t.ModalTitle, 'Navigation'),
-        @($t.Row, '  Tab / Shift+Tab      switch tab            1-5  jump to tab'),
+        @($t.Row, '  Tab / Shift+Tab      switch tab            1-6  jump to tab'),
         @($t.Row, '  Up / Down            move cursor           PgUp / PgDn  page'),
         @($t.Row, '  Home / End           jump to first / last entry'),
         @($t.CtxHi, '  Q  or  Ctrl+C        quit the application'),
@@ -474,6 +474,10 @@ function Show-HelpModal {
         @($t.Row, ''),
         @($t.ModalTitle, 'Log tab'),
         @($t.Row, '  Up / Down            scroll log                     O  open log file'),
+        @($t.Row, ''),
+        @($t.ModalTitle, 'About tab'),
+        @($t.Row, '  G                    open the author''s GitHub profile'),
+        @($t.Row, '  R                    open the releases page'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Misc'),
         @($t.Row, '  W                    disconnect the current PnP session'),

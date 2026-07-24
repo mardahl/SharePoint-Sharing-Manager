@@ -555,6 +555,35 @@ function Add-SetupView {
     }
 }
 
+function Add-AboutView {
+    param([System.Text.StringBuilder]$Sb, [int]$W, [int]$H)
+    $t = $script:T
+    Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + ' About')
+    for ($r = 4; $r -le ($H - 1); $r++) { Add-FrameLine -Sb $Sb -Row $r -Content '' }
+
+    $margin = 4; $pad = ' ' * $margin; $row = 5
+
+    $lines = @(
+        @($t.TitleApp, ('SharePoint Sharing Manager  v' + $script:Version)),
+        @($t.Row,   ''),
+        @($t.Muted, 'A dependency-light PowerShell terminal UI that finds and revokes'),
+        @($t.Muted, 'unwanted SharePoint Online and OneDrive for Business sharing across'),
+        @($t.Muted, 'a tenant - anonymous links, org-wide links, guest sharing, and broad'),
+        @($t.Muted, 'grants (EEEU, Everyone).'),
+        @($t.Row,   ''),
+        @($t.Muted, ('Author   : ' + $t.CtxHi + 'Michael Mardahl')),
+        @($t.Muted, ('GitHub   : ' + $t.CtxHi + 'https://github.com/mardahl')),
+        @($t.Muted, ('Releases : ' + $t.CtxHi + 'https://github.com/mardahl/SharePoint-Sharing-Manager/releases')),
+        @($t.Row,   ''),
+        @($t.Row,   'G  open the author''s GitHub profile in a browser'),
+        @($t.Row,   'R  open the releases page in a browser')
+    )
+    foreach ($ln in $lines) {
+        if ($row -gt ($H - 1)) { break }
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $ln[0] + $ln[1]); $row++
+    }
+}
+
 function Add-LogView {
     param([System.Text.StringBuilder]$Sb, [int]$W, [int]$H)
     $t = $script:T
@@ -597,9 +626,10 @@ function Get-TabHints {
                      @('R','revoke selected'),@('U','add url'),@('I','import csv'),
                      @('Enter','open/load'),@('L','restore'),@('E','export'),@('?','help'),@('Q','quit'))
         }
-        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('1-5','tab'),@('?','help'),@('Q','quit')) }
+        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
         'Setup'  { return @(@('D','delegated app'),@('C','cert app'),@('W','renew cert'),@('X','edit config'),@('?','help'),@('Q','quit')) }
         'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('?','help'),@('Q','quit')) }
+        'About'  { return @(@('G','github'),@('R','releases'),@('?','help'),@('Q','quit')) }
     }
     return @()
 }
@@ -629,6 +659,7 @@ function Write-Screen {
         'Tenant' { Add-TenantView -Sb $sb -W $W -H $H }
         'Setup'  { Add-SetupView -Sb $sb -W $W -H $H }
         'Log'    { Add-LogView -Sb $sb -W $W -H $H }
+        'About'  { Add-AboutView -Sb $sb -W $W -H $H }
     }
 
     # footer
