@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0] - 2026-07-24
+
+- Add: new "About" tab (last tab in the tab bar) showing the app's purpose,
+  version, and author (Michael Mardahl), with dedicated keys - `G` opens the
+  author's GitHub profile (github.com/mardahl) and `R` opens the project's
+  releases page - directly in the default browser.
+
 ## [1.2.0] - 2026-07-23
 
 - Add: scan results are now cached to `SSM-Cache/session.json` after every
