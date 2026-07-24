@@ -562,6 +562,7 @@ function Add-AboutView {
     for ($r = 4; $r -le ($H - 1); $r++) { Add-FrameLine -Sb $Sb -Row $r -Content '' }
 
     $margin = 4; $pad = ' ' * $margin; $row = 5
+    $valueW = [Math]::Max(20, $W - $margin)
 
     $lines = @(
         @($t.TitleApp, ('SharePoint Sharing Manager  v' + $script:Version)),
@@ -571,9 +572,9 @@ function Add-AboutView {
         @($t.Muted, 'a tenant - anonymous links, org-wide links, guest sharing, and broad'),
         @($t.Muted, 'grants (EEEU, Everyone).'),
         @($t.Row,   ''),
-        @($t.Muted, ('Author   : ' + $t.CtxHi + 'Michael Mardahl')),
-        @($t.Muted, ('GitHub   : ' + $t.CtxHi + 'https://github.com/mardahl')),
-        @($t.Muted, ('Releases : ' + $t.CtxHi + 'https://github.com/mardahl/SharePoint-Sharing-Manager/releases')),
+        @($t.Muted, ('Author   : ' + $t.CtxHi + (Get-PadCell 'Michael Mardahl' ($valueW - 11)))),
+        @($t.Muted, ('GitHub   : ' + $t.CtxHi + (Get-PadCell 'https://github.com/mardahl' ($valueW - 11)))),
+        @($t.Muted, ('Releases : ' + $t.CtxHi + (Get-PadCell 'https://github.com/mardahl/SharePoint-Sharing-Manager/releases' ($valueW - 11)))),
         @($t.Row,   ''),
         @($t.Row,   'G  open the author''s GitHub profile in a browser'),
         @($t.Row,   'R  open the releases page in a browser')
