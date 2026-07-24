@@ -274,6 +274,14 @@ function Invoke-SetupKey {
     }
 }
 
+function Invoke-AboutKey {
+    param([System.ConsoleKeyInfo]$K)
+    switch ([char]::ToUpper($K.KeyChar)) {
+        'G' { Open-SsmUrl -Url 'https://github.com/mardahl'; return }
+        'R' { Open-SsmUrl -Url 'https://github.com/mardahl/SharePoint-Sharing-Manager/releases'; return }
+    }
+}
+
 function Invoke-LogKey {
     param([System.ConsoleKeyInfo]$K)
     $cap = [Math]::Max(1, $script:UI.H - 4)
@@ -346,6 +354,7 @@ function Invoke-KeyDispatch {
         'Tenant' { Invoke-TenantKey -K $K }
         'Setup'  { Invoke-SetupKey -K $K }
         'Log'    { Invoke-LogKey -K $K }
+        'About'  { Invoke-AboutKey -K $K }
     }
 }
 

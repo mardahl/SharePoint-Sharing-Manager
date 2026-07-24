@@ -15,3 +15,19 @@ Invoke-SsmTest 'Get-SsmUrlLauncher uses xdg-open + URL arg on Linux' {
     Assert-Equal 'xdg-open' $l.Exe
     Assert-Equal 'https://example.com' (@($l.Args)[0])
 }
+
+Invoke-SsmTest 'Invoke-AboutKey G opens the author GitHub profile' {
+    $script:CapturedUrl = $null
+    function Open-SsmUrl { param([string]$Url) $script:CapturedUrl = $Url }
+    $k = [System.ConsoleKeyInfo]::new('g', [System.ConsoleKey]::G, $false, $false, $false)
+    Invoke-AboutKey -K $k
+    Assert-Equal 'https://github.com/mardahl' $script:CapturedUrl
+}
+
+Invoke-SsmTest 'Invoke-AboutKey R opens the releases page' {
+    $script:CapturedUrl = $null
+    function Open-SsmUrl { param([string]$Url) $script:CapturedUrl = $Url }
+    $k = [System.ConsoleKeyInfo]::new('r', [System.ConsoleKey]::R, $false, $false, $false)
+    Invoke-AboutKey -K $k
+    Assert-Equal 'https://github.com/mardahl/SharePoint-Sharing-Manager/releases' $script:CapturedUrl
+}
