@@ -287,7 +287,9 @@ function Show-InputModal {
         $shown = $typed
         if ($shown.Length -gt 58) { $shown = [string]$script:G.Ell + $shown.Substring($shown.Length - 55) }
         [void]$body.Add(@($script:T.Input, ('  ' + $shown + '_')))
-        [void](Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Enter accept   Esc cancel' -BorderStyle $script:T.Border -MinWidth 66)
+        # Pin the blank spacer and the field so a long prompt cannot push the
+        # input off the bottom of the box.
+        [void](Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Enter accept   Esc cancel' -BorderStyle $script:T.Border -MinWidth 66 -PinnedLines 2)
         $k = Read-ModalKey
         if ($k.Key -eq 'Escape') { $script:UI.Dirty = $true; return $null }
         if (($k.Modifiers -band [ConsoleModifiers]::Control) -and $k.Key -eq 'C') { $script:UI.Dirty = $true; return $null }
@@ -309,11 +311,13 @@ function Show-ListModal {
     param([string]$Title, [string]$Prompt, [string[]]$Options, [string]$Default = '')
     $sel = [Array]::IndexOf($Options, $Default)
     if ($sel -lt 0) { $sel = 0 }
+    $scroll = 0
     while ($true) {
         Write-Screen
         $body = New-Object System.Collections.ArrayList
         foreach ($ln in (ConvertTo-ModalLines -Lines @($Prompt) -Width 60)) { [void]$body.Add($ln) }
         [void]$body.Add(@($script:T.Row, ''))
+        $promptRows = $body.Count
         for ($i = 0; $i -lt $Options.Count; $i++) {
             if ($i -eq $sel) {
                 [void]$body.Add(@($script:T.CursorFg, ('  ' + [string]$script:G.Arrow + ' ' + $Options[$i])))
@@ -321,7 +325,19 @@ function Show-ListModal {
                 [void]$body.Add(@($script:T.Row, ('     ' + $Options[$i])))
             }
         }
-        [void](Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Up/Down move   Enter select   Esc cancel' -BorderStyle $script:T.Border -MinWidth 66)
+        # Keep the cursor inside the visible window. The prompt occupies the
+        # first rows of the body, so the option at index $sel sits at body row
+        # ($promptRows + $sel).
+        $geo = Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Up/Down move   Enter select   Esc cancel' -BorderStyle $script:T.Border -MinWidth 66 -BodyScroll $scroll
+        $cursorRow = $promptRows + $sel
+        if ($cursorRow -lt $scroll) {
+            $scroll = $cursorRow
+            continue
+        }
+        if ($geo.BodyH -gt 0 -and $cursorRow -ge ($scroll + $geo.BodyH)) {
+            $scroll = $cursorRow - $geo.BodyH + 1
+            continue
+        }
         $k = Read-ModalKey
         if (($k.Modifiers -band [ConsoleModifiers]::Control) -and $k.Key -eq 'C') { $script:UI.Dirty = $true; return $null }
         switch ($k.Key) {
@@ -413,8 +429,13 @@ function Write-ProgressModal {
     #              used while streaming results whose total is not known upfront.
     param([string]$Title, [int]$Done, [int]$Total, [string]$Label, [int]$Ok, [int]$Failed)
     $t = $script:T; $g = $script:G
-    $innerW = 60
-    $barW = $innerW - 9
+    $size = Get-ConsoleSize; $W = $size[0]; $H = $size[1]
+    # Match the floor Write-Screen enforces so this cannot paint over the
+    # "Terminal too small" message.
+    if ($W -lt 80 -or $H -lt 20) { return }
+    $boxW = [Math]::Min(66, $W - 4)
+    $innerW = [Math]::Max(20, $boxW - 4)
+    $barW = [Math]::Max(8, $innerW - 9)
     $hint = 'working...'
     if ($Total -gt 0) {
         $pct = [int](100 * $Done / $Total)
@@ -459,8 +480,7 @@ function Write-ProgressModal {
         }
     }
     # Render frame manually to keep the styled bar intact
-    $size = Get-ConsoleSize; $W = $size[0]; $H = $size[1]
-    $boxW = [Math]::Min(66, $W - 4); $innerBox = $boxW - 4
+    $innerBox = $innerW
     $boxH = $body.Count + 4
     $x = [Math]::Max(1, [int](($W - $boxW) / 2) + 1)
     $y = [Math]::Max(1, [int](($H - $boxH) / 2) + 1)
