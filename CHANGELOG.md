@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.3.2] - 2026-07-27
+
+- Fix: the bulk revoke confirmation hid its `REVOKE` input field when many
+  sites were selected. The dialog listed one full site URL per line, each
+  wrapping to two lines, and the body was silently truncated to the terminal
+  height - taking the typed-confirmation prompt and field with it, with no
+  indication that anything was hidden. The site list now scrolls (Up/Down,
+  PgUp/PgDn, Home/End) while the warning, prompt and input field stay pinned
+  to the bottom of the box, and a `3-14 of 36` position counter appears in the
+  footer whenever content is off screen. Sites that share a URL prefix now
+  print that prefix once as a header, so each site fits on one line.
+- Fix: revoking sharing froze the interface until the whole job finished, with
+  no bar, no spinner and no way to stop. Both revoke paths now show a
+  determinate progress bar that runs continuously across every affected site,
+  with the item in flight, live OK/failed counts and a moving spinner during
+  slow calls. Esc asks for confirmation and then stops after the current item;
+  everything processed up to that point is still written to the evidence CSV
+  and the session cache, and the completion report states where the run
+  stopped.
+- Fix: long option lists in picker modals were truncated with no way to scroll,
+  which could leave the selection cursor on an invisible row.
+- Fix: the progress bar overran its border on terminals narrower than about 64
+  columns; its width is now derived from the terminal size. Modals also honour
+  the same 80x20 minimum as the main screen instead of painting over the
+  "Terminal too small" message.
+
 ## [1.3.1] - 2026-07-27
 
 - Fix: the target list (Sites/OneDrives) crashed with `The property 'Count'
