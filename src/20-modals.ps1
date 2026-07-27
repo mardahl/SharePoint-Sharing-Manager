@@ -53,6 +53,34 @@ function ConvertTo-ModalLines {
     return ,$out.ToArray()
 }
 
+function Get-ModalScrollWindow {
+    # Scroll arithmetic for a modal body whose last $PinCount lines are pinned
+    # to the bottom and never scroll. Pure: no console access, so it is unit
+    # testable. $Total counts every body line, pinned ones included.
+    # Returns @{ Start; Count; Pin } - the slice of scrolling lines to draw and
+    # the pin count actually applied after clamping.
+    param([int]$Total, [int]$BodyH, [int]$PinCount, [int]$Scroll)
+
+    if ($Total -lt 0)   { $Total = 0 }
+    if ($BodyH -lt 1)   { $BodyH = 1 }
+    if ($PinCount -lt 0) { $PinCount = 0 }
+
+    # Two independent clamps: a caller may pin more lines than it supplied, and
+    # a short terminal may leave fewer body rows than the pin asks for. At least
+    # one scrolling row always survives so the body is never entirely pinned.
+    $pin = [Math]::Min($PinCount, $Total)
+    $pin = [Math]::Min($pin, [Math]::Max(0, $BodyH - 1))
+
+    $scrollTotal = $Total - $pin
+    $visible = [Math]::Min($BodyH - $pin, $scrollTotal)
+    if ($visible -lt 0) { $visible = 0 }
+
+    $maxStart = [Math]::Max(0, $scrollTotal - $visible)
+    $start = [Math]::Max(0, [Math]::Min($Scroll, $maxStart))
+
+    return @{ Start = $start; Count = $visible; Pin = $pin }
+}
+
 function Write-ModalFrame {
     # Draw a bordered box with title; returns geometry hashtable.
     param(
