@@ -43,6 +43,13 @@
 .NOTES
     Version : 1.3.1
     License : MIT
+    Author  : Michael Mardahl (Microsoft MVP)
+
+    Community contribution, shared "as-is" for the Microsoft open source
+    community. No warranty or official support is implied or provided.
+
+.LINK
+    https://github.com/mardahl/SharePoint-Sharing-Manager
 
 .LINK
     https://learn.microsoft.com/sharepoint/turn-external-sharing-on-or-off
