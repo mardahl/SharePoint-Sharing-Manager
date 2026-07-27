@@ -278,18 +278,8 @@ function Invoke-TabScan {
         $t.Status = 'Scanning'; Write-Screen
         Start-LoadSpinner
         Write-ProgressModal -Title ("Scanning {0}/{1}" -f $i, $sel.Count) -Done 0 -Total 0 -Label $t.Url -Ok 0 -Failed 0
-        $fnProgress = ${function:Write-ProgressModal}
-        $state = @{ LastTick = 0 }
-        $cb = {
-            param($Count, $Label)
-            while ([Console]::KeyAvailable) {
-                if ([Console]::ReadKey($true).Key -eq [ConsoleKey]::Escape) { throw (New-Object System.OperationCanceledException 'Scan cancelled.') }
-            }
-            $now = [Environment]::TickCount
-            if (($now - $state.LastTick) -lt 150) { return }
-            $state.LastTick = $now
-            & $fnProgress -Title 'Scanning' -Done $Count -Total 0 -Label $Label -Ok 0 -Failed 0
-        }.GetNewClosure()
+        $state = @{ LastTick = 0; Offset = 0; Total = 0; Cancel = $false }
+        $cb = New-SsmProgressCallback -Title 'Scanning' -State $state -CancelMode 'Throw'
         try {
             if (-not (Connect-SsmSite -Url $t.Url)) { $t.Status = 'ConnectFailed'; continue }
             $findings = @(Invoke-SiteScan -Target $t -Categories $cats -Progress $cb)
@@ -387,11 +377,21 @@ function Invoke-FindingsRevoke {
         ("Remove {0} link(s)/grant(s) on" -f $sel.Count), $target.Url, '') + $byCat)
     if (-not $ok) { return }
     if (-not (Connect-SsmSite -Url $target.Url)) { return }
-    $removed = Invoke-Revoke -Findings $sel
+    $state = @{ LastTick = 0; Offset = 0; Total = $sel.Count; Cancel = $false }
+    $cb = New-SsmProgressCallback -Title 'Revoking' -State $state -CancelMode 'Flag'
+    Start-LoadSpinner
+    try {
+        Write-ProgressModal -Title 'Revoking' -Done 0 -Total $sel.Count -Label $target.Url -Ok 0 -Failed 0
+        $removed = Invoke-Revoke -Findings $sel -Progress $cb -State $state
+    } finally {
+        Stop-LoadSpinner
+    }
     [void](Export-FindingsCsv -Findings @($ft['Items']) -SiteUrl $target.Url -Phase 'REVOKED')
     $target.FindingCount = @($target.Findings | Where-Object { $_.RevokeStatus -ne 'Removed' -and $_.RevokeStatus -ne 'AlreadyRevoked' }).Count
     if ($target.FindingCount -eq 0) { $target.Status = 'Revoked' }
-    Show-ReportModal -Title 'Revoke complete' -Lines @(("Removed {0} of {1}. Evidence CSV written." -f $removed, $sel.Count))
+    $report = @(("Removed {0} of {1}. Evidence CSV written." -f $removed, $sel.Count))
+    if ($state.Cancel) { $report += 'Cancelled by operator; the remaining findings were not processed.' }
+    Show-ReportModal -Title 'Revoke complete' -Lines $report
     Update-FindingsView -Tab $Tab
 }
 
@@ -426,19 +426,41 @@ function Invoke-BulkRevoke {
     }
     if (-not (Show-TypedConfirmModal -Title 'Bulk revoke sharing' -Word 'REVOKE' -Lines $lines)) { return }
 
-    $totalRemoved = 0; $siteReport = @()
-    foreach ($g in $groups) {
-        if (-not (Connect-SsmSite -Url $g.Name)) {
-            $siteReport += ("{0}: connect failed" -f $g.Name); continue
+    $totalRemoved = 0; $siteReport = @(); $siteNo = 0
+    # One continuous bar across every site: Offset carries the running total of
+    # findings completed in earlier sites, so the bar never resets to zero.
+    $state = @{ LastTick = 0; Offset = 0; Total = $sel.Count; Cancel = $false }
+    $cb = New-SsmProgressCallback -Title 'Revoking' -State $state -CancelMode 'Flag'
+    Start-LoadSpinner
+    try {
+        foreach ($g in $groups) {
+            $siteNo++
+            $siteCount = @($g.Group).Count
+            Write-ProgressModal -Title ("Revoking site {0}/{1}" -f $siteNo, $groups.Count) -Done $state.Offset -Total $sel.Count -Label $g.Name -Ok $totalRemoved -Failed 0
+            if (-not (Connect-SsmSite -Url $g.Name)) {
+                $siteReport += ("{0}: connect failed" -f $g.Name)
+                $state.Offset += $siteCount
+                continue
+            }
+            $removed = Invoke-Revoke -Findings @($g.Group) -Progress $cb -State $state
+            [void](Export-FindingsCsv -Findings @($g.Group) -SiteUrl $g.Name -Phase 'REVOKED')
+            $totalRemoved += $removed
+            $state.Offset += $siteCount
+            $siteReport += ("{0}: removed {1} of {2}" -f $g.Name, $removed, $siteCount)
+            if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
+            # Checked after the evidence CSV and cache save, so a cancelled run
+            # still records everything it actually did.
+            if ($state.Cancel) { break }
         }
-        $removed = Invoke-Revoke -Findings @($g.Group)
-        [void](Export-FindingsCsv -Findings @($g.Group) -SiteUrl $g.Name -Phase 'REVOKED')
-        $totalRemoved += $removed
-        $siteReport += ("{0}: removed {1} of {2}" -f $g.Name, $removed, @($g.Group).Count)
-        if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
+    } finally {
+        Stop-LoadSpinner
     }
     Update-TabTargetStatuses -Tab $Tab
-    Show-ReportModal -Title 'Bulk revoke complete' -Lines (@(("Removed {0} of {1} across {2} site(s)." -f $totalRemoved, $sel.Count, $groups.Count), '') + $siteReport)
+    $summary = @(("Removed {0} of {1} across {2} site(s)." -f $totalRemoved, $sel.Count, $groups.Count))
+    if ($state.Cancel) {
+        $summary += ("Cancelled after {0} of {1} site(s); the rest were not processed." -f $siteNo, $groups.Count)
+    }
+    Show-ReportModal -Title 'Bulk revoke complete' -Lines ($summary + @('') + $siteReport)
     Update-TabView -Tab $Tab
 }
 
