@@ -48,7 +48,8 @@ Invoke-SsmTest 'Save then restore via disk round-trips' {
     Assert-Equal 1 $avail.Count
 
     $script:Tabs = @(
-        @{ Kind='Targets'; Name='OneDrives'; Categories=[System.Collections.ArrayList]@(); Items=@(); Loaded=$false }
+        @{ Kind='Targets'; Name='OneDrives'; Categories=[System.Collections.ArrayList]@(); Items=@(); Loaded=$false
+           Filter='All'; Search=''; SortCol='Url'; SortDesc=$false; Cursor=0; View=@() }
     )
     $ok = Restore-SsmCache
     Assert-Equal 'True' ([string]$ok)

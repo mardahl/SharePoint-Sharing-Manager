@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.1] - 2026-07-27
+
+- Fix: the target list (Sites/OneDrives) crashed with `The property 'Count'
+  cannot be found on this object` whenever a filter, search, or sort left
+  exactly zero or one matching target - including an empty tab. This also
+  broke session restore (`L`), since it re-sorts every target tab and a
+  tenant with only one populated tab (e.g. OneDrives) always hits the
+  empty-tab case on the other one (Sites). Root cause: `$items = if (...) {
+  @(...) } else { @(...) }` re-streams the winning branch's output through
+  the if/else expression before assignment, and PowerShell collapses a
+  0-or-1-object pipeline result to `$null`/a scalar even though each branch
+  itself was array-cast. `@()` now wraps the whole if/else instead of each
+  branch.
+
 ## [1.3.0] - 2026-07-24
 
 - Add: new "About" tab (last tab in the tab bar) showing the app's purpose,

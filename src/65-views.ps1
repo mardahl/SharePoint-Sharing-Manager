@@ -18,7 +18,11 @@ function Update-TabView {
     }
     $prop = $Tab['SortCol']   # Url | Title | Status | Findings
     $expr = switch ($prop) { 'Findings' { { $_.FindingCount } } default { { $_.$prop } } }
-    $items = if ($Tab['SortDesc']) { @($items | Sort-Object -Property $expr -Descending) } else { @($items | Sort-Object -Property $expr) }
+    # @() must wrap the whole if/else, not each branch: an if-expression that
+    # streams zero or one object collapses to $null / a scalar on assignment
+    # even when each branch's own output was array-cast (0 or 1 matches is
+    # the common case - e.g. an empty tab, or a filter with a single hit).
+    $items = @(if ($Tab['SortDesc']) { $items | Sort-Object -Property $expr -Descending } else { $items | Sort-Object -Property $expr })
     $Tab['View'] = $items
     if ($Tab['Cursor'] -ge $items.Count) { $Tab['Cursor'] = [Math]::Max(0, $items.Count - 1) }
     $script:UI.Dirty = $true
