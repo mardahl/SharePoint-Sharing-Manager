@@ -414,13 +414,15 @@ function Write-ProgressModal {
     param([string]$Title, [int]$Done, [int]$Total, [string]$Label, [int]$Ok, [int]$Failed)
     $t = $script:T; $g = $script:G
     $innerW = 60
-    $barW = $innerW - 7
+    $barW = $innerW - 9
     $hint = 'working...'
     if ($Total -gt 0) {
         $pct = [int](100 * $Done / $Total)
         $fill = [int]($barW * $Done / $Total)
         if ($fill -gt $barW) { $fill = $barW }
-        $bar = $t.BarOn + ([string]$g.BarOn * $fill) + $t.BarOff + ([string]$g.BarOff * ($barW - $fill)) + $t.Reset + $t.Row + (' {0,3}%' -f $pct)
+        # 7-char suffix: ' 100%' plus a space and the spinner cell, matching
+        # the indeterminate layout so the spinner lands in the same column.
+        $bar = $t.BarOn + ([string]$g.BarOn * $fill) + $t.BarOff + ([string]$g.BarOff * ($barW - $fill)) + $t.Reset + $t.Row + (' {0,3}%  ' -f $pct)
         $head = "Processing $Done of $Total"
     } else {
         # Marquee: short segment bouncing across the bar; frame from the clock
@@ -432,7 +434,7 @@ function Write-ProgressModal {
         $pos = $phase
         if ($phase -gt $span) { $pos = (2 * $span) - $phase }
         $spin = @('|', '/', '-', '\')[$frame % 4]
-        $bar = $t.BarOff + ([string]$g.BarOff * $pos) + $t.BarOn + ([string]$g.BarOn * $segW) + $t.BarOff + ([string]$g.BarOff * ($span - $pos)) + $t.Reset + $t.Row + ('   {0} ' -f $spin)
+        $bar = $t.BarOff + ([string]$g.BarOff * $pos) + $t.BarOn + ([string]$g.BarOn * $segW) + $t.BarOff + ([string]$g.BarOff * ($span - $pos)) + $t.Reset + $t.Row + ('      {0}' -f $spin)
         $head = "Retrieved $Done so far"
         if ($Done -le 0) { $head = 'Working - this can take a while...' }
         $hint = 'Esc cancels - working...'
@@ -464,13 +466,13 @@ function Write-ProgressModal {
     $y = [Math]::Max(1, [int](($H - $boxH) / 2) + 1)
     # Publish the spinner cell to the background spinner runspace (if any):
     # the suffix slot after the marquee bar. Determinate modals hide it.
+    # Show the spinner in both modes: a determinate bar can sit unchanged for
+    # many seconds inside a single blocking cmdlet, and a frozen bar is
+    # indistinguishable from a hung application. Both suffixes are 7 chars wide
+    # with the spinner in the last one, so the cell is the same either way.
     if ($script:Spinner) {
-        if ($Total -gt 0) {
-            $script:Spinner.State.X = 0
-        } else {
-            $script:Spinner.State.Y = $y + 3
-            $script:Spinner.State.X = $x + 2 + $barW + 3
-        }
+        $script:Spinner.State.Y = $y + 3
+        $script:Spinner.State.X = $x + 2 + $barW + 6
     }
     $sb = New-Object System.Text.StringBuilder
     $hChar = [string]$g.H
@@ -485,7 +487,7 @@ function Write-ProgressModal {
         [void]$sb.Append("$script:ESC[$row;$($x)H").Append($t.Border).Append([string]$g.V).Append($t.Reset).Append(' ')
         if ($pair[0] -eq 'RAWBAR') {
             [void]$sb.Append([string]$pair[1])
-            $visLen = $barW + 5
+            $visLen = $barW + 7
             if ($visLen -lt $innerBox) { [void]$sb.Append(' ' * ($innerBox - $visLen)) }
         } else {
             [void]$sb.Append([string]$pair[0]).Append((Get-PadCell ([string]$pair[1]) $innerBox)).Append($t.Reset)
@@ -499,6 +501,60 @@ function Write-ProgressModal {
     $row++
     [void]$sb.Append("$script:ESC[$row;$($x)H").Append($t.Border).Append([string]$g.BL).Append($hChar * ($boxW - 2)).Append([string]$g.BR).Append($t.Reset)
     [Console]::Write($sb.ToString())
+}
+
+function New-SsmProgressCallback {
+    # Builds the -Progress scriptblock used by the scan and revoke engines.
+    # Repaints Write-ProgressModal at most every 150 ms and drains the key
+    # buffer so Esc is noticed between units of work.
+    #
+    # $State is caller-owned and must be initialised with all four keys:
+    #   @{ LastTick = 0; Offset = 0; Total = 0; Cancel = $false }
+    # Offset is added to the reported count, which lets several sequential
+    # runs share one continuous progress bar. Total 0 selects the
+    # indeterminate marquee.
+    #
+    # CancelMode 'Throw'  - Esc raises OperationCanceledException immediately.
+    #                       For non-destructive work that can be safely unwound
+    #                       from deep inside a scan loop.
+    # CancelMode 'Flag'   - Esc asks for confirmation, then sets $State.Cancel.
+    #                       For destructive work: the engine finishes the item
+    #                       in flight and returns normally, so its caller still
+    #                       writes evidence and saves state.
+    param(
+        [string]$Title,
+        [hashtable]$State,
+        [ValidateSet('Flag','Throw')][string]$CancelMode = 'Flag'
+    )
+    $fnProgress = ${function:Write-ProgressModal}
+    $fnConfirm  = ${function:Show-ConfirmModal}
+    $st = $State
+    $mode = $CancelMode
+    $ttl = $Title
+    return {
+        param($Count, $Total = 0, $Label = '', $Ok = 0, $Failed = 0)
+        $null = $Total  # part of the fixed -Progress signature; state tracks its own Total
+        while ([Console]::KeyAvailable) {
+            if ([Console]::ReadKey($true).Key -eq [ConsoleKey]::Escape) {
+                if ($mode -eq 'Throw') {
+                    throw (New-Object System.OperationCanceledException 'Cancelled by operator.')
+                }
+                if (-not $st.Cancel) {
+                    $stop = & $fnConfirm -Title 'Stop the revoke?' -Danger -Lines @(
+                        'Stop after the current item?',
+                        '',
+                        'Links and grants already removed stay removed; the',
+                        'evidence CSV records exactly what was processed.')
+                    if ($stop) { $st.Cancel = $true }
+                    $st.LastTick = 0   # force an immediate repaint over the confirm box
+                }
+            }
+        }
+        $now = [Environment]::TickCount
+        if (($now - $st.LastTick) -lt 150) { return }
+        $st.LastTick = $now
+        & $fnProgress -Title $ttl -Done ($st.Offset + $Count) -Total $st.Total -Label $Label -Ok $Ok -Failed $Failed
+    }.GetNewClosure()
 }
 
 function Show-HelpModal {
