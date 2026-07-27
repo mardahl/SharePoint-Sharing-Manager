@@ -270,7 +270,15 @@ when `W -lt 80 -or H -lt 20`.
 
 ## Testing
 
-Tests run under Pester via `tests/run-tests.ps1`.
+Tests run under the repository's own assert-based runner,
+`tests/run-tests.ps1`, which dot-sources the PnP-free source files and executes
+every `tests/*.tests.ps1` through `Invoke-SsmTest` / `Assert-Equal`. There is no
+Pester dependency and no mocking framework; PnP cmdlets are shadowed by stub
+functions defined in the test file.
+
+`src/20-modals.ps1` is not currently in the runner's dot-source list. It
+defines functions only, with no load-time side effects, so it is added to that
+list to make `Get-ModalScrollWindow` and `Get-CommonUrlPrefix` reachable.
 
 **Unit tests (no console required):**
 
@@ -281,9 +289,10 @@ Tests run under Pester via `tests/run-tests.ps1`.
   available height; pin count larger than the total line count; scroll value
   past the end; `PinCount = 0` reproducing current behaviour; total smaller
   than the body height.
-- `Invoke-Revoke` cancellation in `tests/revoke.tests.ps1`, which already mocks
-  the PnP cmdlets: setting `State.Cancel` mid-run stops the loop, and the
-  returned count reflects only completed items.
+- `Invoke-Revoke` cancellation in `tests/revoke.tests.ps1`: with the PnP removal
+  cmdlets shadowed by no-op stub functions, setting `State.Cancel` from inside
+  the progress callback stops the loop, and the returned count reflects only
+  completed items.
 
 **Manual verification:** modal rendering and the modal key loops write directly
 to the console through `[Console]::Write` with no existing harness. Verified by
@@ -300,8 +309,9 @@ resize during the confirmation dialog.
   entry.
 
 **Files changed:** `src/20-modals.ps1`, `src/40-revoke.ps1`,
-`src/65-views.ps1`, `src/00-globals.ps1`, `tests/revoke.tests.ps1`,
-`tests/views.tests.ps1`, `CHANGELOG.md`, `dist/SharePoint-Sharing-Manager.ps1`.
+`src/65-views.ps1`, `src/00-globals.ps1`, `tests/run-tests.ps1`,
+`tests/revoke.tests.ps1`, `tests/views.tests.ps1`, `CHANGELOG.md`,
+`dist/SharePoint-Sharing-Manager.ps1`.
 
 ## Known issues and limitations
 
