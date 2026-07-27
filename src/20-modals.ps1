@@ -233,17 +233,24 @@ function Show-ConfirmModal {
 
 function Show-TypedConfirmModal {
     # Requires the operator to type an exact word. Returns $true/$false.
+    # The warning, prompt and input field are pinned to the bottom of the box,
+    # so a long body (e.g. one line per site in a bulk revoke) can scroll
+    # without ever pushing the field off screen.
     param([string]$Title, [object[]]$Lines, [string]$Word)
     $typed = ''
+    $scroll = 0
     while ($true) {
         Write-Screen
         $body = New-Object System.Collections.ArrayList
         foreach ($ln in (ConvertTo-ModalLines -Lines $Lines -Width 64)) { [void]$body.Add($ln) }
+        # These five lines are pinned; keep the count in sync with -PinnedLines.
+        [void]$body.Add(@($script:T.Row, ''))
+        [void]$body.Add(@($script:T.Warn, 'Files and folders are never deleted. This cannot be undone.'))
         [void]$body.Add(@($script:T.Row, ''))
         [void]$body.Add(@($script:T.CtxHi, "Type $Word and press Enter to proceed:"))
         $field = $typed + '_'
         [void]$body.Add(@($script:T.Input, ('  ' + $field)))
-        [void](Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Enter confirm   Esc cancel' -BorderStyle $script:T.BorderErr)
+        $geo = Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Up/Down scroll   Enter confirm   Esc cancel' -BorderStyle $script:T.BorderErr -BodyScroll $scroll -PinnedLines 5
         $k = Read-ModalKey
         if ($k.Key -eq 'Escape') { $script:UI.Dirty = $true; return $false }
         if (($k.Modifiers -band [ConsoleModifiers]::Control) -and $k.Key -eq 'C') { $script:UI.Dirty = $true; return $false }
@@ -251,6 +258,13 @@ function Show-TypedConfirmModal {
             $script:UI.Dirty = $true
             return ($typed -ceq $Word)
         }
+        # Scroll keys must be consumed before the text-append branch below.
+        if ($k.Key -eq 'UpArrow')   { if ($scroll -gt 0) { $scroll-- }; continue }
+        if ($k.Key -eq 'DownArrow') { if ($geo.Scrollable -and $scroll -lt ($geo.Total - $geo.BodyH)) { $scroll++ }; continue }
+        if ($k.Key -eq 'PageUp')    { $scroll = [Math]::Max(0, $scroll - $geo.BodyH); continue }
+        if ($k.Key -eq 'PageDown')  { if ($geo.Scrollable) { $scroll = [Math]::Min([Math]::Max(0, $geo.Total - $geo.BodyH), $scroll + $geo.BodyH) }; continue }
+        if ($k.Key -eq 'Home')      { $scroll = 0; continue }
+        if ($k.Key -eq 'End')       { if ($geo.Scrollable) { $scroll = [Math]::Max(0, $geo.Total - $geo.BodyH) }; continue }
         if ($k.Key -eq 'Backspace') {
             if ($typed.Length -gt 0) { $typed = $typed.Substring(0, $typed.Length - 1) }
             continue

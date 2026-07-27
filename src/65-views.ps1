@@ -384,7 +384,7 @@ function Invoke-FindingsRevoke {
     if ($sel.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('Nothing selected.'); return }
     $byCat = ($sel | Group-Object Category | ForEach-Object { "  {0}: {1}" -f $_.Name, $_.Count })
     $ok = Show-TypedConfirmModal -Title 'Revoke sharing' -Word 'REVOKE' -Lines (@(
-        ("Remove {0} link(s)/grant(s) on" -f $sel.Count), $target.Url, '') + $byCat + @('', 'Files and folders are never deleted. This cannot be undone.'))
+        ("Remove {0} link(s)/grant(s) on" -f $sel.Count), $target.Url, '') + $byCat)
     if (-not $ok) { return }
     if (-not (Connect-SsmSite -Url $target.Url)) { return }
     $removed = Invoke-Revoke -Findings $sel
@@ -412,9 +412,18 @@ function Invoke-BulkRevoke {
     $sel = @($Findings)
     if ($sel.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('Nothing selected.'); return }
     $groups = Group-FindingsBySite -Findings $sel
-    $lines  = @(("Remove {0} link(s)/grant(s) across {1} site(s):" -f $sel.Count, $groups.Count), '')
-    foreach ($g in $groups) { $lines += ("  {0}: {1}" -f $g.Name, @($g.Group).Count) }
-    $lines += @('', 'Files and folders are never deleted. This cannot be undone.')
+    $lines = @(("Remove {0} link(s)/grant(s) across {1} site(s):" -f $sel.Count, $groups.Count), '')
+    $prefix = Get-CommonUrlPrefix -Urls @($groups | ForEach-Object { $_.Name })
+    if ($prefix) {
+        # Print the shared site-collection prefix once so each site fits on one
+        # line; full URLs wrap to two lines each at the modal's 64-char width.
+        $lines += ("Under " + $prefix)
+        foreach ($g in $groups) {
+            $lines += ("  {0}: {1}" -f $g.Name.Substring($prefix.Length), @($g.Group).Count)
+        }
+    } else {
+        foreach ($g in $groups) { $lines += ("  {0}: {1}" -f $g.Name, @($g.Group).Count) }
+    }
     if (-not (Show-TypedConfirmModal -Title 'Bulk revoke sharing' -Word 'REVOKE' -Lines $lines)) { return }
 
     $totalRemoved = 0; $siteReport = @()
