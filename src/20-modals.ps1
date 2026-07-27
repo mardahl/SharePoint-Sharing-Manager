@@ -90,10 +90,16 @@ function Write-ModalFrame {
         [string]$BorderStyle,
         [int]$MinWidth = 68,
         [int]$FixedBodyHeight = 0, # 0 = size to content
-        [int]$BodyScroll = 0
+        [int]$BodyScroll = 0,
+        [int]$PinnedLines = 0      # last N body lines never scroll; drawn at the bottom
     )
     $t = $script:T; $g = $script:G
     $size = Get-ConsoleSize; $W = $size[0]; $H = $size[1]
+    # Match the floor Write-Screen enforces, so a modal cannot paint over the
+    # "Terminal too small" message.
+    if ($W -lt 80 -or $H -lt 20) {
+        return @{ X=1; Y=1; W=0; H=0; InnerW=0; BodyH=0; Total=0; Scrollable=$false }
+    }
     if (-not $BorderStyle) { $BorderStyle = $t.Border }
 
     $boxW = [Math]::Min([Math]::Max($MinWidth, $Title.Length + 8), $W - 4)
@@ -103,8 +109,15 @@ function Write-ModalFrame {
     if ($FixedBodyHeight -gt 0) { $bodyH = $FixedBodyHeight }
     $maxBodyH = $H - 8
     if ($maxBodyH -lt 3) { $maxBodyH = 3 }
-    $scrollable = $false
-    if ($bodyH -gt $maxBodyH) { $bodyH = $maxBodyH; $scrollable = $true }
+    if ($bodyH -gt $maxBodyH) { $bodyH = $maxBodyH }
+
+    # Split the body into a scrolling region and a pinned footer region. The
+    # geometry returned describes the scrolling region only, so callers keep
+    # using ($geo.Total - $geo.BodyH) as their maximum scroll offset.
+    $win = Get-ModalScrollWindow -Total $BodyLines.Count -BodyH $bodyH -PinCount $PinnedLines -Scroll $BodyScroll
+    $pinCount   = $win.Pin
+    $scrollLen  = $BodyLines.Count - $pinCount
+    $scrollable = $scrollLen -gt $win.Count
 
     $boxH = $bodyH + 4   # top border, blank-ish padding handled in body, footer hint, bottom border
     $x = [Math]::Max(1, [int](($W - $boxW) / 2) + 1)
@@ -125,16 +138,20 @@ function Write-ModalFrame {
     [void]$sb.Append($hChar * $dashR).Append([string]$g.TR).Append($t.Reset)
 
     # body rows
-    $visible = $BodyLines
-    if ($scrollable -or ($FixedBodyHeight -gt 0 -and $BodyLines.Count -gt $bodyH)) {
-        $start = [Math]::Max(0, [Math]::Min($BodyScroll, $BodyLines.Count - $bodyH))
-        $visible = $BodyLines[$start..([Math]::Min($BodyLines.Count - 1, $start + $bodyH - 1))]
+    $visible = @()
+    if ($win.Count -gt 0 -and $scrollLen -gt 0) {
+        $visible = @($BodyLines[$win.Start..($win.Start + $win.Count - 1)])
     }
+    $pinned = @()
+    if ($pinCount -gt 0) {
+        $pinned = @($BodyLines[$scrollLen..($BodyLines.Count - 1)])
+    }
+    $rows = @($visible) + @($pinned)
     $row = $y + 1
     for ($i = 0; $i -lt $bodyH; $i++) {
         $style = $t.Row; $text = ''
-        if ($i -lt $visible.Count) {
-            $pair = $visible[$i]
+        if ($i -lt $rows.Count) {
+            $pair = $rows[$i]
             $style = [string]$pair[0]; $text = [string]$pair[1]
         }
         [void]$sb.Append("$script:ESC[$row;$($x)H")
@@ -147,7 +164,13 @@ function Write-ModalFrame {
     # footer hint row
     [void]$sb.Append("$script:ESC[$row;$($x)H")
     [void]$sb.Append($BorderStyle).Append([string]$g.V).Append($t.Reset).Append(' ')
-    [void]$sb.Append($t.Muted).Append((Get-PadCell $FooterHint $innerW -AlignRight)).Append($t.Reset)
+    $hintText = $FooterHint
+    if ($scrollable) {
+        $first = $win.Start + 1
+        $last  = $win.Start + $win.Count
+        $hintText = ("{0}-{1} of {2}   {3}" -f $first, $last, $scrollLen, $FooterHint)
+    }
+    [void]$sb.Append($t.Muted).Append((Get-PadCell $hintText $innerW -AlignRight)).Append($t.Reset)
     [void]$sb.Append(' ').Append($BorderStyle).Append([string]$g.V).Append($t.Reset)
     $row++
 
@@ -156,7 +179,9 @@ function Write-ModalFrame {
     [void]$sb.Append($BorderStyle).Append([string]$g.BL).Append($hChar * ($boxW - 2)).Append([string]$g.BR).Append($t.Reset)
 
     [Console]::Write($sb.ToString())
-    return @{ X=$x; Y=$y; W=$boxW; H=$boxH; InnerW=$innerW; BodyH=$bodyH; Total=$BodyLines.Count; Scrollable=$scrollable }
+    # BodyH/Total describe the scrolling region, not the whole body, so callers
+    # can keep using ($geo.Total - $geo.BodyH) as the maximum scroll offset.
+    return @{ X=$x; Y=$y; W=$boxW; H=$boxH; InnerW=$innerW; BodyH=$win.Count; Total=$scrollLen; Scrollable=$scrollable }
 }
 
 function Read-ModalKey {
