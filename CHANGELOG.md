@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.3] - 2026-07-27
+
+- Fix: a revoke could succeed and show "Revoked" in the TUI, but the session
+  cache (`session.json`) still said "Findings" after a restart or a manual
+  cache restore (`L`) - the underlying `RevokeStatus` on each finding was
+  saved correctly, but the target's summary `Status`/`FindingCount` was not.
+  Two gaps caused this: the single-target drill-down revoke (`R` inside a
+  target's findings view) never saved the cache at all, and the bulk revoke
+  (`R` on the target list, and the aggregate findings view) saved the cache
+  per site *before* recomputing `Status`/`FindingCount` from the finalized
+  `RevokeStatus` values, so every save persisted a stale "Findings" status.
+
 ## [1.3.2] - 2026-07-27
 
 - Fix: the bulk revoke confirmation hid its `REVOKE` input field when many

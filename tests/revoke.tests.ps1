@@ -137,3 +137,91 @@ Invoke-SsmTest 'Invoke-Revoke without -State or -Progress still revokes everythi
     )
     Assert-Equal 2 (Invoke-Revoke -Findings $f)
 }
+
+# Stub the modal/connection layer so the two higher-level revoke entry points
+# (Invoke-FindingsRevoke, Invoke-BulkRevoke) can run headless. Defined at
+# script scope, these shadow the real 20-modals/30-connections functions.
+function Show-TypedConfirmModal { param($Title, $Word, $Lines) return $true }
+function Write-ProgressModal    { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+function Start-LoadSpinner      {}
+function Stop-LoadSpinner       {}
+function Show-ReportModal       { param($Title, $Lines) }
+function Show-MsgModal          { param($Title, $Lines, $Kind) }
+function Connect-SsmSite        { param($Url) return $true }
+function New-SsmProgressCallback { param($Title, $State, $CancelMode) return { param($Count, $Total, $Label, $Ok, $Failed) } }
+
+function New-SsmRevokeTestTab {
+    # Minimal Targets tab with one OneDrive target and one pending finding,
+    # shaped the way Update-TabView/Update-TabTargetStatuses expect.
+    $finding = @{
+        Site='https://x/personal/a'; Location='File'; Name='f1'; CategoryKey='OrgLink'
+        Category='Organization link'; Access='View'; Principal='People in your organization'
+        Path='/a/f1'; RemovalKind='Link'; LinkId='l1'; ListId=$null; ItemId=$null; PrincipalId=$null
+        RevokeStatus='NotAttempted'; Selected=$true
+    }
+    $item = @{
+        Url='https://x/personal/a'; Title='a'; Template='SPSPERS'; Status='Findings'; FindingCount=1
+        Findings=@($finding); Selected=$true
+    }
+    return @{
+        Kind='Targets'; Name='OneDrives'; Categories=[System.Collections.ArrayList]@('OrgLink')
+        Items=@($item); View=@(); Loaded=$true; Cursor=0; Scroll=0; Search=''
+        Filter='All'; SortCol='Url'; SortDesc=$false; Mode='Targets'; FTab=$null
+    }
+}
+
+Invoke-SsmTest 'Invoke-FindingsRevoke persists the revoke to the session cache (regression)' {
+    # Bug: the single-target drill-down revoke path updated Status/FindingCount
+    # in memory but never called Save-SsmCache, so a later cache restore (or
+    # app restart) showed "Findings" again despite a successful revoke.
+    $script:Version = '9.9.9'
+    $script:CacheDir  = Join-Path ([IO.Path]::GetTempPath()) ("ssmcache-{0}" -f [guid]::NewGuid())
+    $script:CacheFile = Join-Path $script:CacheDir 'session.json'
+    $script:CacheWarning = 'test-warning'
+    $script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) ("ssmexport-{0}" -f [guid]::NewGuid())
+
+    $tab = New-SsmRevokeTestTab
+    $target = $tab['Items'][0]
+    $script:Tabs = @($tab)
+
+    Enter-FindingsMode -Tab $tab -Target $target
+    Invoke-FindingsRevoke -Tab $tab
+    Assert-Equal 'Revoked' $target.Status   # in-memory: already worked before the fix
+
+    $freshTab = New-SsmRevokeTestTab
+    $freshTab['Items'] = @()
+    $freshTab['Loaded'] = $false
+    $script:Tabs = @($freshTab)
+    [void](Restore-SsmCache)
+
+    Assert-Equal 'Revoked' $script:Tabs[0]['Items'][0].Status
+    Assert-Equal 0 $script:Tabs[0]['Items'][0].FindingCount
+
+    Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $script:ExportDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Invoke-SsmTest 'Invoke-BulkRevoke saves the cache with the recomputed Status, not a stale one (regression)' {
+    # Bug: Save-SsmCache ran per-site inside the loop, before the post-loop
+    # Update-TabTargetStatuses recomputed Status/FindingCount, and nothing
+    # saved again afterward - the on-disk cache stayed "Findings" forever.
+    $script:Version = '9.9.9'
+    $script:CacheDir  = Join-Path ([IO.Path]::GetTempPath()) ("ssmcache-{0}" -f [guid]::NewGuid())
+    $script:CacheFile = Join-Path $script:CacheDir 'session.json'
+    $script:CacheWarning = 'test-warning'
+    $script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) ("ssmexport-{0}" -f [guid]::NewGuid())
+
+    $tab = New-SsmRevokeTestTab
+    $target = $tab['Items'][0]
+    $script:Tabs = @($tab)
+
+    Invoke-BulkRevoke -Findings @($target.Findings) -Tab $tab
+    Assert-Equal 'Revoked' $target.Status   # in-memory: already worked before the fix
+
+    $onDisk = Get-Content -LiteralPath $script:CacheFile -Raw | ConvertFrom-Json
+    Assert-Equal 'Revoked' $onDisk.Tabs[0].Items[0].Status
+    Assert-Equal 0 $onDisk.Tabs[0].Items[0].FindingCount
+
+    Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $script:ExportDir -Recurse -Force -ErrorAction SilentlyContinue
+}

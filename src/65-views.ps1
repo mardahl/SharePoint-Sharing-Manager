@@ -389,6 +389,7 @@ function Invoke-FindingsRevoke {
     [void](Export-FindingsCsv -Findings @($ft['Items']) -SiteUrl $target.Url -Phase 'REVOKED')
     $target.FindingCount = @($target.Findings | Where-Object { $_.RevokeStatus -ne 'Removed' -and $_.RevokeStatus -ne 'AlreadyRevoked' }).Count
     if ($target.FindingCount -eq 0) { $target.Status = 'Revoked' }
+    if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
     $report = @(("Removed {0} of {1}. Evidence CSV written." -f $removed, $sel.Count))
     if ($state.Cancel) { $report += 'Cancelled by operator; the remaining findings were not processed.' }
     Show-ReportModal -Title 'Revoke complete' -Lines $report
@@ -447,6 +448,11 @@ function Invoke-BulkRevoke {
             $totalRemoved += $removed
             $state.Offset += $siteCount
             $siteReport += ("{0}: removed {1} of {2}" -f $g.Name, $removed, $siteCount)
+            # Recompute Status/FindingCount from the just-updated RevokeStatus
+            # values before saving, so the on-disk cache never lags behind a
+            # restart/restore with a stale "Findings" status - Save-SsmCache
+            # snapshots whatever Status the target currently holds.
+            Update-TabTargetStatuses -Tab $Tab
             if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
             # Checked after the evidence CSV and cache save, so a cancelled run
             # still records everything it actually did.
@@ -455,7 +461,6 @@ function Invoke-BulkRevoke {
     } finally {
         Stop-LoadSpinner
     }
-    Update-TabTargetStatuses -Tab $Tab
     $summary = @(("Removed {0} of {1} across {2} site(s)." -f $totalRemoved, $sel.Count, $groups.Count))
     if ($state.Cancel) {
         $summary += ("Cancelled after {0} of {1} site(s); the rest were not processed." -f $siteNo, $groups.Count)
