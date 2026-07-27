@@ -19,6 +19,35 @@ function Group-FindingsBySite {
     return @(@($Findings) | Group-Object -Property Site)
 }
 
+function Get-CommonUrlPrefix {
+    # Longest common prefix of the given URLs, truncated back to and including
+    # the last '/', so the remainder is always a whole path segment. Used to
+    # print a shared site-collection prefix once instead of on every line.
+    # Returns '' when there is nothing worth factoring out.
+    param([string[]]$Urls)
+
+    $list = @($Urls | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($list.Count -lt 2) { return '' }
+
+    $prefix = $list[0]
+    foreach ($u in $list) {
+        $max = [Math]::Min($prefix.Length, $u.Length)
+        $i = 0
+        while ($i -lt $max -and $prefix[$i] -eq $u[$i]) { $i++ }
+        $prefix = $prefix.Substring(0, $i)
+        if ($prefix.Length -eq 0) { return '' }
+    }
+
+    # Trim back to a segment boundary so a partial name is never shown as shared.
+    $cut = $prefix.LastIndexOf('/')
+    if ($cut -lt 0) { return '' }
+    $prefix = $prefix.Substring(0, $cut + 1)
+
+    # Below this length the header costs more lines than it saves.
+    if ($prefix.Length -le 16) { return '' }
+    return $prefix
+}
+
 #endregion
 
 # ============================================================================
