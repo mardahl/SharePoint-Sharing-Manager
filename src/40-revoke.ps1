@@ -57,19 +57,27 @@ function Get-CommonUrlPrefix {
 function Invoke-Revoke {
     # Remove all given findings against the currently-connected site; sets
     # RevokeStatus per finding and returns the count removed.
-    param($Findings, [scriptblock]$Progress)
-    $removed = 0; $i = 0
+    #
+    # -State is the shared progress/cancel hashtable (see
+    # New-SsmProgressCallback). When its Cancel key is set, the loop stops
+    # after the finding in flight and returns normally, so the caller still
+    # exports evidence and saves the cache for the work actually done.
+    param($Findings, [scriptblock]$Progress, [hashtable]$State)
+    $removed = 0; $failed = 0; $i = 0
     $ordered = Get-RevokeOrder -Findings $Findings
+    $total = @($ordered).Count
     foreach ($f in $ordered) {
         $i++
-        if ($Progress) { & $Progress -Count $i -Label ("Revoking {0} / {1}: {2}" -f $i, @($ordered).Count, $f.Name) }
+        if ($Progress) {
+            & $Progress -Count $i -Total $total -Label ("Revoking {0} / {1}: {2}" -f $i, $total, $f.Name) -Ok $removed -Failed $failed
+        }
         try {
             if ($f.RemovalKind -eq 'Link') {
-                if ([string]::IsNullOrWhiteSpace($f.LinkId)) { $f.RevokeStatus = 'Skipped: empty LinkId'; continue }
+                if ([string]::IsNullOrWhiteSpace($f.LinkId)) { $f.RevokeStatus = 'Skipped: empty LinkId'; $failed++; continue }
                 if ($f.Location -eq 'File') { Remove-PnPFileSharingLink -FileUrl $f.Path -Identity $f.LinkId -Force -ErrorAction Stop }
                 else { Remove-PnPFolderSharingLink -Folder $f.Path -Identity $f.LinkId -Force -ErrorAction Stop }
             } else {   # DirectGrant
-                if (-not $f.PrincipalId) { $f.RevokeStatus = 'Skipped: no PrincipalId'; continue }
+                if (-not $f.PrincipalId) { $f.RevokeStatus = 'Skipped: no PrincipalId'; $failed++; continue }
                 $sec = switch ($f.Location) {
                     'Web'     { Get-PnPWeb }
                     'Library' { Get-PnPList -Identity $f.ListId }
@@ -87,8 +95,10 @@ function Invoke-Revoke {
                 $f.RevokeStatus = 'AlreadyRevoked'; $removed++
             } else {
                 $f.RevokeStatus = "Failed: $msg"
+                $failed++
             }
         }
+        if ($State -and $State.Cancel) { break }
     }
     return $removed
 }
