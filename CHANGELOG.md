@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.0] - 2026-08-19
+
+- Change: Setup tab is now the tenant management hub: lists all tenants with
+  active/default/configured markers; Enter opens per-tenant actions (switch,
+  edit config, register apps, renew cert, set default, remove); A adds a tenant.
+- Change: "Tenant" tab renamed to "Sharing" to avoid confusion with tenant
+  management. Internal behavior unchanged.
+- Change: removed flat D/C/W/X/L keys on Setup (absorbed into the per-tenant
+  action modal). T quick-switcher unchanged.
+- Fix: tenant switcher (T) now advertised in footer hints and help.
+
 ## [1.4.1] - 2026-08-19
 
 - Fix: applying a True/False tenant hardening setting (e.g.

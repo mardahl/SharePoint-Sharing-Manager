@@ -16,7 +16,7 @@ Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Mana
 
 ```
  SharePoint Sharing Manager  v1.0.0        ● https://contoso-my.sharepoint.com/personal/jane_contoso_com
-  1 Sites   2 OneDrives   3 Tenant   4 Setup   5 Log
+  1 Sites   2 OneDrives   3 Sharing   4 Setup   5 Log
  https://contoso-my.sharepoint.com/personal/jane_contoso_com   4 of 4 findings   0 selected   filter:All
  sel Category              Loc     Name                    Principal                 Status
  [ ] Anonymous link         File    Q4-Budget.xlsx          (anonymous)               -
@@ -63,7 +63,7 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **Per-finding multi-select revoke** with typed `REVOKE` confirmation and BEFORE/REVOKED CSV evidence for every run
 - **Target discovery**: auto-enumerate via `Get-PnPTenantSite`, manual URL entry, or CSV import
 - **Delegated (interactive) and app-only certificate authentication**, with a guided in-app setup wizard including 1-year certificate issuance and renewal
-- **Tenant tab**: current sharing posture (`Get-PnPTenant`) plus hardening setters (`Set-PnPTenant`) behind typed confirmation
+- **Sharing tab**: current sharing posture (`Get-PnPTenant`) plus hardening setters (`Set-PnPTenant`) behind typed confirmation
 - **Search** (`/` live filter), category filter, multi-select, sorting
 - **CSV export** of any view; CSV import of target URLs
 - **Timestamped log file** plus an in-app log viewer
@@ -80,7 +80,7 @@ Download the zip from [Releases](https://github.com/mardahl/SharePoint-Sharing-M
 pwsh ./SharePoint-Sharing-Manager.ps1
 ```
 
-First run: open the **Setup** tab and pick an auth mode -
+First run: open the **Setup** tab, press `Enter` on the tenant, and pick an auth mode -
 
 - `C` - register an app-only certificate app (recommended; removes the per-OneDrive Site Collection Admin requirement)
 - `D` - register a delegated (interactive) app
@@ -108,14 +108,12 @@ First run: open the **Setup** tab and pick an auth mode -
 | | `R` | Revoke selected (typed `REVOKE` confirmation); in the all-findings view, revokes across every affected site with one confirmation |
 | | `E` | Export |
 | | `Esc` | Back to target list |
-| Tenant | `Enter` | Load posture |
+| Sharing | `Enter` | Load posture |
 | | `1`-`9` | Change a setting (this tab owns the digit keys - use `Tab`/`Shift+Tab` to switch tabs) |
 | | `R` | Refresh |
-| Setup | `D` | Register delegated app |
-| | `C` | Register app-only certificate app |
-| | `W` | Renew certificate |
-| | `X` | Edit config |
-| | `L` | List tenants - add, set default, or remove |
+| Setup | `Up`/`Down` | Move between tenants |
+| | `Enter` | Actions for the highlighted tenant (switch, edit config, register apps, renew cert, set default, remove) |
+| | `A` | Add a tenant |
 | Log | `↑`/`↓` | Scroll |
 | | `O` | Open log file |
 | Any tab | `T` | Switch tenant (non-Targets tabs) |
@@ -135,7 +133,7 @@ First run: open the **Setup** tab and pick an auth mode -
 | Create the app registration (either mode) | **Application Administrator** |
 | Consent to application permissions (app-only mode) | **Global Administrator** or **Privileged Role Administrator** |
 | Delegated mode: scan/revoke on a target | **Site Collection Admin** on that site or OneDrive |
-| Delegated mode: Tenant tab | **SharePoint Administrator** |
+| Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
 
 App-only mode requests **application** permissions `Sites.FullControl.All` (SharePoint) and `Sites.FullControl.All` (Graph) and uploads a self-signed certificate valid one year. Application Administrator can create the app registration, but admin consent for application permissions requires Global Administrator or Privileged Role Administrator - the setup wizard displays a consent URL that can be forwarded to whoever holds that role.
@@ -160,7 +158,7 @@ Known limitations:
 - Guest detection on specific-people links depends on the link exposing an external grantee; a follow-up report-only pass is the verification.
 - EEEU/Everyone nested inside a site permission group is group membership, not a direct grant, and is not removed.
 - Sharing links on list items outside document libraries are not handled.
-- Cleanup does not prevent new sharing - use the Tenant tab's hardening toggles for that.
+- Cleanup does not prevent new sharing - use the Sharing tab's hardening toggles for that.
 - The SharePoint admin site URL is derived from the tenant name as `https://<tenant>-admin.sharepoint.com`; tenants where the SharePoint hostname doesn't follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 - The scan cache holds one session per install directory (`SSM-Cache/session.json`, next to the script); two installs on the same machine get independent caches. Restoring it loads whatever was scanned last, which may be stale relative to the tenant's current sharing state - rescan before acting on old results. Scan-all (`X`) scans one target at a time.
 

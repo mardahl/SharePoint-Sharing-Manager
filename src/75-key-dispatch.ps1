@@ -212,7 +212,7 @@ function Invoke-FindingsKey {
 }
 
 function Invoke-TenantKey {
-    # The Tenant tab is a navigable list: Up/Down move the cursor over the
+    # The Sharing tab is a navigable list: Up/Down move the cursor over the
     # sharing settings, Enter loads the posture (when unloaded) or opens the
     # value picker for the highlighted setting. Digit keys are intentionally
     # NOT captured here, so they stay available for tab switching in the main
@@ -316,7 +316,7 @@ function Invoke-KeyDispatch {
         $script:UI.Tab = ($script:UI.Tab + $delta + $script:Tabs.Count) % $script:Tabs.Count
         return
     }
-    # Digit keys jump to a tab by position. The Tenant tab no longer captures
+    # Digit keys jump to a tab by position. The Sharing tab no longer captures
     # digits for its own menu (it is arrow-navigated now), so digits switch
     # tabs from every tab.
     if ($K.KeyChar -ge '1' -and $K.KeyChar -le [char]([int][char]'0' + $script:Tabs.Count)) {
