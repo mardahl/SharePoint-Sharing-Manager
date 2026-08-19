@@ -249,3 +249,47 @@ function Switch-SsmTenant {
     Write-SsmLog -Message ("Switched active tenant to '{0}'." -f $Name) -Level OK
     return $true
 }
+
+function Remove-SsmTenantData {
+    # Delete the tenant's local artefacts per flags, then remove the config
+    # entry. Each step is isolated; failures are collected in .Errors and do
+    # not abort the rest. Windows cert-store deletion only runs on Windows.
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [switch]$IncludeCert,
+        [switch]$IncludeCache,
+        [switch]$IncludeExports
+    )
+    $result = @{ Removed=$false; CertDeleted=$false; CacheDeleted=$false; ExportsDeleted=$false; Errors=@() }
+    $c = Get-SsmConfig
+    if ($null -eq $c -or -not $c.Tenants.ContainsKey($Name)) { return $result }
+    $entry = $c.Tenants[$Name]
+    $slug  = ConvertTo-SsmTenantSlug -Name $Name
+
+    if ($IncludeCert) {
+        try {
+            if ($entry.Thumbprint -and $script:IsWin) {
+                $certPath = "Cert:\CurrentUser\My\{0}" -f $entry.Thumbprint
+                if (Test-Path $certPath) { Remove-Item $certPath -Force; $result.CertDeleted = $true }
+            } elseif ($entry.CertPath -and (Test-Path -LiteralPath $entry.CertPath)) {
+                Remove-Item -LiteralPath $entry.CertPath -Force
+                $result.CertDeleted = $true
+            }
+        } catch { $result.Errors += ("cert: {0}" -f $_.Exception.Message) }
+    }
+    if ($IncludeCache) {
+        try {
+            $dir = Join-Path $script:Root ("SSM-Cache/{0}" -f $slug)
+            if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force; $result.CacheDeleted = $true }
+        } catch { $result.Errors += ("cache: {0}" -f $_.Exception.Message) }
+    }
+    if ($IncludeExports) {
+        try {
+            $dir = Join-Path $script:Root ("SSM-Exports/{0}" -f $slug)
+            if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force; $result.ExportsDeleted = $true }
+        } catch { $result.Errors += ("exports: {0}" -f $_.Exception.Message) }
+    }
+    $result.Removed = [bool](Remove-SsmTenant -Name $Name)
+    Write-SsmLog -Message ("Removed tenant '{0}' (cert={1} cache={2} exports={3})." -f $Name, $result.CertDeleted, $result.CacheDeleted, $result.ExportsDeleted) -Level OK
+    return $result
+}

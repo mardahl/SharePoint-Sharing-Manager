@@ -153,3 +153,48 @@ Invoke-SsmTest 'Switch-SsmTenant swaps auth, repaths, clears Targets tabs' {
     Assert-Equal $false (Switch-SsmTenant -Name 'no-such')
     Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
 }
+
+Invoke-SsmTest 'Remove-SsmTenantData deletes cache+exports per flags, removes config' {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-rm-{0}" -f [guid]::NewGuid())
+    $script:Root = $root
+    $p = Join-Path $root 'cfg.json'
+    $script:ConfigPath = $p
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    Save-SsmConfig -Path $p -Config @{
+        Version=2; DefaultTenant=''
+        Tenants=@{ fabrikam=@{ AuthMode='AppOnly'; ClientId='x'; Tenant='f.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires='' } }
+    }
+    $cache = Join-Path $root 'SSM-Cache/fabrikam'
+    $expo  = Join-Path $root 'SSM-Exports/fabrikam'
+    New-Item -ItemType Directory -Path $cache -Force | Out-Null
+    New-Item -ItemType Directory -Path $expo  -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $cache 'session.json') -Value '{}'
+    Set-Content -LiteralPath (Join-Path $expo 'a.csv') -Value 'x'
+    $r = Remove-SsmTenantData -Name 'fabrikam' -IncludeCache
+    Assert-Equal $true $r.Removed
+    Assert-Equal $true $r.CacheDeleted
+    Assert-Equal $false $r.ExportsDeleted
+    Assert-Equal $false (Test-Path -LiteralPath $cache)
+    Assert-Equal $true  (Test-Path -LiteralPath $expo)
+    $c = Get-SsmConfig -Path $p
+    Assert-Equal $false ($c.Tenants.ContainsKey('fabrikam'))
+    Remove-Item -LiteralPath $root -Recurse -Force
+}
+Invoke-SsmTest 'Remove-SsmTenantData deletes PFX when CertPath set (non-Windows path)' {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-rm2-{0}" -f [guid]::NewGuid())
+    $script:Root = $root
+    $p = Join-Path $root 'cfg.json'
+    $script:ConfigPath = $p
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    $pfx = Join-Path $root 'cert.pfx'
+    Set-Content -LiteralPath $pfx -Value 'fake'
+    Save-SsmConfig -Path $p -Config @{
+        Version=2; DefaultTenant=''
+        Tenants=@{ t1=@{ AuthMode='AppOnly'; ClientId='x'; Tenant=''; AdminUrl=''; Thumbprint=''; CertPath=$pfx; CertExpires='' } }
+    }
+    $r = Remove-SsmTenantData -Name 't1' -IncludeCert
+    Assert-Equal $true $r.Removed
+    Assert-Equal $true $r.CertDeleted
+    Assert-Equal $false (Test-Path -LiteralPath $pfx)
+    Remove-Item -LiteralPath $root -Recurse -Force
+}
