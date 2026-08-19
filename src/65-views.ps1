@@ -581,6 +581,10 @@ function Add-SetupView {
     $valueW = [Math]::Max(20, $W - $margin - 14)
     Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Config file : ' + $t.Row + (Get-PadCell $script:ConfigPath $valueW)); $row += 2
 
+    $pnp = Get-Module -ListAvailable -Name 'PnP.PowerShell' | Sort-Object Version -Descending | Select-Object -First 1
+    $pnpText = if ($pnp) { 'installed (v' + $pnp.Version + ')' } else { 'not installed' }
+    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'PnP module  : ' + $t.CtxHi + $pnpText); $row += 2
+
     $legend = @(
         'Enter  actions for the highlighted tenant',
         'A      add a tenant',

@@ -42,6 +42,13 @@ Invoke-SsmTest 'Setup view lists tenants with active/default/configured markers'
     if ($out -notmatch 'empty .*not configured') { throw "missing empty row: $out" }
 }
 
+Invoke-SsmTest 'Setup view shows PnP module status line' {
+    $script:Tabs = @(@{ Kind='Targets' }, @{ Kind='Targets' }, @{ Kind='Tenant' }, @{ Kind='Setup'; Cursor=0 })
+    $script:UI = @{ Tab = 3 }
+    $out = Capture-SetupView
+    if ($out -notmatch 'PnP module  : ') { throw "missing PnP line: $out" }
+}
+
 Invoke-SsmTest 'Setup view cursor clamps past end of list' {
     $script:Tabs = @(@{ Kind='Targets' }, @{ Kind='Targets' }, @{ Kind='Tenant' }, @{ Kind='Setup'; Cursor=99 })
     $script:UI = @{ Tab = 3 }
