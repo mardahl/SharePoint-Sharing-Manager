@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0] - 2026-08-19
+
+- Add: multi-tenant support. Config (`~/.sharepoint-sharing-manager.json`) now
+  stores a named `Tenants` map with a `DefaultTenant`, and a legacy flat v1
+  config is migrated to v2 automatically on first launch (cache and exports
+  are moved into per-tenant directories keyed off a slugified tenant name).
+  The title bar shows the active tenant name. `T` on any non-Targets tab
+  opens a tenant switcher; switching tenants swaps the active auth, repaths
+  cache/exports/logs to that tenant's directories, and clears the Sites/
+  OneDrives target tabs. The Setup tab gains a tenant list with add
+  (`A`, via the existing auth wizard), set-default, and remove flows -
+  removing a tenant optionally deletes its cached scan session, CSV exports,
+  and certificate (typed `DELETE`/`EXPORTS` confirmation) alongside its
+  config entry.
+
 ## [1.3.3] - 2026-07-27
 
 - Fix: a revoke could succeed and show "Revoked" in the TUI, but the session

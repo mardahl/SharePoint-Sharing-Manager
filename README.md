@@ -70,6 +70,7 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **Per-site failure isolation** - a site that will not connect or scan is logged and the run continues
 - **Persistent scan cache with manual restore** - scan results survive a restart and can be reloaded on demand
 - **Bulk revocation across drives and across the full findings list** - revoke every finding on a set of selected targets, or every finding in the aggregate view, in one confirmed pass
+- **Multi-tenant** - manage multiple tenants from one install, switch between them (`T`), each with its own auth, scan cache, and exports; legacy single-tenant config migrates automatically
 
 ## Quick start
 
@@ -114,9 +115,11 @@ First run: open the **Setup** tab and pick an auth mode -
 | | `C` | Register app-only certificate app |
 | | `W` | Renew certificate |
 | | `X` | Edit config |
+| | `L` | List tenants - add, set default, or remove |
 | Log | `↑`/`↓` | Scroll |
 | | `O` | Open log file |
-| Any tab | `?` | Help |
+| Any tab | `T` | Switch tenant (non-Targets tabs) |
+| | `?` | Help |
 | | `Q` | Quit |
 
 ## Requirements
@@ -144,9 +147,9 @@ App-only mode requests **application** permissions `Sites.FullControl.All` (Shar
 | `SharePoint-Sharing-Manager_<timestamp>.log` | Session log (also viewable on the Log tab) |
 | `SSM-Exports/SSM_<phase>_<site>_<timestamp>.csv` | BEFORE/REVOKED evidence for each scan and revoke run |
 | `SSM-Exports/<tab>_targets_<timestamp>.csv` / `SSM-Exports/<tab>_findings_<timestamp>.csv` | View exports |
-| `~/.sharepoint-sharing-manager.json` | Sign-in configuration (auth mode, client id, tenant, cert thumbprint/path) |
+| `~/.sharepoint-sharing-manager.json` | Sign-in configuration - one entry per tenant, plus a default tenant name |
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode (PFX on non-Windows) |
-| `SSM-Cache/session.json` | Cached scan results (targets + findings) for restore; contains directory data |
+| `SSM-Cache/<tenant-slug>/session.json` | Cached scan results (targets + findings) per tenant, for restore; contains directory data |
 | `SSM-Cache/README.txt` | Sensitivity notice for the cache directory |
 
 ## Caveats
