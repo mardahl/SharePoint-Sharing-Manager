@@ -46,3 +46,10 @@ Invoke-SsmTest 'Down arrow on the Tenant tab moves the setting cursor' {
     Invoke-KeyDispatch -K $down
     Assert-Equal 1 $script:Tabs[2]['Cursor']
 }
+
+Invoke-SsmTest 'Tab 3 is named Sharing (Tenant rename)' {
+    $Ascii = $false
+    . (Join-Path $PSScriptRoot '..' 'src' '00-globals.ps1')
+    Assert-Equal 'Sharing' $script:Tabs[2].Name
+    Assert-Equal 'Tenant' $script:Tabs[2].Kind   # Kind must NOT change
+}

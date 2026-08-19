@@ -94,7 +94,7 @@ function New-TargetsTab {
 $script:Tabs = @(
     (New-TargetsTab -Name 'Sites'     -Noun 'sites'     -OneDrive $false -Preset @('OrgLink')),
     (New-TargetsTab -Name 'OneDrives' -Noun 'OneDrives' -OneDrive $true  -Preset @($script:RuleCategories.Keys)),
-    @{ Kind = 'Tenant'; Name = 'Tenant'; Loaded = $false; Posture = $null; Cursor = 0 },
+    @{ Kind = 'Tenant'; Name = 'Sharing'; Loaded = $false; Posture = $null; Cursor = 0 },
     @{ Kind = 'Setup';  Name = 'Setup' },
     @{ Kind = 'Log';    Name = 'Log' },
     @{ Kind = 'About';  Name = 'About' }
