@@ -11,17 +11,19 @@ if (-not $script:Root) {
 }
 
 $script:LogFile   = Join-Path $script:Root ("SharePoint-Sharing-Manager_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
-$script:ExportDir = Join-Path $script:Root 'SSM-Exports'
+$script:ExportDir = $null   # set by Set-SsmTenantPaths
 $script:LogBuffer = New-Object System.Collections.ArrayList
 $script:Spinner   = $null
-$script:CacheDir     = Join-Path $script:Root 'SSM-Cache'
-$script:CacheFile    = Join-Path $script:CacheDir 'session.json'
+$script:CacheDir     = $null   # set by Set-SsmTenantPaths
+$script:CacheFile    = $null
 $script:CacheWarning = @(
     'This directory holds cached SharePoint/OneDrive scan results.'
     'session.json contains directory data - site paths, principal names,'
     'and guest email addresses. Treat it as sensitive; it is protected by'
     'filesystem permissions only, not encryption. Delete it when no longer needed.'
 ) -join [Environment]::NewLine
+
+$script:TenantName = ''   # key into config Tenants map; '' = not chosen yet
 
 # Auth/config state (populated from ~/.sharepoint-sharing-manager.json in 25-config)
 $script:Auth = @{

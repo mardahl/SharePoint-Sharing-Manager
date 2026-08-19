@@ -71,4 +71,16 @@ Invoke-SsmTest 'Save-SsmAuth writes into Tenants[TenantName], preserves others' 
     Assert-Equal '2222' $c.Tenants['fabrikam'].ClientId
     Remove-Item -LiteralPath $v2 -ErrorAction SilentlyContinue
 }
+Invoke-SsmTest 'Set-SsmTenantPaths derives per-tenant dirs from slug' {
+    $script:Root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-root-{0}" -f [guid]::NewGuid())
+    Set-SsmTenantPaths -Name 'Contoso Ltd'
+    Assert-Equal (Join-Path $script:Root 'SSM-Cache/contoso-ltd') $script:CacheDir
+    Assert-Equal (Join-Path $script:Root 'SSM-Cache/contoso-ltd/session.json') $script:CacheFile
+    Assert-Equal (Join-Path $script:Root 'SSM-Exports/contoso-ltd') $script:ExportDir
+}
+Invoke-SsmTest 'Set-SsmTenantPaths with empty name keeps legacy dirs' {
+    Set-SsmTenantPaths -Name ''
+    Assert-Equal (Join-Path $script:Root 'SSM-Cache') $script:CacheDir
+    Assert-Equal (Join-Path $script:Root 'SSM-Exports') $script:ExportDir
+}
 Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue

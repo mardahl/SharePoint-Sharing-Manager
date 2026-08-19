@@ -117,4 +117,19 @@ function ConvertTo-SsmTenantSlug {
     return $s
 }
 
+function Set-SsmTenantPaths {
+    # Point cache + export dirs at the active tenant's slug subdir. Empty
+    # name = legacy un-suffixed dirs (pre-tenant startup state).
+    param([AllowEmptyString()][string]$Name)
+    if ($Name) {
+        $slug = ConvertTo-SsmTenantSlug -Name $Name
+        $script:CacheDir  = Join-Path $script:Root ("SSM-Cache/{0}" -f $slug)
+        $script:ExportDir = Join-Path $script:Root ("SSM-Exports/{0}" -f $slug)
+    } else {
+        $script:CacheDir  = Join-Path $script:Root 'SSM-Cache'
+        $script:ExportDir = Join-Path $script:Root 'SSM-Exports'
+    }
+    $script:CacheFile = Join-Path $script:CacheDir 'session.json'
+}
+
 #endregion
