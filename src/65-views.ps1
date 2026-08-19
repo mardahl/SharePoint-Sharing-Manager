@@ -47,6 +47,7 @@ function Add-TitleBar {
     param([System.Text.StringBuilder]$Sb, [int]$W)
     $t = $script:T; $g = $script:G
     $left = ' SharePoint Sharing Manager  v' + $script:Version
+    if ($script:TenantName) { $left += ('  [' + $script:TenantName + ']') }
     $pieces = New-Object System.Collections.ArrayList
 
     $connGlyph = [string]$g.Ring; $connStyle = $t.TitleOff; $connText = 'Not connected'

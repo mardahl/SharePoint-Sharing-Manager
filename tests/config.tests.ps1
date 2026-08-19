@@ -198,6 +198,44 @@ Invoke-SsmTest 'Remove-SsmTenantData deletes PFX when CertPath set (non-Windows 
     Assert-Equal $false (Test-Path -LiteralPath $pfx)
     Remove-Item -LiteralPath $root -Recurse -Force
 }
+Invoke-SsmTest 'Remove-SsmTenantData -IncludeExports deletes exports dir' {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-rm3-{0}" -f [guid]::NewGuid())
+    $script:Root = $root
+    $p = Join-Path $root 'cfg.json'
+    $script:ConfigPath = $p
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    Save-SsmConfig -Path $p -Config @{
+        Version=2; DefaultTenant=''
+        Tenants=@{ fabrikam=@{ AuthMode='AppOnly'; ClientId='x'; Tenant='f.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires='' } }
+    }
+    $expo = Join-Path $root 'SSM-Exports/fabrikam'
+    New-Item -ItemType Directory -Path $expo -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $expo 'a.csv') -Value 'x'
+    $r = Remove-SsmTenantData -Name 'fabrikam' -IncludeExports
+    Assert-Equal $true $r.Removed
+    Assert-Equal $true $r.ExportsDeleted
+    Assert-Equal $false (Test-Path -LiteralPath $expo)
+    Remove-Item -LiteralPath $root -Recurse -Force
+}
+Invoke-SsmTest 'Remove-SsmTenantData: Removed is false and no throw when config already gone' {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-rm4-{0}" -f [guid]::NewGuid())
+    $script:Root = $root
+    $p = Join-Path $root 'cfg.json'
+    $script:ConfigPath = $p
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    Save-SsmConfig -Path $p -Config @{
+        Version=2; DefaultTenant=''
+        Tenants=@{ fabrikam=@{ AuthMode='AppOnly'; ClientId='x'; Tenant='f.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires='' } }
+    }
+    # Simulate the config being deleted out from under the running process
+    # between reads: Remove-SsmTenant re-reads $script:ConfigPath and finds
+    # nothing to remove, so .Removed stays false without throwing.
+    Remove-Item -LiteralPath $p -Force
+    $r = Remove-SsmTenantData -Name 'fabrikam'
+    Assert-Equal $false $r.Removed
+    Assert-Equal 0 $r.Errors.Count
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
 Invoke-SsmTest 'Save-SsmAuth derives tenant name from Auth.Tenant when unset' {
     $p = Join-Path ([IO.Path]::GetTempPath()) ("ssm-derive-{0}.json" -f [guid]::NewGuid())
     $script:ConfigPath = $p

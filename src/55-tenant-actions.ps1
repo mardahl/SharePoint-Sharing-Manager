@@ -93,10 +93,14 @@ function Show-TenantSwitcherModal {
         $marker = if ($n -eq $script:TenantName) { ' (active)' } else { '' }
         $options += ("{0}{1} - {2}" -f $n, $marker, $e.AuthMode)
     }
-    $pick = Show-ListModal -Title 'Switch tenant' -Prompt 'Select tenant:' -Options $options -Default $script:TenantName
+    $defaultOption = if ($names -contains $script:TenantName) { $options[[Array]::IndexOf($names, $script:TenantName)] } else { '' }
+    $pick = Show-ListModal -Title 'Switch tenant' -Prompt 'Select tenant:' -Options $options -Default $defaultOption
     if (-not $pick) { return }
-    # Extract tenant name back out of the decorated label.
-    $name = ($pick -split ' - ')[0] -replace ' \(active\)$', ''
+    # Match the picked decorated label back to its tenant name by index, not by
+    # parsing the label (tenant names may contain ' - ').
+    $idx = [Array]::IndexOf($options, $pick)
+    if ($idx -lt 0) { return }
+    $name = $names[$idx]
     if ($name -eq $script:TenantName) { return }
     if (-not ($c.Tenants.ContainsKey($name))) { return }
 

@@ -228,7 +228,9 @@ function Show-TenantListModal {
         }
         return
     }
-    $name = ($pick -replace ' \[.*\]$', '')
+    $idx = [Array]::IndexOf($options, $pick)
+    if ($idx -lt 0 -or $idx -ge $names.Count) { return }
+    $name = $names[$idx]
     $action = Show-ListModal -Title $name -Prompt 'Action:' -Options @('Set as default', 'Remove tenant', 'Cancel')
     switch ($action) {
         'Set as default' {
