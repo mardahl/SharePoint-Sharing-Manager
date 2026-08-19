@@ -79,6 +79,17 @@ function Test-SsmAuthReady {
     return $true
 }
 
+function Test-SsmTenantConfigured {
+    # Pure: is a Tenants-map entry complete enough to connect with?
+    param([hashtable]$Entry)
+    if (-not $Entry.ClientId) { return $false }
+    if ($Entry.AuthMode -eq 'AppOnly') {
+        if (-not $Entry.Tenant) { return $false }
+        if (-not ($Entry.Thumbprint -or $Entry.CertPath)) { return $false }
+    }
+    return $true
+}
+
 function Get-CertDaysLeft {
     if (-not $script:Auth.CertExpires) { return $null }
     try { return [int]([datetime]::Parse($script:Auth.CertExpires) - (Get-Date)).TotalDays }

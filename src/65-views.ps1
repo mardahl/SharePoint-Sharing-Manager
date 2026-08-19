@@ -549,46 +549,42 @@ function Add-TenantView {
 function Add-SetupView {
     param([System.Text.StringBuilder]$Sb, [int]$W, [int]$H)
     $t = $script:T
-    Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + ' Sign-in configuration')
+    Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + ' Tenants')
     for ($r = 4; $r -le ($H - 1); $r++) { Add-FrameLine -Sb $Sb -Row $r -Content '' }
 
-    $margin = 4; $row = 5; $pad = ' ' * $margin
-    $valueW = [Math]::Max(20, $W - $margin - 14)
-    $a = $script:Auth
+    $tab = $script:Tabs[$script:UI.Tab]
+    $names = @(Get-SsmTenantNames)
+    if ($names.Count -eq 0) { $tab['Cursor'] = 0 }
+    elseif ($tab['Cursor'] -ge $names.Count) { $tab['Cursor'] = $names.Count - 1 }
+    if ($tab['Cursor'] -lt 0) { $tab['Cursor'] = 0 }
+    $c = Get-SsmConfig
 
-    $modeText = if ($a.AuthMode) { $a.AuthMode } else { '(not configured)' }
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Auth mode   : ' + $t.CtxHi + $modeText); $row++
-    $clientIdText = if ($a.ClientId) { $a.ClientId } else { '(none)' }
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Client Id   : ' + $t.CtxHi + $clientIdText); $row++
-    $tenantText = if ($a.Tenant) { $a.Tenant } else { '(none)' }
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Tenant      : ' + $t.CtxHi + $tenantText); $row++
-    $adminText = if ($a.AdminUrl) { Get-PadCell $a.AdminUrl $valueW } else { '(none)' }
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Admin URL   : ' + $t.CtxHi + $adminText); $row++
-
-    $certRef = if ($a.Thumbprint) { $a.Thumbprint } elseif ($a.CertPath) { $a.CertPath } else { '' }
-    $certText = if ($certRef) { $certRef } else { '(none)' }
-    $daysLeft = Get-CertDaysLeft
-    $certStyle = $t.CtxHi
-    if ($null -ne $daysLeft) {
-        if ($daysLeft -lt 30) { $certStyle = $t.Warn }
-        $certText += (' (expires {0}, {1} days left)' -f $a.CertExpires, $daysLeft)
+    $margin = 4; $pad = ' ' * $margin; $row = 5
+    if ($names.Count -eq 0) {
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'No tenants configured. Press A to add one.'); $row += 2
     }
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Certificate : ' + $certStyle + $certText); $row++
+    for ($i = 0; $i -lt $names.Count -and $row -le ($H - 6); $i++) {
+        $n = $names[$i]
+        $e = $c.Tenants[$n]
+        $tags = @()
+        if ($n -eq $script:TenantName)   { $tags += 'active' }
+        if ($n -eq $c.DefaultTenant)     { $tags += 'default' }
+        $tagText = if ($tags) { ' [' + ($tags -join ',') + ']' } else { '' }
+        $mode = if ($e.AuthMode) { $e.AuthMode } else { '-' }
+        $state = if (Test-SsmTenantConfigured -Entry $e) { 'configured' } else { 'not configured' }
+        $line = $pad + $n + $tagText + '  ' + $mode + '  ' + $state
+        if ($i -eq $tab['Cursor']) { $line = $t.CursorFg + $line + $t.Reset }
+        Add-FrameLine -Sb $Sb -Row $row -Content $line; $row++
+    }
     $row++
 
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Config file : ' + $t.Row + (Get-PadCell $script:ConfigPath $valueW)); $row++
-    $row++
-
-    $pnp = Get-Module -ListAvailable -Name 'PnP.PowerShell' | Sort-Object Version -Descending | Select-Object -First 1
-    $pnpText = if ($pnp) { 'installed (v' + $pnp.Version + ')' } else { 'not installed' }
-    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'PnP module  : ' + $t.CtxHi + $pnpText); $row++
-    $row++
+    $valueW = [Math]::Max(20, $W - $margin - 14)
+    Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + 'Config file : ' + $t.Row + (Get-PadCell $script:ConfigPath $valueW)); $row += 2
 
     $legend = @(
-        'D  register a delegated (interactive) app registration',
-        'C  register a certificate (app-only) app registration',
-        'W  renew the app-only certificate',
-        'X  edit the config file directly'
+        'Enter  actions for the highlighted tenant',
+        'A      add a tenant',
+        'T      quick-switch tenant (works on most tabs)'
     )
     foreach ($ln in $legend) {
         if ($row -gt ($H - 1)) { break }
@@ -669,7 +665,7 @@ function Get-TabHints {
                      @('Enter','open/load'),@('L','restore'),@('E','export'),@('?','help'),@('Q','quit'))
         }
         'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
-        'Setup'  { return @(@('D','delegated app'),@('C','cert app'),@('W','renew cert'),@('X','edit config'),@('?','help'),@('Q','quit')) }
+        'Setup'  { return @(@('Up/Dn','move'),@('Enter','actions'),@('A','add tenant'),@('T','switch'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
         'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('?','help'),@('Q','quit')) }
         'About'  { return @(@('G','github'),@('R','releases'),@('?','help'),@('Q','quit')) }
     }
