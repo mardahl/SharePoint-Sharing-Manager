@@ -336,6 +336,7 @@ function Invoke-KeyDispatch {
     }
     if ($K.KeyChar -eq '?') { Show-HelpModal; return }
     $upper = [char]::ToUpper($K.KeyChar)
+    if ($upper -eq 'T' -and $tab['Kind'] -ne 'Targets') { Show-TenantSwitcherModal; return }
     if ($upper -eq 'Q') { $script:UI.Quit = $true; return }
     if ($upper -eq 'W' -and $tab['Kind'] -ne 'Setup') {
         if ($script:Conn.Url) {

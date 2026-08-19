@@ -80,4 +80,46 @@ function Invoke-TenantSetting {
     }
 }
 
+function Show-TenantSwitcherModal {
+    $names = @(Get-SsmTenantNames)
+    if ($names.Count -eq 0) {
+        Show-MsgModal -Title 'Switch tenant' -Lines @('No tenants configured yet.', 'Use the Setup tab to add one.') -Kind Warn
+        return
+    }
+    $c = Get-SsmConfig
+    $options = @()
+    foreach ($n in $names) {
+        $e = $c.Tenants[$n]
+        $marker = if ($n -eq $script:TenantName) { ' (active)' } else { '' }
+        $options += ("{0}{1} - {2}" -f $n, $marker, $e.AuthMode)
+    }
+    $pick = Show-ListModal -Title 'Switch tenant' -Prompt 'Select tenant:' -Options $options -Default $script:TenantName
+    if (-not $pick) { return }
+    # Extract tenant name back out of the decorated label.
+    $name = ($pick -split ' - ')[0] -replace ' \(active\)$', ''
+    if ($name -eq $script:TenantName) { return }
+    if (-not ($c.Tenants.ContainsKey($name))) { return }
+
+    $hasState = $false
+    foreach ($tab in @($script:Tabs)) {
+        if ($tab['Kind'] -eq 'Targets' -and @($tab['Items']).Count -gt 0) { $hasState = $true; break }
+    }
+    if ($hasState) {
+        $ok = Show-ConfirmModal -Title 'Switch tenant' -Lines @(
+            ("Switch from '{0}' to '{1}'?" -f $script:TenantName, $name), '',
+            'Current scan state in memory will be discarded.',
+            'The on-disk cache for this tenant is kept and can be restored.')
+        if (-not $ok) { return }
+    }
+
+    try { if ($script:Conn.Url) { Disconnect-PnPOnline -ErrorAction SilentlyContinue } } catch {}
+    if (Switch-SsmTenant -Name $name) {
+        if (Get-Command Test-SsmCacheAvailable -ErrorAction SilentlyContinue) {
+            $script:UI.RestoreInfo = Test-SsmCacheAvailable
+        }
+        $script:UI.Dirty = $true
+        Show-MsgModal -Title 'Switched' -Lines @("Active tenant: $name")
+    }
+}
+
 #endregion
