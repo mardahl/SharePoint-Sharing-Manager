@@ -118,3 +118,38 @@ Invoke-SsmTest 'Add/Remove/Default tenant helpers' {
     Assert-Equal $false ($c.Tenants.ContainsKey('fabrikam'))
     Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
 }
+
+Invoke-SsmTest 'Switch-SsmTenant swaps auth, repaths, clears Targets tabs' {
+    $p = Join-Path ([IO.Path]::GetTempPath()) ("ssm-sw-{0}.json" -f [guid]::NewGuid())
+    $script:ConfigPath = $p
+    $script:Root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-root-{0}" -f [guid]::NewGuid())
+    Save-SsmConfig -Path $p -Config @{
+        Version=2; DefaultTenant='contoso'
+        Tenants=@{
+            contoso=@{ AuthMode='AppOnly'; ClientId='aaaa'; Tenant='contoso.onmicrosoft.com'; AdminUrl=''; Thumbprint='THUMB1'; CertPath=''; CertExpires='' }
+            fabrikam=@{ AuthMode='Delegated'; ClientId='bbbb'; Tenant='fabrikam.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires='' }
+        }
+    }
+    $script:TenantName = 'contoso'
+    $script:Auth = @{ AuthMode='AppOnly'; ClientId='aaaa'; Tenant='contoso.onmicrosoft.com'; AdminUrl=''; Thumbprint='THUMB1'; CertPath=''; CertExpires=''; Loaded=$true }
+    $script:Conn = @{ Url='https://contoso.sharepoint.com'; Admin=$false; Account='app:aaaa' }
+    $script:Tabs = @(
+        @{ Kind='Targets'; Name='Sites'; Items=@(@{Url='x'}); View=@(@{Url='x'}); Loaded=$true; Mode='Findings'; Search='abc'; Categories=[System.Collections.ArrayList]@('OrgLink'); FTab=$null; Cursor=0; Scroll=0; Filter='All'; SortCol='Url'; SortDesc=$false },
+        @{ Kind='Tenant'; Name='Tenant'; Loaded=$true; Posture=@{}; Cursor=0 }
+    )
+    Set-SsmTenantPaths -Name 'contoso'
+    Assert-Equal $true (Switch-SsmTenant -Name 'fabrikam')
+    Assert-Equal 'fabrikam' $script:TenantName
+    Assert-Equal 'Delegated' $script:Auth.AuthMode
+    Assert-Equal '' $script:Auth.Thumbprint
+    Assert-Equal '' $script:Conn.Url
+    Assert-Equal 0 @($script:Tabs[0]['Items']).Count
+    Assert-Equal $false $script:Tabs[0]['Loaded']
+    Assert-Equal 'Targets' $script:Tabs[0]['Mode']
+    Assert-Equal '' $script:Tabs[0]['Search']
+    Assert-Equal $true ($script:CacheDir -like '*fabrikam*')
+    # Tenant (posture) tab untouched
+    Assert-Equal $true $script:Tabs[1].Loaded
+    Assert-Equal $false (Switch-SsmTenant -Name 'no-such')
+    Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
+}

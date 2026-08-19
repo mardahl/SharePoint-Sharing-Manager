@@ -219,3 +219,33 @@ function Initialize-SsmTenancy {
     Set-SsmTenantPaths -Name $script:TenantName
     if ($script:TenantName) { Invoke-SsmLegacyMigration -TenantName $script:TenantName }
 }
+
+function Switch-SsmTenant {
+    # Swap active tenant. Loads the tenant's auth into $script:Auth, resets
+    # every Targets tab to empty/unloaded, clears connection state, repaths
+    # cache/exports. Caller is responsible for Disconnect-PnPOnline first.
+    param([Parameter(Mandatory)][string]$Name)
+    $c = Get-SsmConfig
+    if ($null -eq $c -or -not $c.Tenants.ContainsKey($Name)) { return $false }
+    $entry = $c.Tenants[$Name]
+    foreach ($k in $script:AuthKeys) {
+        $script:Auth[$k] = if ($entry.ContainsKey($k)) { [string]$entry[$k] } else { '' }
+    }
+    $script:Auth.Loaded = $true
+    $script:TenantName = $Name
+    foreach ($tab in @($script:Tabs)) {
+        if ($tab['Kind'] -ne 'Targets') { continue }
+        $tab['Items']  = @()
+        $tab['View']   = @()
+        $tab['Loaded'] = $false
+        $tab['Mode']   = 'Targets'
+        $tab['Search'] = ''
+        $tab['Cursor'] = 0
+        $tab['Scroll'] = 0
+        $tab['FTab']   = $null
+    }
+    $script:Conn.Url = ''; $script:Conn.Admin = $false; $script:Conn.Account = ''
+    Set-SsmTenantPaths -Name $Name
+    Write-SsmLog -Message ("Switched active tenant to '{0}'." -f $Name) -Level OK
+    return $true
+}
