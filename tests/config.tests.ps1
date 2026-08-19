@@ -10,9 +10,9 @@ Invoke-SsmTest 'Save/Get round-trips all fields' {
         Thumbprint='ABCD'; CertPath=''; CertExpires='2027-07-21'
     }
     $c = Get-SsmConfig -Path $tmp
-    Assert-Equal 'AppOnly' $c.AuthMode
-    Assert-Equal 'ABCD' $c.Thumbprint
-    Assert-Equal '2027-07-21' $c.CertExpires
+    Assert-Equal 'AppOnly' $c.Tenants['contoso'].AuthMode
+    Assert-Equal 'ABCD' $c.Tenants['contoso'].Thumbprint
+    Assert-Equal '2027-07-21' $c.Tenants['contoso'].CertExpires
 }
 Invoke-SsmTest 'Get-SsmConfig survives corrupt JSON' {
     Set-Content -LiteralPath $tmp -Value '{not json'
@@ -42,5 +42,33 @@ Invoke-SsmTest 'ConvertTo-SsmTenantSlug lowercases and sanitises' {
 Invoke-SsmTest 'ConvertTo-SsmTenantSlug caps at 40 chars' {
     $long = 'a' * 60
     Assert-Equal 40 ((ConvertTo-SsmTenantSlug -Name $long).Length)
+}
+Invoke-SsmTest 'Get-SsmConfig migrates flat v1 config to v2' {
+    $v1 = Join-Path ([IO.Path]::GetTempPath()) ("ssm-v1-{0}.json" -f [guid]::NewGuid())
+    Save-SsmConfig -Path $v1 -Config @{
+        AuthMode='AppOnly'; ClientId='1111'; Tenant='contoso.onmicrosoft.com'
+        AdminUrl='https://contoso-admin.sharepoint.com'
+        Thumbprint='ABCD'; CertPath=''; CertExpires='2027-01-01'
+    }
+    $c = Get-SsmConfig -Path $v1
+    Assert-Equal 2 $c.Version
+    Assert-Equal 'contoso' $c.DefaultTenant
+    Assert-Equal 'ABCD' $c.Tenants['contoso'].Thumbprint
+    Remove-Item -LiteralPath $v1 -ErrorAction SilentlyContinue
+}
+Invoke-SsmTest 'Save-SsmAuth writes into Tenants[TenantName], preserves others' {
+    $v2 = Join-Path ([IO.Path]::GetTempPath()) ("ssm-v2-{0}.json" -f [guid]::NewGuid())
+    $script:ConfigPath = $v2
+    $script:TenantName = 'contoso'
+    $script:Auth = @{ AuthMode='AppOnly'; ClientId='1111'; Tenant='contoso.onmicrosoft.com'; AdminUrl=''; Thumbprint='ABCD'; CertPath=''; CertExpires='' }
+    Save-SsmConfig -Path $v2 -Config @{
+        Version=2; DefaultTenant='contoso'
+        Tenants=@{ contoso=@{ ClientId='1111' }; fabrikam=@{ ClientId='2222' } }
+    }
+    Save-SsmAuth
+    $c = Get-SsmConfig -Path $v2
+    Assert-Equal 'ABCD' $c.Tenants['contoso'].Thumbprint
+    Assert-Equal '2222' $c.Tenants['fabrikam'].ClientId
+    Remove-Item -LiteralPath $v2 -ErrorAction SilentlyContinue
 }
 Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
