@@ -169,6 +169,49 @@ function Invoke-SsmLegacyMigration {
     }
 }
 
+function Get-SsmTenantNames {
+    $c = Get-SsmConfig
+    if ($null -eq $c) { return @() }
+    return @($c.Tenants.Keys)
+}
+
+function Add-SsmTenant {
+    # Add an empty tenant entry. Reject exact name dup and slug collision
+    # (two names that would share a cache dir).
+    param([Parameter(Mandatory)][string]$Name)
+    $c = Get-SsmConfig
+    if ($null -eq $c) { $c = @{ Version=2; DefaultTenant=''; Tenants=@{} } }
+    if ($c.Tenants.ContainsKey($Name)) { return $false }
+    $slug = ConvertTo-SsmTenantSlug -Name $Name
+    foreach ($k in $c.Tenants.Keys) {
+        if ((ConvertTo-SsmTenantSlug -Name $k) -eq $slug) { return $false }
+    }
+    $entry = @{}
+    foreach ($k in $script:AuthKeys) { $entry[$k] = '' }
+    $c.Tenants[$Name] = $entry
+    Save-SsmConfig -Config $c
+    return $true
+}
+
+function Remove-SsmTenant {
+    param([Parameter(Mandatory)][string]$Name)
+    $c = Get-SsmConfig
+    if ($null -eq $c -or -not $c.Tenants.ContainsKey($Name)) { return $false }
+    $c.Tenants.Remove($Name)
+    if ($c.DefaultTenant -eq $Name) { $c.DefaultTenant = '' }
+    Save-SsmConfig -Config $c
+    return $true
+}
+
+function Set-SsmDefaultTenant {
+    param([Parameter(Mandatory)][string]$Name)
+    $c = Get-SsmConfig
+    if ($null -eq $c -or -not $c.Tenants.ContainsKey($Name)) { return $false }
+    $c.DefaultTenant = $Name
+    Save-SsmConfig -Config $c
+    return $true
+}
+
 function Initialize-SsmTenancy {
     # Startup entry point: load config, point paths at the active tenant,
     # and migrate any legacy un-suffixed cache/export content once.

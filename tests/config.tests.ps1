@@ -99,3 +99,22 @@ Invoke-SsmTest 'Invoke-SsmLegacyMigration moves cache and exports into slug dirs
     Assert-Equal $true (Test-Path -LiteralPath (Join-Path $root 'SSM-Exports/contoso/a.csv'))
     Remove-Item -LiteralPath $root -Recurse -Force
 }
+
+Invoke-SsmTest 'Add/Remove/Default tenant helpers' {
+    $p = Join-Path ([IO.Path]::GetTempPath()) ("ssm-crud-{0}.json" -f [guid]::NewGuid())
+    $script:ConfigPath = $p
+    Save-SsmConfig -Path $p -Config @{ Version=2; DefaultTenant=''; Tenants=@{} }
+    Assert-Equal $true (Add-SsmTenant -Name 'contoso')
+    Assert-Equal $true (Add-SsmTenant -Name 'fabrikam')
+    Assert-Equal $false (Add-SsmTenant -Name 'contoso')          # exact dup
+    Assert-Equal $true (Add-SsmTenant -Name 'Contoso Ltd')       # different slug ok
+    Assert-Equal $false (Add-SsmTenant -Name 'Contoso-Ltd')      # slug collision
+    Set-SsmDefaultTenant -Name 'fabrikam'
+    $c = Get-SsmConfig -Path $p
+    Assert-Equal 'fabrikam' $c.DefaultTenant
+    Assert-Equal $true (Remove-SsmTenant -Name 'fabrikam')
+    $c = Get-SsmConfig -Path $p
+    Assert-Equal '' $c.DefaultTenant
+    Assert-Equal $false ($c.Tenants.ContainsKey('fabrikam'))
+    Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
+}
