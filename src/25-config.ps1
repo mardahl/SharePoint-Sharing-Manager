@@ -75,4 +75,17 @@ function Install-SsmModule {
     return $true
 }
 
+function ConvertTo-SsmTenantSlug {
+    # Filesystem-safe slug from a tenant display name. Lowercase, only
+    # [a-z0-9-], runs of invalid chars collapse to one dash, capped at 40.
+    param([Parameter(Mandatory)][string]$Name)
+    $s = $Name.ToLowerInvariant()
+    $s = $s -replace '[^a-z0-9-]+', '-'
+    $s = $s -replace '-{2,}', '-'
+    $s = $s.Trim('-')
+    if ($s.Length -gt 40) { $s = $s.Substring(0, 40).TrimEnd('-') }
+    if (-not $s) { $s = 'tenant' }
+    return $s
+}
+
 #endregion

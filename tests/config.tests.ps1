@@ -33,4 +33,14 @@ Invoke-SsmTest 'Get-CertDaysLeft parses ISO date' {
     $d = Get-CertDaysLeft
     if ($d -lt 9 -or $d -gt 10) { throw "expected ~10, got $d" }
 }
+Invoke-SsmTest 'ConvertTo-SsmTenantSlug lowercases and sanitises' {
+    Assert-Equal 'contoso' (ConvertTo-SsmTenantSlug -Name 'Contoso')
+    Assert-Equal 'contoso-ltd' (ConvertTo-SsmTenantSlug -Name 'Contoso Ltd')
+    Assert-Equal 'a-b-c' (ConvertTo-SsmTenantSlug -Name 'a  b--c')
+    Assert-Equal 'x' (ConvertTo-SsmTenantSlug -Name 'X')
+}
+Invoke-SsmTest 'ConvertTo-SsmTenantSlug caps at 40 chars' {
+    $long = 'a' * 60
+    Assert-Equal 40 ((ConvertTo-SsmTenantSlug -Name $long).Length)
+}
 Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
