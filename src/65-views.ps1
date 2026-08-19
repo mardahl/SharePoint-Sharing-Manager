@@ -664,10 +664,10 @@ function Get-TabHints {
                      @('R','revoke selected'),@('U','add url'),@('I','import csv'),
                      @('Enter','open/load'),@('L','restore'),@('E','export'),@('?','help'),@('Q','quit'))
         }
-        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
+        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('T','switch'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
         'Setup'  { return @(@('Up/Dn','move'),@('Enter','actions'),@('A','add tenant'),@('T','switch'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
-        'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('?','help'),@('Q','quit')) }
-        'About'  { return @(@('G','github'),@('R','releases'),@('?','help'),@('Q','quit')) }
+        'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('T','switch'),@('?','help'),@('Q','quit')) }
+        'About'  { return @(@('G','github'),@('R','releases'),@('T','switch'),@('?','help'),@('Q','quit')) }
     }
     return @()
 }
