@@ -70,7 +70,10 @@ function Invoke-TenantSetting {
         'This changes sharing behavior for the WHOLE tenant.')
     if (-not $ok) { return }
     try {
-        $setArgs = @{ $s.Prop = $new }
+        # Enum params coerce from strings, but Nullable[bool] params (e.g.
+        # ShowEveryoneExceptExternalUsersClaim) do not - cast those first.
+        $val = if ($new -eq 'True') { [bool]$true } elseif ($new -eq 'False') { [bool]$false } else { $new }
+        $setArgs = @{ $s.Prop = $val }
         Set-PnPTenant @setArgs -ErrorAction Stop
         Write-SsmLog -Message ("Tenant setting changed: {0} = {1}" -f $s.Prop, $new) -Level OK
         [void](Get-TenantPosture)

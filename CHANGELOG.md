@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1] - 2026-08-19
+
+- Fix: applying a True/False tenant hardening setting (e.g.
+  `ShowEveryoneExceptExternalUsersClaim`) failed with
+  "Cannot convert 'System.String' to ... System.Nullable`1[System.Boolean]" -
+  the value is now cast to `[bool]` before calling `Set-PnPTenant`.
+
 ## [1.4.0] - 2026-08-19
 
 - Add: multi-tenant support. Config (`~/.sharepoint-sharing-manager.json`) now
