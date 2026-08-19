@@ -81,7 +81,7 @@ foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filt
 }
 # ==== END SRC LOAD ====
 
-Initialize-SsmAuth
+Initialize-SsmTenancy
 
 $script:UI.RestoreInfo = Test-SsmCacheAvailable
 if ($script:UI.RestoreInfo) {

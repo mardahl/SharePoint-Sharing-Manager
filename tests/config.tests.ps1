@@ -84,3 +84,18 @@ Invoke-SsmTest 'Set-SsmTenantPaths with empty name keeps legacy dirs' {
     Assert-Equal (Join-Path $script:Root 'SSM-Exports') $script:ExportDir
 }
 Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
+
+Invoke-SsmTest 'Invoke-SsmLegacyMigration moves cache and exports into slug dirs' {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-mig-{0}" -f [guid]::NewGuid())
+    $script:Root = $root
+    New-Item -ItemType Directory -Path (Join-Path $root 'SSM-Cache') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $root 'SSM-Exports') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $root 'SSM-Cache/session.json') -Value '{"Tabs":[]}'
+    Set-Content -LiteralPath (Join-Path $root 'SSM-Exports/a.csv') -Value 'x'
+    $script:TenantName = 'Contoso'
+    Set-SsmTenantPaths -Name $script:TenantName
+    Invoke-SsmLegacyMigration -TenantName $script:TenantName
+    Assert-Equal $true (Test-Path -LiteralPath (Join-Path $root 'SSM-Cache/contoso/session.json'))
+    Assert-Equal $true (Test-Path -LiteralPath (Join-Path $root 'SSM-Exports/contoso/a.csv'))
+    Remove-Item -LiteralPath $root -Recurse -Force
+}

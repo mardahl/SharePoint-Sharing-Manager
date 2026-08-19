@@ -133,3 +133,46 @@ function Set-SsmTenantPaths {
 }
 
 #endregion
+
+function Invoke-SsmLegacyMigration {
+    # Move legacy un-suffixed cache/export content into the active tenant's
+    # slug subdir. Idempotent: only moves when legacy location has content
+    # and the destination does not already hold the file.
+    param([Parameter(Mandatory)][string]$TenantName)
+    $slug = ConvertTo-SsmTenantSlug -Name $TenantName
+    foreach ($pair in @(
+        @{ Root = 'SSM-Cache';   File = 'session.json' },
+        @{ Root = 'SSM-Exports'; File = $null }
+    )) {
+        $legacy = Join-Path $script:Root $pair.Root
+        $dest   = Join-Path $script:Root ("{0}/{1}" -f $pair.Root, $slug)
+        if (-not (Test-Path -LiteralPath $legacy)) { continue }
+        if ($pair.File) {
+            $src = Join-Path $legacy $pair.File
+            $dst = Join-Path $dest $pair.File
+            if ((Test-Path -LiteralPath $src) -and -not (Test-Path -LiteralPath $dst)) {
+                New-Item -ItemType Directory -Path $dest -Force | Out-Null
+                Move-Item -LiteralPath $src -Destination $dst
+                Write-SsmLog -Message ("Migrated {0}/{1} to tenant '{2}'." -f $pair.Root, $pair.File, $TenantName) -Level OK
+            }
+        } else {
+            $items = @(Get-ChildItem -LiteralPath $legacy -File -ErrorAction SilentlyContinue)
+            if ($items.Count -gt 0) {
+                New-Item -ItemType Directory -Path $dest -Force | Out-Null
+                foreach ($it in $items) {
+                    $dst = Join-Path $dest $it.Name
+                    if (-not (Test-Path -LiteralPath $dst)) { Move-Item -LiteralPath $it.FullName -Destination $dst }
+                }
+                Write-SsmLog -Message ("Migrated {0} export(s) to tenant '{1}'." -f $items.Count, $TenantName) -Level OK
+            }
+        }
+    }
+}
+
+function Initialize-SsmTenancy {
+    # Startup entry point: load config, point paths at the active tenant,
+    # and migrate any legacy un-suffixed cache/export content once.
+    Initialize-SsmAuth
+    Set-SsmTenantPaths -Name $script:TenantName
+    if ($script:TenantName) { Invoke-SsmLegacyMigration -TenantName $script:TenantName }
+}
