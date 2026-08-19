@@ -198,3 +198,15 @@ Invoke-SsmTest 'Remove-SsmTenantData deletes PFX when CertPath set (non-Windows 
     Assert-Equal $false (Test-Path -LiteralPath $pfx)
     Remove-Item -LiteralPath $root -Recurse -Force
 }
+Invoke-SsmTest 'Save-SsmAuth derives tenant name from Auth.Tenant when unset' {
+    $p = Join-Path ([IO.Path]::GetTempPath()) ("ssm-derive-{0}.json" -f [guid]::NewGuid())
+    $script:ConfigPath = $p
+    $script:TenantName = ''
+    $script:Auth = @{ AuthMode='Delegated'; ClientId='x'; Tenant='fabrikam.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires=''; Loaded=$true }
+    Save-SsmAuth
+    Assert-Equal 'fabrikam' $script:TenantName
+    $c = Get-SsmConfig -Path $p
+    Assert-Equal 'fabrikam' $c.DefaultTenant
+    Assert-Equal $true ($c.Tenants.ContainsKey('fabrikam'))
+    Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
+}
