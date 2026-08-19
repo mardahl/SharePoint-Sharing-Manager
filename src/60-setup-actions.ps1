@@ -166,4 +166,78 @@ function Edit-SsmConfig {
     $script:UI.Dirty = $true
 }
 
+function Invoke-RemoveTenantFlow {
+    param([Parameter(Mandatory)][string]$Name)
+    if ($Name -eq $script:TenantName) {
+        Show-MsgModal -Title 'Remove tenant' -Lines @('Cannot remove the active tenant.', 'Switch to another tenant first.') -Kind Warn
+        return
+    }
+    $c = Get-SsmConfig
+    $e = $c.Tenants[$Name]
+    $slug = ConvertTo-SsmTenantSlug -Name $Name
+    $lines = @(
+        ("Remove tenant '{0}'?" -f $Name), '',
+        ("Auth mode   {0}" -f $e.AuthMode)
+    )
+    if ($e.Thumbprint)  { $lines += ("Cert        CurrentUser\My\{0}" -f $e.Thumbprint) }
+    if ($e.CertPath)    { $lines += ("PFX file    {0}" -f $e.CertPath) }
+    $lines += ("Cache       SSM-Cache/{0}/" -f $slug)
+    $lines += ("Exports     SSM-Exports/{0}/" -f $slug)
+    $lines += ''
+    $lines += 'Type DELETE to also delete the certificate and scan cache.'
+    $lines += 'Anything else cancels. Export CSVs are kept either way;'
+    $lines += 'delete SSM-Exports manually if they should go too.'
+    $ok = Show-TypedConfirmModal -Title 'Remove tenant' -Word 'DELETE' -Lines $lines
+    if (-not $ok) { return }
+
+    # ponytail: two-checkbox UI is overkill for the existing modal toolkit;
+    # typed DELETE covers cert+cache, exports stay behind a second typed prompt.
+    $expOk = Show-TypedConfirmModal -Title 'Delete exports' -Word 'EXPORTS' -Lines @(
+        ("Also delete export CSVs for '{0}'?" -f $Name), '',
+        'These are evidence of past scans and revokes. This cannot be undone.')
+    $r = Remove-SsmTenantData -Name $Name -IncludeCert -IncludeCache -IncludeExports:$expOk
+    $msg = @(("Removed '{0}'." -f $Name))
+    if ($r.CertDeleted)     { $msg += 'Certificate deleted.' }
+    if ($r.CacheDeleted)    { $msg += 'Cache deleted.' }
+    if ($r.ExportsDeleted)  { $msg += 'Exports deleted.' }
+    if ($r.Errors.Count)    { $msg += ('Warnings: {0}' -f ($r.Errors -join '; ')) }
+    Show-MsgModal -Title 'Removed' -Lines $msg
+}
+
+function Show-TenantListModal {
+    $names = @(Get-SsmTenantNames)
+    $c = Get-SsmConfig
+    $options = @()
+    foreach ($n in $names) {
+        $tag = @()
+        if ($n -eq $script:TenantName)    { $tag += 'active' }
+        if ($n -eq $c.DefaultTenant)      { $tag += 'default' }
+        $suffix = if ($tag) { ' [' + ($tag -join ',') + ']' } else { '' }
+        $options += ($n + $suffix)
+    }
+    $options += '<add new tenant>'
+    $pick = Show-ListModal -Title 'Tenants' -Prompt 'Select:' -Options $options
+    if (-not $pick) { return }
+    if ($pick -eq '<add new tenant>') {
+        $name = Show-InputModal -Title 'Add tenant' -Prompt 'Tenant display name (e.g. contoso):'
+        if (-not $name) { return }
+        if (Add-SsmTenant -Name $name) {
+            Show-MsgModal -Title 'Added' -Lines @(("Tenant '{0}' added." -f $name), 'Configure auth via D or C on the Setup tab.')
+        } else {
+            Show-MsgModal -Title 'Add failed' -Lines @('Name already exists or would share a cache directory with another tenant.') -Kind Warn
+        }
+        return
+    }
+    $name = ($pick -replace ' \[.*\]$', '')
+    $action = Show-ListModal -Title $name -Prompt 'Action:' -Options @('Set as default', 'Remove tenant', 'Cancel')
+    switch ($action) {
+        'Set as default' {
+            if (Set-SsmDefaultTenant -Name $name) {
+                Show-MsgModal -Title 'Default' -Lines @(("'{0}' is now the startup tenant." -f $name))
+            }
+        }
+        'Remove tenant' { Invoke-RemoveTenantFlow -Name $name }
+    }
+}
+
 #endregion

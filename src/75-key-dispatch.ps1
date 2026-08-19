@@ -271,6 +271,7 @@ function Invoke-SetupKey {
         'C' { Invoke-SetupAction -Key 'C' -Name 'Register cert app'; return }
         'W' { Invoke-SetupAction -Key 'W' -Name 'Renew certificate'; return }
         'X' { Invoke-SetupAction -Key 'X' -Name 'Edit config'; return }
+        'L' { Show-TenantListModal; return }
     }
 }
 
