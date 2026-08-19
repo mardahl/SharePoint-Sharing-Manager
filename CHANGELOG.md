@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.1] - 2026-08-19
+
+- Fix: switching tenants now resets the Sharing tab (posture cleared, reload
+  required) so the previous tenant's settings are never shown as current.
+
 ## [1.5.0] - 2026-08-19
 
 - Change: Setup tab is now the tenant management hub: lists all tenants with

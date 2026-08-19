@@ -245,6 +245,11 @@ function Switch-SsmTenant {
     $script:Auth.Loaded = $true
     $script:TenantName = $Name
     foreach ($tab in @($script:Tabs)) {
+        if ($tab['Kind'] -eq 'Tenant') {
+            # Sharing tab holds the OLD tenant's posture - force a reload.
+            $tab['Loaded'] = $false; $tab['Posture'] = $null; $tab['Cursor'] = 0
+            continue
+        }
         if ($tab['Kind'] -ne 'Targets') { continue }
         $tab['Items']  = @()
         $tab['View']   = @()

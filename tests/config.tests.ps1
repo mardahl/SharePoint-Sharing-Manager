@@ -148,8 +148,10 @@ Invoke-SsmTest 'Switch-SsmTenant swaps auth, repaths, clears Targets tabs' {
     Assert-Equal 'Targets' $script:Tabs[0]['Mode']
     Assert-Equal '' $script:Tabs[0]['Search']
     Assert-Equal $true ($script:CacheDir -like '*fabrikam*')
-    # Tenant (posture) tab untouched
-    Assert-Equal $true $script:Tabs[1].Loaded
+    # Tenant (Sharing) tab posture is reset so the old tenant's settings are
+    # never shown for the new one.
+    Assert-Equal $false $script:Tabs[1].Loaded
+    Assert-Equal '' "$($script:Tabs[1].Posture)"
     Assert-Equal $false (Switch-SsmTenant -Name 'no-such')
     Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
 }
