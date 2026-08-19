@@ -183,7 +183,7 @@ function Invoke-SsmLegacyMigration {
 function Get-SsmTenantNames {
     $c = Get-SsmConfig
     if ($null -eq $c) { return @() }
-    return @($c.Tenants.Keys)
+    return @($c.Tenants.Keys | Sort-Object)
 }
 
 function Add-SsmTenant {

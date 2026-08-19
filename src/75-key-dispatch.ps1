@@ -251,28 +251,16 @@ function Invoke-TenantKey {
     }
 }
 
-function Invoke-SetupAction {
-    # Stub for the Setup-tab actions until Task 12 wires the real handlers
-    # (Register-SsmDelegatedApp / Register-SsmAppOnlyApp / Update-SsmCertificate / Edit-SsmConfig).
-    param([string]$Key, [string]$Name)
-    $map = @{ D = 'Register-SsmDelegatedApp'; C = 'Register-SsmAppOnlyApp'; W = 'Update-SsmCertificate'; X = 'Edit-SsmConfig' }
-    $fn = $map[$Key]
-    if ($fn -and (Get-Command $fn -ErrorAction SilentlyContinue)) {
-        & $fn
-    } else {
-        Show-MsgModal -Title 'Setup' -Lines @(($Name + ' is not yet implemented (lands in Task 12).')) -Kind Warn
-    }
-}
-
 function Invoke-SetupKey {
     param([System.ConsoleKeyInfo]$K)
-    switch ([char]::ToUpper($K.KeyChar)) {
-        'D' { Invoke-SetupAction -Key 'D' -Name 'Register delegated app'; return }
-        'C' { Invoke-SetupAction -Key 'C' -Name 'Register cert app'; return }
-        'W' { Invoke-SetupAction -Key 'W' -Name 'Renew certificate'; return }
-        'X' { Invoke-SetupAction -Key 'X' -Name 'Edit config'; return }
-        'L' { Show-TenantListModal; return }
+    $tab = $script:Tabs[$script:UI.Tab]
+    $names = @(Get-SsmTenantNames)
+    switch ($K.Key) {
+        'UpArrow'   { if ($tab['Cursor'] -gt 0) { $tab['Cursor']-- }; return }
+        'DownArrow' { if ($tab['Cursor'] -lt ($names.Count - 1)) { $tab['Cursor']++ }; return }
+        'Enter'     { if ($names.Count -gt 0) { Show-TenantActionsModal -Name $names[$tab['Cursor']] }; return }
     }
+    if ([char]::ToUpper($K.KeyChar) -eq 'A') { Invoke-AddTenantFlow; return }
 }
 
 function Invoke-AboutKey {

@@ -204,42 +204,40 @@ function Invoke-RemoveTenantFlow {
     Show-MsgModal -Title 'Removed' -Lines $msg
 }
 
-function Show-TenantListModal {
-    $names = @(Get-SsmTenantNames)
-    $c = Get-SsmConfig
+function Invoke-AddTenantFlow {
+    $name = Show-InputModal -Title 'Add tenant' -Prompt 'Tenant display name (e.g. contoso):'
+    if (-not $name) { return }
+    if (Add-SsmTenant -Name $name.Trim()) {
+        Show-MsgModal -Title 'Added' -Lines @(("Tenant '{0}' added." -f $name.Trim()), 'Press Enter on it to configure auth.')
+    } else {
+        Show-MsgModal -Title 'Add failed' -Lines @('Name already exists or would share a cache directory with another tenant.') -Kind Warn
+    }
+}
+
+function Show-TenantActionsModal {
+    param([Parameter(Mandatory)][string]$Name)
     $options = @()
-    foreach ($n in $names) {
-        $tag = @()
-        if ($n -eq $script:TenantName)    { $tag += 'active' }
-        if ($n -eq $c.DefaultTenant)      { $tag += 'default' }
-        $suffix = if ($tag) { ' [' + ($tag -join ',') + ']' } else { '' }
-        $options += ($n + $suffix)
+    if ($Name -ne $script:TenantName) { $options += 'Switch to this tenant' }
+    $options += @('Edit config', 'Register delegated app', 'Register cert app',
+                  'Renew certificate', 'Set as default', 'Remove tenant', 'Cancel')
+    $pick = Show-ListModal -Title $Name -Prompt 'Action:' -Options $options
+    if (-not $pick -or $pick -eq 'Cancel') { return }
+
+    $needsAuth = @('Edit config', 'Register delegated app', 'Register cert app', 'Renew certificate')
+    if ($needsAuth -contains $pick -and $Name -ne $script:TenantName) {
+        if ($script:Conn.Url) { Disconnect-SsmConnection }
+        if (-not (Switch-SsmTenant -Name $Name)) { return }
     }
-    $options += '<add new tenant>'
-    $pick = Show-ListModal -Title 'Tenants' -Prompt 'Select:' -Options $options
-    if (-not $pick) { return }
-    if ($pick -eq '<add new tenant>') {
-        $name = Show-InputModal -Title 'Add tenant' -Prompt 'Tenant display name (e.g. contoso):'
-        if (-not $name) { return }
-        if (Add-SsmTenant -Name $name) {
-            Show-MsgModal -Title 'Added' -Lines @(("Tenant '{0}' added." -f $name), 'Configure auth via D or C on the Setup tab.')
-        } else {
-            Show-MsgModal -Title 'Add failed' -Lines @('Name already exists or would share a cache directory with another tenant.') -Kind Warn
-        }
-        return
+    switch ($pick) {
+        'Switch to this tenant'   { if ($script:Conn.Url) { Disconnect-SsmConnection }; [void](Switch-SsmTenant -Name $Name) }
+        'Edit config'             { Edit-SsmConfig }
+        'Register delegated app'  { Register-SsmDelegatedApp }
+        'Register cert app'       { Register-SsmAppOnlyApp }
+        'Renew certificate'       { Update-SsmCertificate }
+        'Set as default'          { if (Set-SsmDefaultTenant -Name $Name) { Show-MsgModal -Title 'Default' -Lines @(("'{0}' is now the startup tenant." -f $Name)) } }
+        'Remove tenant'           { Invoke-RemoveTenantFlow -Name $Name }
     }
-    $idx = [Array]::IndexOf($options, $pick)
-    if ($idx -lt 0 -or $idx -ge $names.Count) { return }
-    $name = $names[$idx]
-    $action = Show-ListModal -Title $name -Prompt 'Action:' -Options @('Set as default', 'Remove tenant', 'Cancel')
-    switch ($action) {
-        'Set as default' {
-            if (Set-SsmDefaultTenant -Name $name) {
-                Show-MsgModal -Title 'Default' -Lines @(("'{0}' is now the startup tenant." -f $name))
-            }
-        }
-        'Remove tenant' { Invoke-RemoveTenantFlow -Name $name }
-    }
+    $script:UI.Dirty = $true
 }
 
 #endregion
