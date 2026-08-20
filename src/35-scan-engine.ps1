@@ -62,9 +62,24 @@ function Get-SharingLinkInfo {
     # has no created date). Returns map of link Url -> info, or $null.
     param([string]$Base, [string]$ListId, [int]$ItemId)
     $u = "$Base/_api/web/lists(guid'$ListId')/items($ItemId)/GetSharingInformation"
-    $body = @{ request = @{ maxLinksToReturn = 100; maxPrincipalsToReturn = 0; maxInheritedLinksToReturn = 0; excludeCurrentUser = $true } } | ConvertTo-Json -Depth 4
+    # Verbose-JSON CSOM-style payload: typed request object with PascalCase fields.
+    $body = @{
+        request = @{
+            '__metadata'               = @{ type = 'SP.Sharing.SharingInformationRequest' }
+            MaxLinksToReturn           = 100
+            MaxPrincipalsToReturn      = 0
+            MaxInheritedLinksToReturn  = 0
+            ExcludeCurrentUser         = $true
+            RetrieveSharingLinks       = $true
+            RetrieveSPOProtocolHandler = $false
+        }
+    } | ConvertTo-Json -Depth 5
     try {
-        $r = Invoke-PnPSPRestMethod -Url $u -Method Post -Content $body -ContentType 'application/json;odata=verbose'
+        $r = Invoke-PnPSPRestMethod -Url $u -Method Post -Content $body -ContentType 'application/json;odata=verbose' -Accept 'application/json;odata=verbose'
+        if (-not $script:SharingLinkInfoDumped) {
+            $script:SharingLinkInfoDumped = $true
+            Write-SsmLog -Message ("GetSharingInformation sample response: {0}" -f ($r | ConvertTo-Json -Depth 6 -Compress).Substring(0, [Math]::Min(2000, ($r | ConvertTo-Json -Depth 6 -Compress).Length)))
+        }
         # Unwrap response envelope: verbose JSON nests under GetSharingInformation,
         # light JSON returns fields at top level.
         $info = $r
