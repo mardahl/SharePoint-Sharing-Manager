@@ -64,11 +64,31 @@ function Get-SharingLinkInfo {
     $u = "$Base/_api/web/lists(guid'$ListId')/items($ItemId)/GetSharingInformation"
     $body = @{ request = @{ maxLinksToReturn = 100; maxPrincipalsToReturn = 0; maxInheritedLinksToReturn = 0; excludeCurrentUser = $true } } | ConvertTo-Json -Depth 4
     try {
-        $r = Invoke-PnPSPRestMethod -Url $u -Method Post -Content $body
+        $r = Invoke-PnPSPRestMethod -Url $u -Method Post -Content $body -ContentType 'application/json;odata=verbose'
+        # Unwrap response envelope: verbose JSON nests under GetSharingInformation,
+        # light JSON returns fields at top level.
+        $info = $r
+        foreach ($prop in @('GetSharingInformation', 'd')) {
+            if ($null -ne $info -and $info.PSObject.Properties[$prop]) { $info = $info.$prop }
+        }
+        $links = $null
+        foreach ($prop in @('sharingLinks', 'SharingLinks')) {
+            if ($null -ne $info -and $info.PSObject.Properties[$prop]) { $links = $info.$prop; break }
+        }
+        if ($null -eq $links) {
+            Write-SsmLog -Message ("GetSharingInformation: no sharingLinks in response for item {0} (keys: {1})" -f $ItemId, (@($info.PSObject.Properties.Name) -join ',')) -Level WARN
+            return $null
+        }
         $map = @{}
-        foreach ($sl in @($r.sharingLinks)) { if ($sl.Url) { $map[$sl.Url] = $sl } }
+        foreach ($sl in @($links)) {
+            $url = if ($sl.PSObject.Properties['Url']) { $sl.Url } else { $null }
+            if ($url) { $map[$url] = $sl }
+        }
         return $map
-    } catch { return $null }
+    } catch {
+        Write-SsmLog -Message ("GetSharingInformation failed for item {0}: {1}" -f $ItemId, $_.Exception.Message) -Level WARN
+        return $null
+    }
 }
 
 function Add-GrantsRest {
@@ -182,9 +202,13 @@ function Invoke-SiteScan {
                     $created = ''; $createdBy = ''
                     if ($infoMap -and $l.Link.WebUrl -and $infoMap.ContainsKey($l.Link.WebUrl)) {
                         $info = $infoMap[$l.Link.WebUrl]
-                        $created = [string]$info.Created
-                        if ($info.CreatedBy -and $info.CreatedBy.UserPrincipalName) { $createdBy = [string]$info.CreatedBy.UserPrincipalName }
-                        elseif ($info.CreatedBy -and $info.CreatedBy.Email)      { $createdBy = [string]$info.CreatedBy.Email }
+                        if ($info.PSObject.Properties['Created']) { $created = [string]$info.Created }
+                        $cb = if ($info.PSObject.Properties['CreatedBy']) { $info.CreatedBy } else { $null }
+                        if ($cb) {
+                            if ($cb.PSObject.Properties['UserPrincipalName'] -and $cb.UserPrincipalName) { $createdBy = [string]$cb.UserPrincipalName }
+                            elseif ($cb.PSObject.Properties['Email'] -and $cb.Email)                     { $createdBy = [string]$cb.Email }
+                            elseif ($cb.PSObject.Properties['LoginName'] -and $cb.LoginName)             { $createdBy = [string]$cb.LoginName }
+                        }
                     }
                     $bag.Add([pscustomobject]@{
                         Site = $site; Location = $loc; Name = $name
