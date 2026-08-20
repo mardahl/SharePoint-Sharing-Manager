@@ -12,7 +12,7 @@ A portable PowerShell **terminal UI** that finds and revokes unwanted sharing ac
 
 ## TL;DR
 
-Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest), extract, double-click `Launch-Sharing-Manager.bat` (or run `pwsh ./SharePoint-Sharing-Manager.ps1`), then pick an auth mode on the **Setup** tab. Full steps in [Quick start](#quick-start).
+Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest), extract, double-click `Launch-Sharing-Manager.bat` (or run `pwsh ./SharePoint-Sharing-Manager.ps1`), then pick an auth mode on the **Setup** tab. Full steps in [Quick start](#quick-start); full docs in the [wiki](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki).
 
 ```
  SharePoint Sharing Manager  v1.0.0        ● https://contoso-my.sharepoint.com/personal/jane_contoso_com
@@ -36,7 +36,7 @@ Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Mana
 - [Files the tool writes](#files-the-tool-writes)
 - [Caveats](#caveats)
 - [References](#references)
-- [Contributing](#contributing) · [Security](#security) · [Changelog](CHANGELOG.md)
+- [Contributing](#contributing) · [Security](#security) · [Changelog](CHANGELOG.md) · [Wiki](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki)
 
 ## Why
 
@@ -86,40 +86,7 @@ First run: open the **Setup** tab, press `Enter` on the tenant, and pick an auth
 - `C` - register an app-only certificate app (recommended; removes the per-OneDrive Site Collection Admin requirement)
 - `D` - register a delegated (interactive) app
 
-### Keys
-
-| Tab | Key | Action |
-|---|---|---|
-| Sites / OneDrives (target list) | `Space` | Toggle selection (`A` all, `N` none) |
-| | `/` | Live search |
-| | `F` | Cycle status filter |
-| | `S` | Scan selected |
-| | `X` | Scan all not-yet-scanned targets |
-| | `T` | Toggle rule categories |
-| | `G` | All findings (aggregate view across drives) |
-| | `R` | Revoke all findings on selected targets |
-| | `U` | Add URL |
-| | `I` | Import CSV |
-| | `Enter` | Open/load |
-| | `L` | Restore the saved scan session |
-| | `E` | Export |
-| Sites / OneDrives (findings) | `Space` | Toggle selection (`A` all, `N` none) |
-| | `/` | Live search |
-| | `F` | Cycle category filter |
-| | `R` | Revoke selected (typed `REVOKE` confirmation); in the all-findings view, revokes across every affected site with one confirmation |
-| | `E` | Export |
-| | `Esc` | Back to target list |
-| Sharing | `Enter` | Load posture |
-| | `1`-`9` | Change a setting (this tab owns the digit keys - use `Tab`/`Shift+Tab` to switch tabs) |
-| | `R` | Refresh |
-| Setup | `Up`/`Down` | Move between tenants |
-| | `Enter` | Actions for the highlighted tenant (switch, edit config, register apps, renew cert, set default, remove) |
-| | `A` | Add a tenant |
-| Log | `↑`/`↓` | Scroll |
-| | `O` | Open log file |
-| Any tab | `T` | Switch tenant (non-Targets tabs) |
-| | `?` | Help |
-| | `Q` | Quit |
+Full key reference, auth trade-offs, and per-setting docs live in the [wiki](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki).
 
 ## Requirements
 
@@ -137,7 +104,7 @@ First run: open the **Setup** tab, press `Enter` on the tenant, and pick an auth
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
 
-App-only mode requests **application** permissions `Sites.FullControl.All` (SharePoint) and `Sites.FullControl.All` (Graph) and uploads a self-signed certificate valid one year. Application Administrator can create the app registration, but admin consent for application permissions requires Global Administrator or Privileged Role Administrator - the setup wizard displays a consent URL that can be forwarded to whoever holds that role.
+Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication) in the wiki.
 
 ## Files the tool writes
 
