@@ -166,6 +166,84 @@ function Edit-SsmConfig {
     $script:UI.Dirty = $true
 }
 
+function Remove-SsmAppRegistration {
+    # Deletes the Entra app + local cert for the active tenant, then blanks
+    # the auth fields (Tenant/AdminUrl stay so re-registration is quick).
+    # No abort on first failure - each step's error is collected and shown.
+    if (-not $script:Auth.ClientId) {
+        Show-MsgModal -Title 'Remove app registration' -Lines @('No app registration on this tenant.') -Kind Warn
+        return
+    }
+    $lines = @(
+        'This will delete:', '',
+        ("Auth mode   {0}" -f $script:Auth.AuthMode),
+        ("Client Id   {0}" -f $script:Auth.ClientId)
+    )
+    if ($script:Auth.Thumbprint -and $script:IsWin) { $lines += ("Cert        CurrentUser\My\{0}" -f $script:Auth.Thumbprint) }
+    elseif ($script:Auth.CertPath) { $lines += ("PFX file    {0}" -f $script:Auth.CertPath) }
+    $lines += '', 'Tenant name, admin URL, scan cache and exports are kept.'
+    $ok = Show-TypedConfirmModal -Title 'Remove app registration' -Word 'REMOVE' -Lines $lines
+    if (-not $ok) { return }
+
+    $errors = @()
+    $appDeleted = $false
+    $certDeleted = $false
+
+    # Step 1: delete the Entra app (needs delegated sign-in; app-only can't
+    # delete itself). Derive the admin host from Tenant, else AdminUrl.
+    $adminHost = $null
+    if ($script:Auth.Tenant) {
+        $adminHost = "https://{0}-admin.sharepoint.com" -f ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '')
+    } elseif ($script:Auth.AdminUrl) {
+        $adminHost = $script:Auth.AdminUrl
+    }
+    if ($adminHost) {
+        try {
+            $clientId = $script:Auth.ClientId
+            Invoke-OnMainBuffer {
+                Connect-PnPOnline -Url $adminHost -Interactive -ClientId $clientId -ErrorAction Stop
+                Invoke-PnPGraphMethod -Method Delete -Url ("applications(appId='{0}')" -f $clientId) -ErrorAction Stop
+            }
+            $appDeleted = $true
+        } catch {
+            Write-SsmErrorLog -Context 'App registration deletion failed' -ErrorRecord $_
+            $errors += ("Entra app: {0}" -f $_.Exception.Message)
+        }
+    } else {
+        $errors += 'Entra app: no tenant/admin URL on file - skipped, delete it manually in the Entra portal.'
+    }
+
+    # Step 2: delete the local cert (same logic as Remove-SsmTenantData -IncludeCert).
+    try {
+        if ($script:Auth.Thumbprint -and $script:IsWin) {
+            $certPath = "Cert:\CurrentUser\My\{0}" -f $script:Auth.Thumbprint
+            if (Test-Path $certPath) { Remove-Item $certPath -Force; $certDeleted = $true }
+        } elseif ($script:Auth.CertPath -and (Test-Path -LiteralPath $script:Auth.CertPath)) {
+            Remove-Item -LiteralPath $script:Auth.CertPath -Force
+            $certDeleted = $true
+        }
+    } catch {
+        Write-SsmErrorLog -Context 'Cert deletion failed' -ErrorRecord $_
+        $errors += ("cert: {0}" -f $_.Exception.Message)
+    }
+
+    # Step 3: clear config, keep Tenant/AdminUrl.
+    $script:Auth.AuthMode = ''
+    $script:Auth.ClientId = ''
+    $script:Auth.Thumbprint = ''
+    $script:Auth.CertPath = ''
+    $script:Auth.CertExpires = ''
+    Save-SsmAuth
+
+    $msg = @()
+    $msg += if ($appDeleted) { 'Entra app deleted.' } else { 'Entra app not deleted (see warnings).' }
+    $msg += if ($certDeleted) { 'Certificate deleted.' } else { 'No local certificate found.' }
+    $msg += 'Config cleared.'
+    if ($errors.Count) { $msg += ''; $msg += 'Warnings:'; $msg += $errors }
+    Write-SsmLog -Message ("Removed app registration (app={0} cert={1})." -f $appDeleted, $certDeleted) -Level OK
+    Show-MsgModal -Title 'App registration removed' -Lines $msg
+}
+
 function Invoke-RemoveTenantFlow {
     param([Parameter(Mandatory)][string]$Name)
     if ($Name -eq $script:TenantName) {
@@ -219,11 +297,11 @@ function Show-TenantActionsModal {
     $options = @()
     if ($Name -ne $script:TenantName) { $options += 'Switch to this tenant' }
     $options += @('Edit config', 'Register delegated app', 'Register cert app',
-                  'Renew certificate', 'Set as default', 'Remove tenant', 'Cancel')
+                  'Renew certificate', 'Remove app registration', 'Set as default', 'Remove tenant', 'Cancel')
     $pick = Show-ListModal -Title $Name -Prompt 'Action:' -Options $options
     if (-not $pick -or $pick -eq 'Cancel') { return }
 
-    $needsAuth = @('Edit config', 'Register delegated app', 'Register cert app', 'Renew certificate')
+    $needsAuth = @('Edit config', 'Register delegated app', 'Register cert app', 'Renew certificate', 'Remove app registration')
     if ($needsAuth -contains $pick -and $Name -ne $script:TenantName) {
         if ($script:Conn.Url) { Disconnect-SsmConnection }
         if (-not (Switch-SsmTenant -Name $Name)) { return }
@@ -234,6 +312,7 @@ function Show-TenantActionsModal {
         'Register delegated app'  { Register-SsmDelegatedApp }
         'Register cert app'       { Register-SsmAppOnlyApp }
         'Renew certificate'       { Update-SsmCertificate }
+        'Remove app registration' { Remove-SsmAppRegistration }
         'Set as default'          { if (Set-SsmDefaultTenant -Name $Name) { Show-MsgModal -Title 'Default' -Lines @(("'{0}' is now the startup tenant." -f $Name)) } }
         'Remove tenant'           { Invoke-RemoveTenantFlow -Name $Name }
     }

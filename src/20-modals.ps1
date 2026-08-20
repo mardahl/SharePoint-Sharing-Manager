@@ -623,6 +623,7 @@ function Show-HelpModal {
         @($t.Row, '  A                    add a tenant'),
         @($t.Row, '  D                    register delegated app         C  register cert app'),
         @($t.Row, '  W                    renew certificate              X  edit config file'),
+        @($t.Row, '  (Enter on a tenant also offers: remove app registration)'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Log tab'),
         @($t.Row, '  Up / Down            scroll log                     O  open log file'),
