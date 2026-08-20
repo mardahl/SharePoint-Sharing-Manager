@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+- Add: Sharing tab covers more of the tenant sharing surface:
+  `SharingDomainRestrictionMode`, `FileAnonymousLinkType`,
+  `FolderAnonymousLinkType`, `PreventExternalUsersFromResharing`,
+  `ExternalUserExpirationRequired`, `ExternalUserExpireInDays` (15 settings).
+- Change: sharing-capability values now show the SharePoint admin UI wording
+  alongside the internal enum (e.g. `ExternalUserAndGuestSharing (Anyone)`),
+  both in the posture view and the value picker.
+- Fix: `RequireAnonymousLinksExpireInDays` note now states it applies to
+  anonymous ("Anyone") links only; `0`/blank = never (not `-1`).
+- Add: `C` applies the CIS Microsoft 365 Foundations 7.2.x sharing baseline
+  (L1, or L1+L2 via picker; typed `CIS` confirmation). Current values are
+  snapshotted to the per-tenant cache dir first. `Z` reverts to the latest
+  snapshot (typed `REVERT`). CIS 7.2.6 (domain allowlist) is shown as a
+  notice but not applied - the allowed-domains list is org-specific.
+
 ## [1.5.1] - 2026-08-19
 
 - Fix: switching tenants now resets the Sharing tab (posture cleared, reload

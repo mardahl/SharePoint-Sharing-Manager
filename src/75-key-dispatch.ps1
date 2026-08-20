@@ -224,7 +224,7 @@ function Invoke-TenantKey {
     param([System.ConsoleKeyInfo]$K)
     $tab = $script:Tabs[2]
     $count = @($script:TenantSettings).Count
-    if ($count -lt 1) { $count = 9 }
+    if ($count -lt 1) { $count = 15 }
     if (-not $tab.ContainsKey('Cursor')) { $tab['Cursor'] = 0 }
 
     switch ($K.Key) {
@@ -248,6 +248,10 @@ function Invoke-TenantKey {
         if (Get-Command Get-TenantPosture -ErrorAction SilentlyContinue) { Get-TenantPosture }
         else { Show-MsgModal -Title 'Tenant' -Lines @('Tenant posture loading is not yet available (lands in Task 11).') -Kind Warn }
         return
+    }
+    switch ([char]::ToUpper($K.KeyChar)) {
+        'C' { Invoke-CisBaseline; return }
+        'Z' { Invoke-CisRevert;   return }
     }
 }
 

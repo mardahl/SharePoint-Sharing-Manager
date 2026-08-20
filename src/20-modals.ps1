@@ -610,6 +610,8 @@ function Show-HelpModal {
         @($t.Row, '  Up / Down            move between sharing settings'),
         @($t.Row, '  Enter                load posture, or change the highlighted setting'),
         @($t.Row, '  R                    refresh the sharing posture'),
+        @($t.Row, '  C                    apply CIS 7.2.x baseline (L1 or L1+L2, snapshots first)'),
+        @($t.Row, '  Z                    revert to the last CIS snapshot'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Tenants'),
         @($t.Row, '  T                    quick-switch tenant (all tabs except Sites/OneDrives)'),

@@ -521,14 +521,27 @@ function Add-TenantView {
     $pad = ' ' * $margin
     $cursor = if ($tabState.ContainsKey('Cursor')) { [int]$tabState['Cursor'] } else { 0 }
 
+    # Capability enums carry the SPO admin UI (Sharing > External sharing)
+    # wording alongside the internal name so operators recognize them.
+    $spoCap = $p.SharingCapability
+    $odCap  = $p.OneDriveSharingCapability
+    if ($script:SharingCapabilityLabels.ContainsKey($spoCap)) { $spoCap = '{0} ({1})' -f $spoCap, $script:SharingCapabilityLabels[$spoCap] }
+    if ($script:SharingCapabilityLabels.ContainsKey($odCap))  { $odCap  = '{0} ({1})' -f $odCap,  $script:SharingCapabilityLabels[$odCap] }
+
     $rows = @(
-        @{ Label = 'SharingCapability';                  Value = $p.SharingCapability;                  Note = 'Tenant-wide external sharing level for SharePoint sites.' }
-        @{ Label = 'OneDriveSharingCapability';           Value = $p.OneDriveSharingCapability;          Note = 'External sharing level for OneDrive for Business.' }
-        @{ Label = 'DefaultSharingLinkType';              Value = $p.DefaultSharingLinkType;             Note = 'Link type pre-selected in the sharing dialog.' }
-        @{ Label = 'DefaultLinkPermission';               Value = $p.DefaultLinkPermission;              Note = 'Permission pre-selected in the sharing dialog.' }
-        @{ Label = 'RequireAnonymousLinksExpireInDays';   Value = $p.RequireAnonymousLinksExpireInDays;  Note = 'Days before anonymous links auto-expire (-1 = never).' }
-        @{ Label = 'ShowEveryoneClaim';                    Value = $p.ShowEveryoneClaim;                  Note = 'Show "Everyone" in People Picker (False = hidden, recommended).' }
-        @{ Label = 'ShowAllUsersClaim';                    Value = $p.ShowAllUsersClaim;                  Note = 'Show "All Users (x)" org-wide claims in People Picker.' }
+        @{ Label = 'SharingCapability (SharePoint)';      Value = $spoCap;                                  Note = 'SPO admin UI: Sharing > External sharing > SharePoint.' }
+        @{ Label = 'OneDriveSharingCapability';           Value = $odCap;                                   Note = 'SPO admin UI: Sharing > External sharing > OneDrive (must be <= SharePoint).' }
+        @{ Label = 'DefaultSharingLinkType';              Value = $p.DefaultSharingLinkType;                Note = 'Link type pre-selected in the sharing dialog (AnonymousAccess = "Anyone").' }
+        @{ Label = 'DefaultLinkPermission';               Value = $p.DefaultLinkPermission;                 Note = 'Permission pre-selected in the sharing dialog.' }
+        @{ Label = 'RequireAnonymousLinksExpireInDays';   Value = $p.RequireAnonymousLinksExpireInDays;     Note = 'Expiration for ANONYMOUS (Anyone) links only; guest/org links unaffected. 0/blank = never.' }
+        @{ Label = 'SharingDomainRestrictionMode';        Value = $p.SharingDomainRestrictionMode;          Note = 'Limit sharing by domain (AllowList/BlockList); lists editable in SPO admin UI.' }
+        @{ Label = 'FileAnonymousLinkType';               Value = $p.FileAnonymousLinkType;                 Note = 'Default permission for anonymous file links (View/Edit).' }
+        @{ Label = 'FolderAnonymousLinkType';             Value = $p.FolderAnonymousLinkType;               Note = 'Default permission for anonymous folder links (View/Edit).' }
+        @{ Label = 'PreventExternalUsersFromResharing';   Value = $p.PreventExternalUsersFromResharing;     Note = 'Block guests from resharing items with others (True = block, recommended).' }
+        @{ Label = 'ExternalUserExpirationRequired';      Value = $p.ExternalUserExpirationRequired;        Note = 'Guest ACCESS to sites expires after N days (not a link setting).' }
+        @{ Label = 'ExternalUserExpireInDays';            Value = $p.ExternalUserExpireInDays;              Note = 'Days until guest site access expires (only if expiration required above).' }
+        @{ Label = 'ShowEveryoneClaim';                    Value = $p.ShowEveryoneClaim;                    Note = 'Show "Everyone" in People Picker (False = hidden, recommended).' }
+        @{ Label = 'ShowAllUsersClaim';                    Value = $p.ShowAllUsersClaim;                    Note = 'Show "All Users (x)" org-wide claims in People Picker.' }
         @{ Label = 'ShowEveryoneExceptExternalUsersClaim'; Value = $p.ShowEveryoneExceptExternalUsersClaim; Note = 'Show "Everyone except external users" (EEEU) in People Picker.' }
         @{ Label = 'AllowEEEUClaimInPrivateSite';          Value = $p.AllowEveryoneExceptExternalUsersClaimInPrivateSite; Note = 'Allow EEEU claim in private sites specifically.' }
     )
@@ -668,7 +681,7 @@ function Get-TabHints {
                      @('R','revoke selected'),@('U','add url'),@('I','import csv'),
                      @('Enter','open/load'),@('L','restore'),@('E','export'),@('?','help'),@('Q','quit'))
         }
-        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('T','switch'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
+        'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('C','apply CIS'),@('Z','undo CIS'),@('T','switch'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
         'Setup'  { return @(@('Up/Dn','move'),@('Enter','actions'),@('A','add tenant'),@('T','switch'),@('1-6','tab'),@('?','help'),@('Q','quit')) }
         'Log'    { return @(@('Up/Dn','scroll'),@('O','open log file'),@('T','switch'),@('?','help'),@('Q','quit')) }
         'About'  { return @(@('G','github'),@('R','releases'),@('T','switch'),@('?','help'),@('Q','quit')) }

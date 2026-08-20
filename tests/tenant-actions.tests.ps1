@@ -26,6 +26,23 @@ Invoke-SsmTest 'TenantSettings covers the org-wide/EEEU claim hardening settings
     }
 }
 
+Invoke-SsmTest 'TenantSettings covers link/access expiration and resharing beyond anyone-link expiry' {
+    $props = @($script:TenantSettings | Select-Object -ExpandProperty Prop)
+    foreach ($expected in @('ExternalUserExpirationRequired','ExternalUserExpireInDays','PreventExternalUsersFromResharing','SharingDomainRestrictionMode','FileAnonymousLinkType','FolderAnonymousLinkType')) {
+        if ($props -notcontains $expected) { throw "TenantSettings is missing $expected" }
+    }
+    if (@($script:TenantSettings).Count -ne 15) { throw "expected 15 tenant settings, got $(@($script:TenantSettings).Count)" }
+}
+
+Invoke-SsmTest 'SharingCapabilityLabels maps every enum value to the SPO admin UI wording' {
+    $cap = @($script:TenantSettings | Where-Object { $_.Prop -eq 'SharingCapability' }).Values
+    foreach ($v in $cap) {
+        if (-not $script:SharingCapabilityLabels.ContainsKey($v)) { throw "no vanity label for $v" }
+    }
+    Assert-Equal 'Anyone' $script:SharingCapabilityLabels['ExternalUserAndGuestSharing']
+    Assert-Equal 'Only people in your organization' $script:SharingCapabilityLabels['Disabled']
+}
+
 Invoke-SsmTest 'Digit key on the Tenant tab jumps tabs (menu no longer captures digits)' {
     Reset-TestUiState
     Invoke-KeyDispatch -K (New-TestKey '2')
@@ -83,6 +100,44 @@ Invoke-SsmTest 'Switch-SsmTenant resets the Sharing tab posture (no stale cross-
     } finally {
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
     }
+}
+
+Invoke-SsmTest 'CIS baseline covers the CIS 7.2.x tenant knobs' {
+    foreach ($k in @('SharingCapability','DefaultSharingLinkType','DefaultLinkPermission','ExternalUserExpireInDays','EmailAttestationReAuthDays')) {
+        if (-not $script:CisBaselineL1.Contains($k)) { throw "L1 baseline missing $k" }
+    }
+    foreach ($k in @('OneDriveSharingCapability','PreventExternalUsersFromResharing')) {
+        if (-not $script:CisBaselineL2.Contains($k)) { throw "L2 baseline missing $k" }
+    }
+    Assert-Equal 'ExternalUserSharingOnly' $script:CisBaselineL1['SharingCapability']
+    Assert-Equal 'View' $script:CisBaselineL1['DefaultLinkPermission']
+}
+
+Invoke-SsmTest 'CIS snapshot saves and reloads current tenant values' {
+    $script:TestRoot = Join-Path ([IO.Path]::GetTempPath()) ("ssm-cis-" + [guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Path $script:TestRoot | Out-Null
+    $savedDir = $script:CacheDir; $savedName = $script:TenantName
+    $script:CacheDir = $script:TestRoot; $script:TenantName = 't1'
+    $script:Tabs = @(@{}, @{}, @{ Kind='Tenant'; Loaded=$true; Posture=@{ SharingCapability='ExternalUserAndGuestSharing'; DefaultLinkPermission='Edit'; ExternalUserExpireInDays='60' } })
+    try {
+        Save-CisSnapshot -Props @('SharingCapability','DefaultLinkPermission','ExternalUserExpireInDays') | Out-Null
+        $snap = Get-CisSnapshot
+        Assert-Equal 'ExternalUserAndGuestSharing' $snap.Values.SharingCapability
+        Assert-Equal 'Edit' $snap.Values.DefaultLinkPermission
+        Assert-Equal '60' $snap.Values.ExternalUserExpireInDays
+        Assert-Equal 't1' $snap.Tenant
+    } finally {
+        $script:CacheDir = $savedDir; $script:TenantName = $savedName
+        Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
+    }
+}
+
+Invoke-SsmTest 'Get-CisSnapshot returns null when no snapshot exists' {
+    $script:TestRoot = Join-Path ([IO.Path]::GetTempPath()) ("ssm-cis-" + [guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Path $script:TestRoot | Out-Null
+    $savedDir = $script:CacheDir; $script:CacheDir = $script:TestRoot
+    try { Assert-Equal '' "$(Get-CisSnapshot)" }
+    finally { $script:CacheDir = $savedDir; Remove-Item -LiteralPath $script:TestRoot -Recurse -Force }
 }
 
 Invoke-SsmTest 'Tab 3 is named Sharing (Tenant rename)' {
