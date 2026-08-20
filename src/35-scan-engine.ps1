@@ -70,7 +70,8 @@ function Get-SharingLinkInfo {
         $ctx.ExecuteQuery()
         $map = @{}
         foreach ($sl in @($osi.SharingLinks)) {
-            if ($sl.Url -and $sl.Created) { $map[$sl.Url] = $sl.Created.ToString('yyyy-MM-ddTHH:mm:ssZ') }
+            # Created comes back as a plain string ("2026-07-24T07:10:18.520Z") - keep as-is.
+            if ($sl.Url -and $sl.Created) { $map[$sl.Url] = [string]$sl.Created }
         }
         return $map
     } catch {
