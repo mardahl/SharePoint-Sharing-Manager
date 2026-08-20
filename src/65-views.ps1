@@ -262,7 +262,7 @@ function Add-FindingsView {
         $created = ''
         $lc = $item.PSObject.Properties['LinkCreated']
         if ($lc -and $lc.Value) {
-            $d = $null
+            [datetime]$d = [datetime]::MinValue
             if ([datetime]::TryParse([string]$lc.Value, [ref]$d)) { $created = $d.ToString('yyyy-MM-dd') }
         }
         $line += '  ' + (Get-PadCell $created $col.Created)
