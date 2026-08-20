@@ -83,6 +83,9 @@ foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filt
 
 Initialize-SsmTenancy
 
+# Boot into the last-used tenant with its scan cache already loaded.
+if ($script:TenantName) { [void](Restore-SsmCache) }
+
 $script:UI.RestoreInfo = Test-SsmCacheAvailable
 if ($script:UI.RestoreInfo) {
     Write-SsmLog -Message ("Session cache available: {0} target(s) from {1}. Press L on a target tab to restore." -f $script:UI.RestoreInfo.Count, $script:UI.RestoreInfo.SavedAt)

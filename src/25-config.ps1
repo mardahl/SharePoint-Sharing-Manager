@@ -262,6 +262,10 @@ function Switch-SsmTenant {
     }
     $script:Conn.Url = ''; $script:Conn.Admin = $false; $script:Conn.Account = ''
     Set-SsmTenantPaths -Name $Name
+    # Persist as startup tenant so next launch boots into the last-used one.
+    [void](Set-SsmDefaultTenant -Name $Name)
+    # Restore this tenant's on-disk scan cache (if any) so scans don't start over.
+    [void](Restore-SsmCache)
     Write-SsmLog -Message ("Switched active tenant to '{0}'." -f $Name) -Level OK
     return $true
 }

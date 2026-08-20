@@ -156,6 +156,45 @@ Invoke-SsmTest 'Switch-SsmTenant swaps auth, repaths, clears Targets tabs' {
     Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
 }
 
+Invoke-SsmTest 'Switch-SsmTenant persists default and restores on-disk cache' {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-sw2-{0}" -f [guid]::NewGuid())
+    $p = Join-Path $root 'cfg.json'
+    $script:Root = $root
+    $script:ConfigPath = $p
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    Save-SsmConfig -Path $p -Config @{
+        Version=2; DefaultTenant='contoso'
+        Tenants=@{
+            contoso=@{ AuthMode='AppOnly'; ClientId='aaaa'; Tenant='contoso.onmicrosoft.com'; AdminUrl=''; Thumbprint='T'; CertPath=''; CertExpires='' }
+            fabrikam=@{ AuthMode='Delegated'; ClientId='bbbb'; Tenant='fabrikam.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires='' }
+        }
+    }
+    # Pre-seed fabrikam's on-disk cache with one scanned target.
+    $cacheDir = Join-Path $root 'SSM-Cache/fabrikam'
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    @{
+        Version='1.5.1'; SavedAt=(Get-Date).ToString('o')
+        Tabs=@(@{ Name='Sites'; Categories=@('OrgLink'); Items=@(@{ Url='https://fabrikam.sharepoint.com/sites/x'; Title='x'; Template=''; Status='Clean'; FindingCount=0; Findings=@() }) })
+    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $cacheDir 'session.json') -Encoding UTF8
+
+    $script:TenantName = 'contoso'
+    $script:Auth = @{ AuthMode='AppOnly'; ClientId='aaaa'; Tenant='contoso.onmicrosoft.com'; AdminUrl=''; Thumbprint='T'; CertPath=''; CertExpires=''; Loaded=$true }
+    $script:Conn = @{ Url=''; Admin=$false; Account='' }
+    $script:Tabs = @(
+        @{ Kind='Targets'; Name='Sites'; Items=@(); View=@(); Loaded=$false; Mode='Targets'; Search=''; Categories=[System.Collections.ArrayList]@('OrgLink'); FTab=$null; Cursor=0; Scroll=0; Filter='All'; SortCol='Url'; SortDesc=$false }
+    )
+    Set-SsmTenantPaths -Name 'contoso'
+    Assert-Equal $true (Switch-SsmTenant -Name 'fabrikam')
+    # New default persisted.
+    $cfg = Get-SsmConfig -Path $p
+    Assert-Equal 'fabrikam' $cfg.DefaultTenant
+    # Cache restored into the Sites tab.
+    Assert-Equal $true $script:Tabs[0]['Loaded']
+    Assert-Equal 1 @($script:Tabs[0]['Items']).Count
+    Assert-Equal 'https://fabrikam.sharepoint.com/sites/x' $script:Tabs[0]['Items'][0].Url
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Invoke-SsmTest 'Remove-SsmTenantData deletes cache+exports per flags, removes config' {
     $root = Join-Path ([IO.Path]::GetTempPath()) ("ssm-rm-{0}" -f [guid]::NewGuid())
     $script:Root = $root
