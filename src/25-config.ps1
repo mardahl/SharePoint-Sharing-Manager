@@ -2,7 +2,7 @@
 #region Config & modules
 # ============================================================================
 
-$script:AuthKeys = @('AuthMode','ClientId','Tenant','AdminUrl','Thumbprint','CertPath','CertExpires')
+$script:AuthKeys = @('AuthMode','ClientId','Tenant','AdminUrl','Thumbprint','CertPath','CertExpires','IncludeLinkDates')
 
 function ConvertTo-SsmConfigV2 {
     # Pure: accept any parsed config hashtable, return v2 shape.

@@ -296,12 +296,30 @@ function Show-TenantActionsModal {
     param([Parameter(Mandatory)][string]$Name)
     $options = @()
     if ($Name -ne $script:TenantName) { $options += 'Switch to this tenant' }
-    $options += @('Edit config', 'Register delegated app', 'Register cert app',
+    $linkDatesOn = ($script:Auth.Contains('IncludeLinkDates') -and $script:Auth.IncludeLinkDates -eq 'True')
+    $linkToggle = if ($linkDatesOn) { 'Disable link-date lookup' } else { 'Enable link-date lookup' }
+    $options += @('Edit config', $linkToggle, 'Register delegated app', 'Register cert app',
                   'Renew certificate', 'Remove app registration', 'Set as default', 'Remove tenant', 'Cancel')
     $pick = Show-ListModal -Title $Name -Prompt 'Action:' -Options $options
     if (-not $pick -or $pick -eq 'Cancel') { return }
 
     $needsAuth = @('Edit config', 'Register delegated app', 'Register cert app', 'Renew certificate', 'Remove app registration')
+    if ($pick -like '*link-date lookup*') {
+        if ($Name -ne $script:TenantName) {
+            if ($script:Conn.Url) { Disconnect-SsmConnection }
+            if (-not (Switch-SsmTenant -Name $Name)) { return }
+        }
+        $script:Auth.IncludeLinkDates = if ($linkDatesOn) { '' } else { 'True' }
+        Save-SsmAuth
+        $state = if ($script:Auth.IncludeLinkDates) { 'ON' } else { 'OFF' }
+        Show-MsgModal -Title 'Link-date lookup' -Lines @(
+            ("Link-date lookup is now {0} for '{1}'." -f $state, $Name), '',
+            'ON = each scan also fetches sharing-link Created/CreatedBy via',
+            'SharePoint REST (one extra call per uniquely-shared item = slower).',
+            'The dates appear in the findings view and CSV exports.')
+        $script:UI.Dirty = $true
+        return
+    }
     if ($needsAuth -contains $pick -and $Name -ne $script:TenantName) {
         if ($script:Conn.Url) { Disconnect-SsmConnection }
         if (-not (Switch-SsmTenant -Name $Name)) { return }

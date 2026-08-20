@@ -56,6 +56,21 @@ function Get-RestUnique {
     catch { return $false }
 }
 
+function Get-SharingLinkInfo {
+    # SharePoint REST GetSharingInformation returns sharingLinks with
+    # Created/CreatedBy (Graph permission - which PnP link cmdlets wrap -
+    # has no created date). Returns map of link Url -> info, or $null.
+    param([string]$Base, [string]$ListId, [int]$ItemId)
+    $u = "$Base/_api/web/lists(guid'$ListId')/items($ItemId)/GetSharingInformation"
+    $body = @{ request = @{ maxLinksToReturn = 100; maxPrincipalsToReturn = 0; maxInheritedLinksToReturn = 0; excludeCurrentUser = $true } } | ConvertTo-Json -Depth 4
+    try {
+        $r = Invoke-PnPSPRestMethod -Url $u -Method Post -Content $body
+        $map = @{}
+        foreach ($sl in @($r.sharingLinks)) { if ($sl.Url) { $map[$sl.Url] = $sl } }
+        return $map
+    } catch { return $null }
+}
+
 function Add-GrantsRest {
     # Read a roleassignments collection via REST and add bad direct grants to $Bag.
     param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag)
@@ -75,6 +90,7 @@ function Add-GrantsRest {
             CategoryKey = $key; Category = $script:RuleCategories[$key]
             Access = $roles; Principal = $ra.Member.Title; Path = $Path; RemovalKind = 'DirectGrant'
             LinkId = $null; ListId = $ListId; ItemId = $ItemId; PrincipalId = $ra.PrincipalId
+            LinkCreated = ''; LinkCreatedBy = ''
             RevokeStatus = 'NotAttempted'; Selected = $false
         })
     }
@@ -89,6 +105,7 @@ function Invoke-SiteScan {
     $linkKeys = @('AnonymousLink', 'OrgLink', 'GuestLink')
     $scanGrants = ([bool]@($Categories | Where-Object { $grantKeys -contains $_ }).Count)
     $scanLinks = ([bool]@($Categories | Where-Object { $linkKeys -contains $_ }).Count)
+    $wantLinkDates = ($script:Auth -and $script:Auth.Contains('IncludeLinkDates') -and $script:Auth.IncludeLinkDates -eq 'True')
 
     $web = Get-PnPWeb
     $base = $web.Url.TrimEnd('/')
@@ -154,16 +171,27 @@ function Invoke-SiteScan {
                     $links = if ($isFolder) { Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop }
                              else { Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop }
                 } catch { $links = @() }
+                # Optional per-tenant: one extra REST call per item for Created/CreatedBy.
+                $infoMap = $null
+                if ($wantLinkDates -and @($links).Count -gt 0) { $infoMap = Get-SharingLinkInfo -Base $base -ListId $listId -ItemId $it.Id }
                 foreach ($l in @($links)) {
                     if (-not $l.Link) { continue }
                     $cat = Get-LinkCategory -Scope $l.Link.Scope -Link $l
                     if (-not $cat) { continue }
                     if ($Categories -notcontains $cat.Key) { continue }
+                    $created = ''; $createdBy = ''
+                    if ($infoMap -and $l.Link.WebUrl -and $infoMap.ContainsKey($l.Link.WebUrl)) {
+                        $info = $infoMap[$l.Link.WebUrl]
+                        $created = [string]$info.Created
+                        if ($info.CreatedBy -and $info.CreatedBy.UserPrincipalName) { $createdBy = [string]$info.CreatedBy.UserPrincipalName }
+                        elseif ($info.CreatedBy -and $info.CreatedBy.Email)      { $createdBy = [string]$info.CreatedBy.Email }
+                    }
                     $bag.Add([pscustomobject]@{
                         Site = $site; Location = $loc; Name = $name
                         CategoryKey = $cat.Key; Category = $script:RuleCategories[$cat.Key]
                         Access = $l.Link.Type; Principal = $cat.Principal; Path = $fileRef; RemovalKind = 'Link'
                         LinkId = $l.Id; ListId = $listId; ItemId = $it.Id; PrincipalId = $null
+                        LinkCreated = $created; LinkCreatedBy = $createdBy
                         RevokeStatus = 'NotAttempted'; Selected = $false
                     })
                 }

@@ -14,6 +14,19 @@ Invoke-SsmTest 'Save/Get round-trips all fields' {
     Assert-Equal 'ABCD' $c.Tenants['contoso'].Thumbprint
     Assert-Equal '2027-07-21' $c.Tenants['contoso'].CertExpires
 }
+Invoke-SsmTest 'IncludeLinkDates defaults to empty for old configs and round-trips when set' {
+    $p = Join-Path ([IO.Path]::GetTempPath()) ("ssm-ld-{0}.json" -f [guid]::NewGuid())
+    Save-SsmConfig -Path $p -Config @{ Version=2; DefaultTenant='contoso'; Tenants=@{ contoso=@{ ClientId='1111' } } }
+    $c = Get-SsmConfig -Path $p
+    Assert-Equal 'False' ($c.Tenants['contoso'].ContainsKey('IncludeLinkDates') -and $c.Tenants['contoso'].IncludeLinkDates)
+    $script:ConfigPath = $p
+    $script:TenantName = 'contoso'
+    $script:Auth = @{ AuthMode='Delegated'; ClientId='1111'; Tenant=''; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires=''; IncludeLinkDates='True'; Loaded=$true }
+    Save-SsmAuth
+    $c = Get-SsmConfig -Path $p
+    Assert-Equal 'True' $c.Tenants['contoso'].IncludeLinkDates
+    Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue
+}
 Invoke-SsmTest 'Get-SsmConfig survives corrupt JSON' {
     Set-Content -LiteralPath $tmp -Value '{not json'
     Assert-Equal '' (Get-SsmConfig -Path $tmp)

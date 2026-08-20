@@ -193,13 +193,13 @@ function Get-FindingsLayout {
     param([int]$W, [bool]$Aggregate = $false)
     $siteW = if ($Aggregate) { 22 } else { 0 }
     $siteFixed = if ($Aggregate) { $siteW + 2 } else { 0 }
-    # ' ' sel(3) ' ' [Site(22) '  '] Category(20) '  ' Loc(7) '  ' Name(flex 40%) '  ' Principal(flex 60%) '  ' Status(12)
-    $fixed = 1 + 3 + 1 + $siteFixed + 20 + 2 + 7 + 2 + 2 + 2 + 12
+    # ' ' sel(3) ' ' [Site(22) '  '] Category(20) '  ' Loc(7) '  ' Name(flex 40%) '  ' Principal(flex 60%) '  ' Created(10) '  ' Status(12)
+    $fixed = 1 + 3 + 1 + $siteFixed + 20 + 2 + 7 + 2 + 2 + 2 + 10 + 2 + 12
     $flex = $W - $fixed - 1
     if ($flex -lt 20) { $flex = 20 }
     $nameW = [int]($flex * 0.4)
     $principalW = $flex - $nameW
-    return @{ Site = $siteW; Category = 20; Loc = 7; Name = $nameW; Principal = $principalW; Status = 12 }
+    return @{ Site = $siteW; Category = 20; Loc = 7; Name = $nameW; Principal = $principalW; Created = 10; Status = 12 }
 }
 
 function Add-FindingsView {
@@ -215,7 +215,7 @@ function Add-FindingsView {
     $agg = [bool]$ft['Aggregate']
     $col = Get-FindingsLayout -W $W -Aggregate $agg
     $siteHead = if ($agg) { (Get-PadCell 'Site' $col.Site) + '  ' } else { '' }
-    $head = ' ' + (Get-PadCell 'sel' 3) + ' ' + $siteHead + (Get-PadCell 'Category' $col.Category) + '  ' + (Get-PadCell 'Loc' $col.Loc) + '  ' + (Get-PadCell 'Name' $col.Name) + '  ' + (Get-PadCell 'Principal' $col.Principal) + '  ' + (Get-PadCell 'Status' $col.Status)
+    $head = ' ' + (Get-PadCell 'sel' 3) + ' ' + $siteHead + (Get-PadCell 'Category' $col.Category) + '  ' + (Get-PadCell 'Loc' $col.Loc) + '  ' + (Get-PadCell 'Name' $col.Name) + '  ' + (Get-PadCell 'Principal' $col.Principal) + '  ' + (Get-PadCell 'Created' $col.Created) + '  ' + (Get-PadCell 'Status' $col.Status)
     Add-FrameLine -Sb $Sb -Row 4 -Content ($t.ColHead + $head)
 
     $top = 5; $bottom = $H - 1
@@ -257,6 +257,15 @@ function Add-FindingsView {
         if ($isCursor) { $line += (Get-PadCell $item.Name $col.Name) }
         else { $line += $t.RowDim + (Get-PadCell $item.Name $col.Name) + $t.Row }
         $line += '  ' + (Get-PadCell $item.Principal $col.Principal)
+        # Link creation date (only populated when link-date lookup is enabled
+        # for the tenant). Date-only, yyyy-MM-dd, blank when unknown.
+        $created = ''
+        $lc = $item.PSObject.Properties['LinkCreated']
+        if ($lc -and $lc.Value) {
+            $d = $null
+            if ([datetime]::TryParse([string]$lc.Value, [ref]$d)) { $created = $d.ToString('yyyy-MM-dd') }
+        }
+        $line += '  ' + (Get-PadCell $created $col.Created)
         $statusStyle = $t.Muted
         if ($item.RevokeStatus -eq 'Removed') { $statusStyle = $t.Good }
         elseif ($item.RevokeStatus -like 'Failed:*') { $statusStyle = $t.Danger }

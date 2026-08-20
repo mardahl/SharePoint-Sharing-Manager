@@ -96,4 +96,26 @@ Invoke-SsmTest 'Old flat keys D/C/W/X/L no longer fire on Setup' {
     Assert-Equal 0 $script:Calls.Count
 }
 
+Invoke-SsmTest 'Action modal: toggle link-date lookup flips config for active tenant' {
+    Reset-SetupUi
+    $script:Auth = @{ AuthMode='Delegated'; ClientId='id-a'; Tenant='a.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires=''; IncludeLinkDates=''; Loaded=$true }
+    $script:NextPick = 'Enable link-date lookup'
+    Show-TenantActionsModal -Name 'a'
+    Assert-Equal 'True' $script:Auth['IncludeLinkDates']
+    # Label flips with state (Save-SsmAuth persistence is covered by config tests)
+    Show-TenantActionsModal -Name 'a'
+    Assert-Equal 'Disable link-date lookup' ($script:SeenOptions | Where-Object { $_ -like '*link-date*' })
+    $script:Auth['IncludeLinkDates'] = ''
+}
+
+Invoke-SsmTest 'Action modal: toggle on non-active tenant switches first' {
+    Reset-SetupUi
+    $script:Auth = @{ AuthMode='Delegated'; ClientId='id-a'; Tenant='a.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires=''; IncludeLinkDates=''; Loaded=$true }
+    $script:NextPick = 'Enable link-date lookup'
+    Show-TenantActionsModal -Name 'b'
+    Assert-Equal 'switch:b' $script:Calls[1]
+    Assert-Equal 'True' $script:Auth['IncludeLinkDates']
+    $script:Auth['IncludeLinkDates'] = ''
+}
+
 Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
