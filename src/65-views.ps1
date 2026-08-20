@@ -521,41 +521,63 @@ function Add-TenantView {
     $pad = ' ' * $margin
     $cursor = if ($tabState.ContainsKey('Cursor')) { [int]$tabState['Cursor'] } else { 0 }
 
-    # Capability enums carry the SPO admin UI (Sharing > External sharing)
-    # wording alongside the internal name so operators recognize them.
-    $spoCap = $p.SharingCapability
-    $odCap  = $p.OneDriveSharingCapability
-    if ($script:SharingCapabilityLabels.ContainsKey($spoCap)) { $spoCap = '{0} ({1})' -f $spoCap, $script:SharingCapabilityLabels[$spoCap] }
-    if ($script:SharingCapabilityLabels.ContainsKey($odCap))  { $odCap  = '{0} ({1})' -f $odCap,  $script:SharingCapabilityLabels[$odCap] }
+    # Rows come straight from $script:TenantSettings so display order, cursor
+    # nav and Enter can never drift apart (labels/values computed per row).
+    $capLabels = $script:SharingCapabilityLabels
+    $rows = @($script:TenantSettings | ForEach-Object {
+        $v = [string]$p[$_.Prop]
+        if ($_.Prop -match 'SharingCapability$' -and $capLabels.ContainsKey($v)) { $v = '{0} ({1})' -f $v, $capLabels[$v] }
+        @{ Prop = $_.Prop; Value = $v; Note = $_.Note }
+    })
 
-    $rows = @(
-        @{ Label = 'SharingCapability (SharePoint)';      Value = $spoCap;                                  Note = 'SPO admin UI: Sharing > External sharing > SharePoint.' }
-        @{ Label = 'OneDriveSharingCapability';           Value = $odCap;                                   Note = 'SPO admin UI: Sharing > External sharing > OneDrive (must be <= SharePoint).' }
-        @{ Label = 'DefaultSharingLinkType';              Value = $p.DefaultSharingLinkType;                Note = 'Link type pre-selected in the sharing dialog (AnonymousAccess = "Anyone").' }
-        @{ Label = 'DefaultLinkPermission';               Value = $p.DefaultLinkPermission;                 Note = 'Permission pre-selected in the sharing dialog.' }
-        @{ Label = 'RequireAnonymousLinksExpireInDays';   Value = $p.RequireAnonymousLinksExpireInDays;     Note = 'Expiration for ANONYMOUS (Anyone) links only; guest/org links unaffected. 0/blank = never.' }
-        @{ Label = 'SharingDomainRestrictionMode';        Value = $p.SharingDomainRestrictionMode;          Note = 'Limit sharing by domain (AllowList/BlockList); lists editable in SPO admin UI.' }
-        @{ Label = 'FileAnonymousLinkType';               Value = $p.FileAnonymousLinkType;                 Note = 'Default permission for anonymous file links (View/Edit).' }
-        @{ Label = 'FolderAnonymousLinkType';             Value = $p.FolderAnonymousLinkType;               Note = 'Default permission for anonymous folder links (View/Edit).' }
-        @{ Label = 'PreventExternalUsersFromResharing';   Value = $p.PreventExternalUsersFromResharing;     Note = 'Block guests from resharing items with others (True = block, recommended).' }
-        @{ Label = 'ExternalUserExpirationRequired';      Value = $p.ExternalUserExpirationRequired;        Note = 'Guest ACCESS to sites expires after N days (not a link setting).' }
-        @{ Label = 'ExternalUserExpireInDays';            Value = $p.ExternalUserExpireInDays;              Note = 'Days until guest site access expires (only if expiration required above).' }
-        @{ Label = 'ShowEveryoneClaim';                    Value = $p.ShowEveryoneClaim;                    Note = 'Show "Everyone" in People Picker (False = hidden, recommended).' }
-        @{ Label = 'ShowAllUsersClaim';                    Value = $p.ShowAllUsersClaim;                    Note = 'Show "All Users (x)" org-wide claims in People Picker.' }
-        @{ Label = 'ShowEveryoneExceptExternalUsersClaim'; Value = $p.ShowEveryoneExceptExternalUsersClaim; Note = 'Show "Everyone except external users" (EEEU) in People Picker.' }
-        @{ Label = 'AllowEEEUClaimInPrivateSite';          Value = $p.AllowEveryoneExceptExternalUsersClaimInPrivateSite; Note = 'Allow EEEU claim in private sites specifically.' }
-    )
-    $idx = 0
-    foreach ($r in $rows) {
-        if ($row -gt ($H - 3)) { break }
+    # Scroll window: keep the cursor inside the visible band, show overflow
+    # arrows so a clipped list is never mistaken for the whole list. Arrow
+    # rows are reserved BEFORE the window is sized - otherwise the band
+    # shrinks after scroll is computed and the cursor gets clipped.
+    $top = 5; $bottom = $H - 2
+    $cap = $bottom - $top + 1
+    $scroll = if ($tabState.ContainsKey('Scroll')) { [int]$tabState['Scroll'] } else { 0 }
+    $hasUp = $false; $hasDown = $false
+    for ($pass = 0; $pass -lt 3; $pass++) {
+        $bandCap = $cap - ([int]$hasUp) - ([int]$hasDown)
+        if ($cursor -lt $scroll) { $scroll = $cursor }
+        if ($cursor -ge ($scroll + $bandCap)) { $scroll = $cursor - $bandCap + 1 }
+        $scroll = [Math]::Max(0, [Math]::Min($scroll, [Math]::Max(0, $rows.Count - $bandCap)))
+        $newUp = $scroll -gt 0
+        $newDown = ($scroll + $bandCap) -lt $rows.Count
+        if ($newUp -eq $hasUp -and $newDown -eq $hasDown) { break }
+        $hasUp = $newUp; $hasDown = $newDown
+    }
+    $tabState['Scroll'] = $scroll
+
+    $row = $top
+    if ($hasUp) {
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + [string]$script:G.Up + ' more above')
+        $row++
+    }
+    $last = [Math]::Min($scroll + $bandCap - 1, $rows.Count - 1)
+    for ($idx = $scroll; $idx -le $last; $idx++) {
+        $r = $rows[$idx]
         $isCur = ($idx -eq $cursor)
         $arrow = [string]$script:G.Arrow
         $marker = if ($isCur) { $t.CtxHi + $arrow + ' ' } else { ' ' * ($arrow.Length + 1) }
         $labelStyle = if ($isCur) { $t.CursorFg } else { $t.CtxHi }
-        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $marker + $labelStyle + (Get-PadCell $r.Label 38) + $t.Reset + $t.Row + ': ' + $r.Value); $row++
-        if ($row -le ($H - 2)) { Add-FrameLine -Sb $Sb -Row $row -Content ($pad + '   ' + $t.Muted + $r.Note); $row++ }
-        $row++
-        $idx++
+        # CIS 7.2.x alignment badge: green "CIS ✓" when the value meets the
+        # benchmark's recommended state, dim "CIS ✗" when it does not, nothing
+        # when CIS has no recommendation for the setting.
+        $cis = Test-CisAlignment -Prop $r.Prop -Value ($r.Value -replace ' \(.*$', '')
+        $badge = ''
+        if ($cis -eq $true)       { $badge = '  ' + $t.Good  + 'CIS ' + [string]$script:G.AuditOk + $t.Reset }
+        elseif ($cis -eq $false)  { $badge = '  ' + $t.Muted + 'CIS ' + [string]$script:G.AuditError + $t.Reset }
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $marker + $labelStyle + (Get-PadCell $r.Prop 38) + $t.Reset + $t.Row + ': ' + $r.Value + $badge); $row++
+    }
+    if ($hasDown -and $row -le $bottom) {
+        Add-FrameLine -Sb $Sb -Row $row -Content ($pad + $t.Muted + [string]$script:G.Down + ' more below')
+    }
+    # The highlighted setting's explanation rides the header line - per-row
+    # note lines were dropped so the list fits twice as many rows.
+    if ($cursor -lt $rows.Count -and $rows[$cursor].Note) {
+        Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + ' Tenant-wide sharing posture   ' + $t.Muted + $rows[$cursor].Note)
     }
 }
 

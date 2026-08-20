@@ -224,12 +224,14 @@ function Invoke-TenantKey {
     param([System.ConsoleKeyInfo]$K)
     $tab = $script:Tabs[2]
     $count = @($script:TenantSettings).Count
-    if ($count -lt 1) { $count = 15 }
+    if ($count -lt 1) { $count = 19 }
     if (-not $tab.ContainsKey('Cursor')) { $tab['Cursor'] = 0 }
 
     switch ($K.Key) {
         'UpArrow'   { if ($tab['Cursor'] -gt 0) { $tab['Cursor']-- }; $script:UI.Dirty = $true; return }
         'DownArrow' { if ($tab['Cursor'] -lt ($count - 1)) { $tab['Cursor']++ }; $script:UI.Dirty = $true; return }
+        'PageUp'    { $tab['Cursor'] = [Math]::Max(0, $tab['Cursor'] - 10); $script:UI.Dirty = $true; return }
+        'PageDown'  { $tab['Cursor'] = [Math]::Min($count - 1, $tab['Cursor'] + 10); $script:UI.Dirty = $true; return }
         'Home'      { $tab['Cursor'] = 0; $script:UI.Dirty = $true; return }
         'End'       { $tab['Cursor'] = $count - 1; $script:UI.Dirty = $true; return }
         'Enter' {
@@ -237,7 +239,7 @@ function Invoke-TenantKey {
                 if (Get-Command Get-TenantPosture -ErrorAction SilentlyContinue) { Get-TenantPosture }
                 else { Show-MsgModal -Title 'Tenant' -Lines @('Tenant posture loading is not yet available (lands in Task 11).') -Kind Warn }
             } elseif (Get-Command Invoke-TenantSetting -ErrorAction SilentlyContinue) {
-                Invoke-TenantSetting -Setting ([int]$tab['Cursor'] + 1)
+                if ([int]$tab['Cursor'] -lt @($script:TenantSettings).Count) { Invoke-TenantSetting -Setting ([int]$tab['Cursor'] + 1) }
             } else {
                 Show-MsgModal -Title 'Tenant' -Lines @('Changing tenant settings is not yet available (lands in Task 11).') -Kind Warn
             }

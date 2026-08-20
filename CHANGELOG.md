@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Add: all CIS-baseline knobs are now individually visible/adjustable on the
+  Sharing tab: `LegacyAuthProtocolsEnabled`, `EnableAzureADB2BIntegration`,
+  `EmailAttestationRequired`, `EmailAttestationReAuthDays` (19 settings).
+- Fix: Enter on the four new CIS rows opened the wrong picker (the view's
+  row order and the settings' `N` numbers had drifted). The view, cursor
+  nav and Enter now all index `$script:TenantSettings` by position - the
+  `N` field is gone, so the two lists can't diverge again.
+- Fix: Sharing tab now scrolls in small windows - per-row note lines were
+  dropped (the highlighted row's note rides the header line), overflow is
+  signalled with `↑ more above` / `↓ more below`, and PgUp/PgDn jump 10.
+- Add: CIS alignment badge next to each Sharing tab value - green `CIS ✓`
+  when the value meets the CIS 7.2.x recommended state (or is stricter),
+  dim `CIS ✗` when not; settings without a CIS rule show no badge.
 - Add: Sharing tab covers more of the tenant sharing surface:
   `SharingDomainRestrictionMode`, `FileAnonymousLinkType`,
   `FolderAnonymousLinkType`, `PreventExternalUsersFromResharing`,

@@ -31,7 +31,7 @@ Invoke-SsmTest 'TenantSettings covers link/access expiration and resharing beyon
     foreach ($expected in @('ExternalUserExpirationRequired','ExternalUserExpireInDays','PreventExternalUsersFromResharing','SharingDomainRestrictionMode','FileAnonymousLinkType','FolderAnonymousLinkType')) {
         if ($props -notcontains $expected) { throw "TenantSettings is missing $expected" }
     }
-    if (@($script:TenantSettings).Count -ne 15) { throw "expected 15 tenant settings, got $(@($script:TenantSettings).Count)" }
+    if (@($script:TenantSettings).Count -ne 19) { throw "expected 19 tenant settings, got $(@($script:TenantSettings).Count)" }
 }
 
 Invoke-SsmTest 'SharingCapabilityLabels maps every enum value to the SPO admin UI wording' {
@@ -129,6 +129,47 @@ Invoke-SsmTest 'CIS snapshot saves and reloads current tenant values' {
     } finally {
         $script:CacheDir = $savedDir; $script:TenantName = $savedName
         Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
+    }
+}
+
+Invoke-SsmTest 'TenantSettings surfaces every CIS baseline knob for manual adjustment' {
+    $props = @($script:TenantSettings | Select-Object -ExpandProperty Prop)
+    foreach ($k in @($script:CisBaselineL1.Keys) + @($script:CisBaselineL2.Keys)) {
+        if ($props -notcontains $k) { throw "TenantSettings missing CIS knob $k" }
+    }
+}
+
+Invoke-SsmTest 'Test-CisAlignment: aligned, misaligned, and unlisted settings' {
+    Assert-Equal 'True'  (Test-CisAlignment 'SharingCapability' 'Disabled')                    # stricter than CIS
+    Assert-Equal 'True'  (Test-CisAlignment 'SharingCapability' 'ExternalUserSharingOnly')     # exact match
+    Assert-Equal 'False' (Test-CisAlignment 'SharingCapability' 'ExternalUserAndGuestSharing') # Anyone = fail
+    Assert-Equal 'False' (Test-CisAlignment 'OneDriveSharingCapability' 'ExternalUserSharingOnly')
+    Assert-Equal 'True'  (Test-CisAlignment 'LegacyAuthProtocolsEnabled' 'False')
+    Assert-Equal 'False' (Test-CisAlignment 'LegacyAuthProtocolsEnabled' 'True')
+    Assert-Equal 'True'  (Test-CisAlignment 'ExternalUserExpireInDays' '30')
+    Assert-Equal 'True'  (Test-CisAlignment 'ExternalUserExpireInDays' '14')
+    Assert-Equal 'False' (Test-CisAlignment 'ExternalUserExpireInDays' '31')
+    Assert-Equal 'False' (Test-CisAlignment 'DefaultLinkPermission' 'Edit')
+    Assert-Equal 'True'  (Test-CisAlignment 'DefaultSharingLinkType' 'Direct')
+    Assert-Equal 'True'  (Test-CisAlignment 'DefaultSharingLinkType' 'Internal')
+    Assert-Equal 'False' (Test-CisAlignment 'DefaultSharingLinkType' 'AnonymousAccess')
+    Assert-Equal ''      (Test-CisAlignment 'ShowEveryoneClaim' 'True')   # no CIS rule -> null
+    Assert-Equal ''      (Test-CisAlignment 'RequireAnonymousLinksExpireInDays' '14')
+}
+
+Invoke-SsmTest 'TenantSettings order matches Enter dispatch (no N-field drift)' {
+    # Regression: view listed new CIS props at positions 12-15 while their N
+    # values were 16-19, so Enter on LegacyAuthProtocolsEnabled opened the
+    # ShowEveryoneClaim picker. Order-based lookup makes this impossible.
+    Assert-Equal 'LegacyAuthProtocolsEnabled' $script:TenantSettings[11].Prop
+    Assert-Equal 'EnableAzureADB2BIntegration' $script:TenantSettings[12].Prop
+    Assert-Equal 'EmailAttestationRequired' $script:TenantSettings[13].Prop
+    Assert-Equal 'EmailAttestationReAuthDays' $script:TenantSettings[14].Prop
+    Assert-Equal 'ShowEveryoneClaim' $script:TenantSettings[15].Prop
+    Assert-Equal 'AllowEveryoneExceptExternalUsersClaimInPrivateSite' $script:TenantSettings[18].Prop
+    foreach ($s in $script:TenantSettings) {
+        if ($s.ContainsKey('N')) { throw "stale N field on $($s.Prop) - order-based lookup in use" }
+        if (-not $s.Note) { throw "missing Note on $($s.Prop) - shown in the header line" }
     }
 }
 

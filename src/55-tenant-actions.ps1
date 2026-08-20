@@ -15,24 +15,32 @@ $script:SharingCapabilityLabels = @{
 }
 
 $script:TenantSettings = @(
-    @{ N=1; Prop='SharingCapability';                 Values=@('Disabled','ExistingExternalUserSharingOnly','ExternalUserSharingOnly','ExternalUserAndGuestSharing') },
-    @{ N=2; Prop='OneDriveSharingCapability';         Values=@('Disabled','ExistingExternalUserSharingOnly','ExternalUserSharingOnly','ExternalUserAndGuestSharing') },
-    @{ N=3; Prop='DefaultSharingLinkType';            Values=@('None','Direct','Internal','AnonymousAccess') },
-    @{ N=4; Prop='DefaultLinkPermission';             Values=@('None','View','Edit') },
-    @{ N=5; Prop='RequireAnonymousLinksExpireInDays'; Values=@() },  # numeric, free input
-    @{ N=6; Prop='SharingDomainRestrictionMode';      Values=@('None','AllowList','BlockList') },
-    @{ N=7; Prop='FileAnonymousLinkType';             Values=@('None','View','Edit') },
-    @{ N=8; Prop='FolderAnonymousLinkType';           Values=@('None','View','Edit') },
-    @{ N=9; Prop='PreventExternalUsersFromResharing'; Values=@('True','False') },
-    @{ N=10; Prop='ExternalUserExpirationRequired';   Values=@('True','False') },
-    @{ N=11; Prop='ExternalUserExpireInDays';         Values=@() },  # numeric, free input
+    # Row order = display order on the Sharing tab. The view, cursor nav and
+    # Enter all index into this array - there is no separate numbering to drift.
+    @{ Prop='SharingCapability';                 Values=@('Disabled','ExistingExternalUserSharingOnly','ExternalUserSharingOnly','ExternalUserAndGuestSharing'); Note='SPO admin UI: Sharing > External sharing > SharePoint.' },
+    @{ Prop='OneDriveSharingCapability';         Values=@('Disabled','ExistingExternalUserSharingOnly','ExternalUserSharingOnly','ExternalUserAndGuestSharing'); Note='SPO admin UI: Sharing > External sharing > OneDrive (must be <= SharePoint).' },
+    @{ Prop='DefaultSharingLinkType';            Values=@('None','Direct','Internal','AnonymousAccess'); Note='Link type pre-selected in the sharing dialog (AnonymousAccess = "Anyone").' },
+    @{ Prop='DefaultLinkPermission';             Values=@('None','View','Edit'); Note='Permission pre-selected in the sharing dialog.' },
+    @{ Prop='RequireAnonymousLinksExpireInDays'; Values=@(); Note='Expiration for ANONYMOUS (Anyone) links only; guest/org links unaffected. 0/blank = never.' },
+    @{ Prop='SharingDomainRestrictionMode';      Values=@('None','AllowList','BlockList'); Note='Limit sharing by domain (AllowList/BlockList); lists editable in SPO admin UI.' },
+    @{ Prop='FileAnonymousLinkType';             Values=@('None','View','Edit'); Note='Default permission for anonymous file links (View/Edit).' },
+    @{ Prop='FolderAnonymousLinkType';           Values=@('None','View','Edit'); Note='Default permission for anonymous folder links (View/Edit).' },
+    @{ Prop='PreventExternalUsersFromResharing'; Values=@('True','False'); Note='Block guests from resharing items with others (True = block, recommended).' },
+    @{ Prop='ExternalUserExpirationRequired';    Values=@('True','False'); Note='Guest ACCESS to sites expires after N days (not a link setting).' },
+    @{ Prop='ExternalUserExpireInDays';          Values=@(); Note='Days until guest site access expires (only if expiration required above).' },
+    # CIS 7.2.x knobs the baseline applies - surfaced so they can be adjusted
+    # individually instead of only via the C bulk-apply.
+    @{ Prop='LegacyAuthProtocolsEnabled';        Values=@('False','True'); Note='CIS 7.2.1: legacy auth off (False) = modern authentication required.' },
+    @{ Prop='EnableAzureADB2BIntegration';       Values=@('True','False'); Note='CIS 7.2.2: Entra B2B integration for guest management.' },
+    @{ Prop='EmailAttestationRequired';          Values=@('True','False'); Note='CIS 7.2.10: guests reauthenticate with a verification code.' },
+    @{ Prop='EmailAttestationReAuthDays';        Values=@(); Note='CIS 7.2.10: days between guest verification-code reauthentication.' },
     # Org-wide sharing claims + EEEU (Everyone Except External Users) grants in the People
     # Picker - hiding/disabling these stops users from re-creating the org-wide/EEEU grants
     # this tool's scan engine finds and revokes (see 35-scan-engine.ps1).
-    @{ N=12; Prop='ShowEveryoneClaim';                              Values=@('True','False') },
-    @{ N=13; Prop='ShowAllUsersClaim';                              Values=@('True','False') },
-    @{ N=14; Prop='ShowEveryoneExceptExternalUsersClaim';           Values=@('True','False') },
-    @{ N=15; Prop='AllowEveryoneExceptExternalUsersClaimInPrivateSite'; Values=@('True','False') }
+    @{ Prop='ShowEveryoneClaim';                              Values=@('True','False'); Note='Show "Everyone" in People Picker (False = hidden, recommended).' },
+    @{ Prop='ShowAllUsersClaim';                              Values=@('True','False'); Note='Show "All Users (x)" org-wide claims in People Picker.' },
+    @{ Prop='ShowEveryoneExceptExternalUsersClaim';           Values=@('True','False'); Note='Show "Everyone except external users" (EEEU) in People Picker.' },
+    @{ Prop='AllowEveryoneExceptExternalUsersClaimInPrivateSite'; Values=@('True','False'); Note='Allow EEEU claim in private sites specifically.' }
 )
 
 function Get-TenantPosture {
@@ -59,6 +67,10 @@ function Get-TenantPosture {
         PreventExternalUsersFromResharing = [string]$t.PreventExternalUsersFromResharing
         ExternalUserExpirationRequired    = [string]$t.ExternalUserExpirationRequired
         ExternalUserExpireInDays          = [string]$t.ExternalUserExpireInDays
+        LegacyAuthProtocolsEnabled        = [string]$t.LegacyAuthProtocolsEnabled
+        EnableAzureADB2BIntegration       = [string]$t.EnableAzureADB2BIntegration
+        EmailAttestationRequired          = [string]$t.EmailAttestationRequired
+        EmailAttestationReAuthDays        = [string]$t.EmailAttestationReAuthDays
         ShowEveryoneClaim                              = [string]$t.ShowEveryoneClaim
         ShowAllUsersClaim                              = [string]$t.ShowAllUsersClaim
         ShowEveryoneExceptExternalUsersClaim           = [string]$t.ShowEveryoneExceptExternalUsersClaim
@@ -77,7 +89,7 @@ function Invoke-TenantSetting {
     # Task 10), which invokes this as `Invoke-TenantSetting -Setting <n>`.
     param([int]$Setting)
     if (-not $script:Tabs[2].Loaded) { Show-MsgModal -Title 'Tenant' -Lines @('Load the posture first (Enter).'); return }
-    $s = $script:TenantSettings | Where-Object { $_.N -eq $Setting }
+    $s = $script:TenantSettings[$Setting - 1]
     if (-not $s) { return }
     $current = $script:Tabs[2].Posture[$s.Prop]
     # Fixed-value settings get a navigable picker so the operator selects a
@@ -134,6 +146,30 @@ $script:CisBaselineL1 = [ordered]@{
 $script:CisBaselineL2 = [ordered]@{
     OneDriveSharingCapability        = 'Disabled'  # 7.2.4
     PreventExternalUsersFromResharing= $true       # 7.2.5
+}
+
+function Test-CisAlignment {
+    # Returns $true when a posture value meets the CIS 7.2.x recommended state,
+    # $false when it does not, $null when CIS has no recommendation for it.
+    # Capability checks use "recommended or less permissive" per the benchmark.
+    param([string]$Prop, [string]$Value)
+    if ($null -eq $Value -or $Value -eq '') { return $null }
+    $capRank = @{ Disabled = 0; ExistingExternalUserSharingOnly = 1; ExternalUserSharingOnly = 2; ExternalUserAndGuestSharing = 3 }
+    switch ($Prop) {
+        'LegacyAuthProtocolsEnabled'      { return ($Value -eq 'False') }                                  # 7.2.1
+        'EnableAzureADB2BIntegration'     { return ($Value -eq 'True') }                                   # 7.2.2
+        'SharingCapability'               { return ($capRank[$Value] -le $capRank['ExternalUserSharingOnly']) }  # 7.2.3
+        'OneDriveSharingCapability'       { return ($Value -eq 'Disabled') }                               # 7.2.4 (L2)
+        'PreventExternalUsersFromResharing' { return ($Value -eq 'True') }                                 # 7.2.5 (L2)
+        'SharingDomainRestrictionMode'    { return ($Value -eq 'AllowList') }                              # 7.2.6 (L2, list not checkable)
+        'DefaultSharingLinkType'          { return ($Value -eq 'Direct' -or $Value -eq 'Internal') }       # 7.2.7
+        'ExternalUserExpirationRequired'  { return ($Value -eq 'True') }                                   # 7.2.9
+        'ExternalUserExpireInDays'        { $n = 0; return ([int]::TryParse($Value, [ref]$n) -and $n -le 30 -and $n -gt 0) }  # 7.2.9
+        'EmailAttestationRequired'        { return ($Value -eq 'True') }                                   # 7.2.10
+        'EmailAttestationReAuthDays'      { $n = 0; return ([int]::TryParse($Value, [ref]$n) -and $n -le 15 -and $n -gt 0) }  # 7.2.10
+        'DefaultLinkPermission'           { return ($Value -eq 'View') }                                   # 7.2.11
+    }
+    return $null
 }
 
 function Save-CisSnapshot {
