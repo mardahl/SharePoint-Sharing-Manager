@@ -71,7 +71,7 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **Persistent scan cache with manual restore** - scan results survive a restart and can be reloaded on demand
 - **Bulk revocation across drives and across the full findings list** - revoke every finding on a set of selected targets, or every finding in the aggregate view, in one confirmed pass
 - **Multi-tenant** - manage multiple tenants from one install, switch between them (`T`), each with its own auth, scan cache, and exports; legacy single-tenant config migrates automatically
-- **Sharing-link age** (optional, per tenant) - Setup > tenant > "Enable link-date lookup" makes scans also fetch each link's Created/CreatedBy via SharePoint REST (slower; one extra call per shared item). Shown as a Created column in the findings view and in CSV exports - useful when deciding whether an old link is safe to revoke
+- **Sharing-link age** (optional, per tenant) - Setup > tenant > "Enable link-date lookup" makes scans also fetch each link's Created date via CSOM (slower; one extra call per shared item). Shown as a Created column in the findings view and in CSV exports - useful when deciding whether an old link is safe to revoke
 
 ## Quick start
 

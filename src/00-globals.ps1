@@ -35,7 +35,7 @@ $script:Auth = @{
     Thumbprint  = ''      # Windows cert store (CurrentUser\My)
     CertPath    = ''      # PFX path (non-Windows)
     CertExpires = ''      # ISO date string
-    IncludeLinkDates = '' # 'True' = look up sharing-link Created/CreatedBy per item (slower scan)
+    IncludeLinkDates = '' # 'True' = look up sharing-link Created per item (slower scan)
 }
 
 # Connection state: one PnP connection at a time, cached per URL

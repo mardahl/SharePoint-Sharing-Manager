@@ -57,51 +57,24 @@ function Get-RestUnique {
 }
 
 function Get-SharingLinkInfo {
-    # SharePoint REST GetSharingInformation returns sharingLinks with
-    # Created/CreatedBy (Graph permission - which PnP link cmdlets wrap -
-    # has no created date). Returns map of link Url -> info, or $null.
-    param([string]$Base, [string]$ListId, [int]$ItemId)
-    $u = "$Base/_api/web/lists(guid'$ListId')/items($ItemId)/GetSharingInformation"
-    # Verbose-JSON CSOM-style payload: typed request object with PascalCase fields.
-    $body = @{
-        request = @{
-            '__metadata'               = @{ type = 'SP.Sharing.SharingInformationRequest' }
-            MaxLinksToReturn           = 100
-            MaxPrincipalsToReturn      = 0
-            MaxInheritedLinksToReturn  = 0
-            ExcludeCurrentUser         = $true
-            RetrieveSharingLinks       = $true
-            RetrieveSPOProtocolHandler = $false
-        }
-    } | ConvertTo-Json -Depth 5
+    # CSOM ObjectSharingInformation.SharingLinks carries Created (the REST
+    # GetSharingInformation twin takes no JSON request fields on current
+    # tenants, and the Graph permission resource has no created date).
+    # Returns map of link Url -> Created ISO string, or $null.
+    param([string]$ListId, [int]$ItemId)
     try {
-        $r = Invoke-PnPSPRestMethod -Url $u -Method Post -Content $body -ContentType 'application/json;odata=verbose' -Accept 'application/json;odata=verbose'
-        if (-not $script:SharingLinkInfoDumped) {
-            $script:SharingLinkInfoDumped = $true
-            Write-SsmLog -Message ("GetSharingInformation sample response: {0}" -f ($r | ConvertTo-Json -Depth 6 -Compress).Substring(0, [Math]::Min(2000, ($r | ConvertTo-Json -Depth 6 -Compress).Length)))
-        }
-        # Unwrap response envelope: verbose JSON nests under GetSharingInformation,
-        # light JSON returns fields at top level.
-        $info = $r
-        foreach ($prop in @('GetSharingInformation', 'd')) {
-            if ($null -ne $info -and $info.PSObject.Properties[$prop]) { $info = $info.$prop }
-        }
-        $links = $null
-        foreach ($prop in @('sharingLinks', 'SharingLinks')) {
-            if ($null -ne $info -and $info.PSObject.Properties[$prop]) { $links = $info.$prop; break }
-        }
-        if ($null -eq $links) {
-            Write-SsmLog -Message ("GetSharingInformation: no sharingLinks in response for item {0} (keys: {1})" -f $ItemId, (@($info.PSObject.Properties.Name) -join ',')) -Level WARN
-            return $null
-        }
+        $ctx = Get-PnPContext
+        $osi = [Microsoft.SharePoint.Client.ObjectSharingInformation]::GetListItemSharingInformation(
+            $ctx, [guid]$ListId, $ItemId, $false, $false, $false, $true, $true, $false)
+        $ctx.Load($osi)
+        $ctx.ExecuteQuery()
         $map = @{}
-        foreach ($sl in @($links)) {
-            $url = if ($sl.PSObject.Properties['Url']) { $sl.Url } else { $null }
-            if ($url) { $map[$url] = $sl }
+        foreach ($sl in @($osi.SharingLinks)) {
+            if ($sl.Url -and $sl.Created) { $map[$sl.Url] = $sl.Created.ToString('yyyy-MM-ddTHH:mm:ssZ') }
         }
         return $map
     } catch {
-        Write-SsmLog -Message ("GetSharingInformation failed for item {0}: {1}" -f $ItemId, $_.Exception.Message) -Level WARN
+        Write-SsmLog -Message ("SharingLinks lookup failed for item {0}: {1}" -f $ItemId, $_.Exception.Message) -Level WARN
         return $null
     }
 }
@@ -125,7 +98,7 @@ function Add-GrantsRest {
             CategoryKey = $key; Category = $script:RuleCategories[$key]
             Access = $roles; Principal = $ra.Member.Title; Path = $Path; RemovalKind = 'DirectGrant'
             LinkId = $null; ListId = $ListId; ItemId = $ItemId; PrincipalId = $ra.PrincipalId
-            LinkCreated = ''; LinkCreatedBy = ''
+            LinkCreated = ''
             RevokeStatus = 'NotAttempted'; Selected = $false
         })
     }
@@ -206,31 +179,24 @@ function Invoke-SiteScan {
                     $links = if ($isFolder) { Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop }
                              else { Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop }
                 } catch { $links = @() }
-                # Optional per-tenant: one extra REST call per item for Created/CreatedBy.
+                # Optional per-tenant: one extra CSOM call per item for link Created date.
                 $infoMap = $null
-                if ($wantLinkDates -and @($links).Count -gt 0) { $infoMap = Get-SharingLinkInfo -Base $base -ListId $listId -ItemId $it.Id }
+                if ($wantLinkDates -and @($links).Count -gt 0) { $infoMap = Get-SharingLinkInfo -ListId $listId -ItemId $it.Id }
                 foreach ($l in @($links)) {
                     if (-not $l.Link) { continue }
                     $cat = Get-LinkCategory -Scope $l.Link.Scope -Link $l
                     if (-not $cat) { continue }
                     if ($Categories -notcontains $cat.Key) { continue }
-                    $created = ''; $createdBy = ''
+                    $created = ''
                     if ($infoMap -and $l.Link.WebUrl -and $infoMap.ContainsKey($l.Link.WebUrl)) {
-                        $info = $infoMap[$l.Link.WebUrl]
-                        if ($info.PSObject.Properties['Created']) { $created = [string]$info.Created }
-                        $cb = if ($info.PSObject.Properties['CreatedBy']) { $info.CreatedBy } else { $null }
-                        if ($cb) {
-                            if ($cb.PSObject.Properties['UserPrincipalName'] -and $cb.UserPrincipalName) { $createdBy = [string]$cb.UserPrincipalName }
-                            elseif ($cb.PSObject.Properties['Email'] -and $cb.Email)                     { $createdBy = [string]$cb.Email }
-                            elseif ($cb.PSObject.Properties['LoginName'] -and $cb.LoginName)             { $createdBy = [string]$cb.LoginName }
-                        }
+                        $created = [string]$infoMap[$l.Link.WebUrl]
                     }
                     $bag.Add([pscustomobject]@{
                         Site = $site; Location = $loc; Name = $name
                         CategoryKey = $cat.Key; Category = $script:RuleCategories[$cat.Key]
                         Access = $l.Link.Type; Principal = $cat.Principal; Path = $fileRef; RemovalKind = 'Link'
                         LinkId = $l.Id; ListId = $listId; ItemId = $it.Id; PrincipalId = $null
-                        LinkCreated = $created; LinkCreatedBy = $createdBy
+                        LinkCreated = $created
                         RevokeStatus = 'NotAttempted'; Selected = $false
                     })
                 }

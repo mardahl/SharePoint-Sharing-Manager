@@ -8,7 +8,7 @@ function Export-FindingsCsv {
     $tag   = ($SiteUrl.TrimEnd('/') -split '/')[-1]
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $path  = Join-Path $script:ExportDir ("SSM_{0}_{1}_{2}.csv" -f $Phase, $tag, $stamp)
-    $Findings | Select-Object Site, Location, Category, Name, Access, Principal, Path, LinkCreated, LinkCreatedBy, RevokeStatus |
+    $Findings | Select-Object Site, Location, Category, Name, Access, Principal, Path, LinkCreated, RevokeStatus |
         Export-Csv -Path $path -NoTypeInformation -Encoding UTF8BOM
     Write-SsmLog -Message ("{0} evidence: {1}" -f $Phase, $path)
     return $path
@@ -21,7 +21,7 @@ function Export-ViewCsv {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     if ($Tab['Mode'] -eq 'Findings' -and $Tab['FTab']) {
         $path = Join-Path $script:ExportDir ("{0}_findings_{1}.csv" -f $Tab['Name'], $stamp)
-        @($Tab['FTab']['View']) | Select-Object Site, Location, Category, Name, Access, Principal, Path, LinkCreated, LinkCreatedBy, RevokeStatus |
+        @($Tab['FTab']['View']) | Select-Object Site, Location, Category, Name, Access, Principal, Path, LinkCreated, RevokeStatus |
             Export-Csv -Path $path -NoTypeInformation -Encoding UTF8BOM
     } else {
         $path = Join-Path $script:ExportDir ("{0}_targets_{1}.csv" -f $Tab['Name'], $stamp)

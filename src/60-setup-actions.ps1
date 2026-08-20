@@ -314,8 +314,8 @@ function Show-TenantActionsModal {
         $state = if ($script:Auth.IncludeLinkDates) { 'ON' } else { 'OFF' }
         Show-MsgModal -Title 'Link-date lookup' -Lines @(
             ("Link-date lookup is now {0} for '{1}'." -f $state, $Name), '',
-            'ON = each scan also fetches sharing-link Created/CreatedBy via',
-            'SharePoint REST (one extra call per uniquely-shared item = slower).',
+            'ON = each scan also fetches sharing-link Created date via',
+            'CSOM (one extra call per uniquely-shared item = slower).',
             'The dates appear in the findings view and CSV exports.')
         $script:UI.Dirty = $true
         return
