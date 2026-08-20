@@ -144,7 +144,7 @@ No telemetry. Authentication is delegated to PnP.PowerShell / MSAL. Logs and CSV
 
 ## Credits
 
-Combines and supersedes the standalone [Revoke-OrgWideSharingLinks](docs/legacy/Revoke-OrgWideSharingLinks.ps1) and [Revoke-OneDrive-NonMemberAccess](docs/legacy/Revoke-OneDrive-NonMemberAccess.ps1) scripts, kept in `docs/legacy/` for reference. TUI framework shared with [Exchange-SOA-Manager](https://github.com/mardahl/Exchange-SOA-Manager).
+Combines and supersedes the original standalone `Revoke-OrgWideSharingLinks` and `Revoke-OneDrive-NonMemberAccess` scripts. TUI framework shared with [Exchange-SOA-Manager](https://github.com/mardahl/Exchange-SOA-Manager).
 
 ## License
 
