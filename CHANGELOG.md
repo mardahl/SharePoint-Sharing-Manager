@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Fix: cert attach (re-key and renewal) sent the PEM text as the Graph key
+  (`Cannot convert ... to Edm.Binary`) and used the `addKey` action, which
+  requires a proof JWT signed by an EXISTING key on the app - precisely the
+  key the operator no longer holds. Both paths now PATCH `keyCredentials`
+  with base64 DER (existing keys preserved, new one appended); Application
+  Administrator suffices, no proof needed.
+- Change: AADSTS700016 (PnP Management Shell not consented in the tenant)
+  now offers to open the adminconsent URL in the browser directly, and the
+  error text states that 31359c7f-... is Microsoft's sign-in app, not the
+  tenant's registration.
+- Add: app-name lookup logs every matched app (displayName + appId) and
+  warns when several apps share the name - the first match is used.
 - Fix: the re-key flow for an existing Entra app always failed with "found
   but no Client Id returned" - `Get-PnPAzureADApp` returns the client id as
   `AppId`, not `AzureAppId`. The lookup (now shared as `Find-SsmAppClientId`)

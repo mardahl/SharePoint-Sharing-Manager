@@ -20,9 +20,15 @@ function Save-SsmAuth {}
 function Get-PnPAzureADApp { param([string]$Identity) $script:FakeApp }
 function Get-PnPAzureADApp { param([string]$Identity) $script:FakeApp }
 function New-PnPAzureCertificate { param($CommonName, $ValidYears, $OutPfx, $OutCert)
-    [pscustomobject]@{ Thumbprint = 'THUMB123'; Certificate = [byte[]](1,2,3) } }
+    [pscustomobject]@{
+        Thumbprint = 'THUMB123'
+        Certificate = [byte[]](1,2,3)
+        KeyCredentials = (@{ customKeyIdentifier='x'; keyId='k'; type='AsymmetricX509Cert'; usage='Verify'; value='REVJQg==' } | ConvertTo-Json)
+    } }
 function Invoke-PnPGraphMethod { param($Method, $Url, $Content)
     $script:GraphCalls += "$Method $Url"
+    $script:LastPatchContent = $Content
+    if ($Method -eq 'Get') { return [pscustomobject]@{ keyCredentials = @(@{ type='AsymmetricX509Cert'; usage='Verify'; key='b2xk' }) } }
     [pscustomobject]@{} }
 
 function Reset-AdoptState {
@@ -63,12 +69,23 @@ Invoke-SsmTest 'Copy-SsmExistingAppId does nothing when the operator cancels' {
     Assert-Equal '' $script:Auth.ClientId
 }
 
-Invoke-SsmTest 'Add-SsmCertToExistingApp re-keys and saves app-only config' {
+Invoke-SsmTest 'Add-SsmCertToExistingApp re-keys via PATCH keyCredentials and saves app-only config' {
     Reset-AdoptState
     Add-SsmCertToExistingApp -Tenant 't.onmicrosoft.com'
     Assert-Equal 'AppOnly' $script:Auth.AuthMode
     Assert-Equal 'real-app-id-123' $script:Auth.ClientId
-    Assert-Equal 'Post applications(appId=''real-app-id-123'')/addKey' $script:GraphCalls[0]
+    Assert-Equal 'Get applications(appId=''real-app-id-123'')?$select=keyCredentials' $script:GraphCalls[0]
+    Assert-Equal 'Patch applications(appId=''real-app-id-123'')' $script:GraphCalls[1]
+}
+
+Invoke-SsmTest 'Add-SsmKeyCredentialToApp sends base64 DER, keeps existing keys' {
+    Reset-AdoptState
+    $cert = New-PnPAzureCertificate -CommonName 'x' -ValidYears 1 -OutPfx 'x.pfx' -OutCert 'x.cer'
+    Add-SsmKeyCredentialToApp -AppId 'app-1' -Cert $cert
+    Assert-Equal 2 $script:GraphCalls.Count
+    Assert-Equal 'Patch applications(appId=''app-1'')' $script:GraphCalls[1]
+    # new key is the parsed DER value from KeyCredentials, not the PEM string
+    Assert-Equal 'REVJQg==' $script:LastPatchContent.keyCredentials[1].key
 }
 
 Invoke-SsmTest 'Add-SsmCertToExistingApp does nothing when the operator cancels' {

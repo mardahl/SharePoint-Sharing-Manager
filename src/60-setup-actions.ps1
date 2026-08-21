@@ -166,7 +166,8 @@ function Find-SsmAppClientId {
     # Operator-context Graph lookup of the well-known app by display name.
     # Returns the client (application) id, or throws. Get-PnPAzureADApp returns
     # PnP.PowerShell.Commands.Model.AzureADApp whose client-id property is
-    # AppId (AzureAppId does not exist on the returned object).
+    # AppId (AzureAppId does not exist on the returned object). Identity matches
+    # displayName - several apps can share a name, so log every match.
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Tenant',
         Justification = 'Used inside the Invoke-OnMainBuffer scriptblock, which the analyzer cannot see.')]
     [CmdletBinding()]
@@ -175,8 +176,18 @@ function Find-SsmAppClientId {
         Connect-SsmOperatorGraph -Tenant $Tenant
         $script:FoundApp = Get-PnPAzureADApp -Identity 'SharePoint-Sharing-Manager' -ErrorAction Stop
     }
+    $found = @($script:FoundApp)
+    foreach ($m in $found) {
+        $id = [string](Get-SsmObjectProp -InputObject $m -Name @('AppId', 'AzureAppId', 'ClientId'))
+        $dn = [string](Get-SsmObjectProp -InputObject $m -Name @('DisplayName'))
+        Write-SsmLog -Message ("App lookup matched: displayName='{0}' appId={1}" -f $dn, $id)
+    }
+    if ($found.Count -gt 1) {
+        Write-SsmLog -Message ("Multiple apps named 'SharePoint-Sharing-Manager' ({0}) - using the first. Delete extras in the Entra portal if this picks the wrong one." -f $found.Count) -Level WARN
+    }
     $appId = [string](Get-SsmObjectProp -InputObject $script:FoundApp -Name @('AppId', 'AzureAppId', 'ClientId'))
     if (-not $appId) { throw "App 'SharePoint-Sharing-Manager' found but no Client Id returned." }
+    Write-SsmLog -Message ("Resolved existing app ClientId: {0}" -f $appId)
     return $appId
 }
 
@@ -203,17 +214,59 @@ function Copy-SsmExistingAppId {
             'Existing app saved to config. Delegated mode is now active.')
     } catch {
         Write-SsmErrorLog -Context 'Adoption of existing app failed' -ErrorRecord $_
-        $msg = @($_.Exception.Message, '')
         if ($_.Exception.Message -match 'AADSTS700016') {
-            $msg += @(
-                'The PnP Management Shell app is not consented in this tenant yet.',
-                'Open this URL as Global Admin, consent, then retry:', '',
-                ("https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $Tenant, $script:PnPManagementShellClientId))
-        } else {
-            $msg += 'Alternative: delete the app in the Entra portal, then register again.'
+            Open-SsmPnpConsentPrompt -Tenant $Tenant
+            return
         }
+        $msg = @($_.Exception.Message, '')
+        $msg += 'Alternative: delete the app in the Entra portal, then register again.'
         Show-MsgModal -Title 'Failed' -Lines $msg -Kind Error
     }
+}
+
+function Add-SsmKeyCredentialToApp {
+    # Attach a new cert to an existing app registration. NOT Graph addKey:
+    # addKey requires a proof JWT signed by an EXISTING key on the app, which
+    # we do not hold (that's the whole reason we're re-keying). It also wants
+    # the key as base64 DER, not the PEM string New-PnPAzureCertificate emits.
+    # PATCH /applications(appId=..) with the full keyCredentials set (existing
+    # keys preserved, new one appended) needs no proof - App Admin suffices.
+    # Runs inside the caller's Invoke-OnMainBuffer with an operator connection.
+    param([Parameter(Mandatory)][string]$AppId, [Parameter(Mandatory)]$Cert)
+    $x509 = $null
+    if ($Cert.Certificate -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
+        $x509 = $Cert.Certificate
+    } elseif ($Cert.KeyCredentials) {
+        # PnP AzureCertificate model: KeyCredentials is a JSON string whose
+        # 'value' holds the base64 DER. Parse instead of re-reading the PFX.
+        $kc = $Cert.KeyCredentials | ConvertFrom-Json
+        $der = $kc.value
+    }
+    if (-not $der -and $x509) { $der = [Convert]::ToBase64String($x509.GetRawCertData()) }
+    if (-not $der) { throw 'Could not get base64 DER from the generated certificate.' }
+    $existing = @(Invoke-PnPGraphMethod -Method Get -Url ("applications(appId='{0}')?`$select=keyCredentials" -f $AppId) -ErrorAction Stop)
+    $keys = @()
+    if ($existing.keyCredentials) { $keys = @($existing.keyCredentials) }
+    $keys += @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $der }
+    Write-SsmLog -Message ("Attaching cert to app {0} (PATCH keyCredentials, {1} existing + 1 new)." -f $AppId, ($keys.Count - 1))
+    Invoke-PnPGraphMethod -Method Patch -Url ("applications(appId='{0}')" -f $AppId) -Content @{ keyCredentials = $keys } -ErrorAction Stop
+}
+
+function Open-SsmPnpConsentPrompt {
+    # AADSTS700016 recovery: PnP Management Shell has no service principal in
+    # this tenant and the interactive flow did not surface a consent prompt
+    # (the operator's account cannot trigger it). Offer to open the one-time
+    # adminconsent URL in the browser - a Global Admin approves it, then the
+    # action can be retried.
+    param([Parameter(Mandatory)][string]$Tenant)
+    $url = "https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $Tenant, $script:PnPManagementShellClientId
+    $open = Show-ConfirmModal -Title 'Consent needed' -Lines @(
+        'The PnP Management Shell app is not consented in this tenant yet.',
+        '(Client id 31359c7f-... is Microsoft''s sign-in app, not yours.)', '',
+        'Open the consent URL in the browser now? A Global Admin must approve.',
+        'Retry the action afterwards.')
+    if ($open) { Open-SsmUrl -Url $url }
+    else { Show-MsgModal -Title 'Consent needed' -Lines @('Open this URL as Global Admin, consent, then retry:', '', $url) }
 }
 
 function Add-SsmCertToExistingApp {
@@ -237,8 +290,7 @@ function Add-SsmCertToExistingApp {
         $appId = Find-SsmAppClientId -Tenant $Tenant
         Invoke-OnMainBuffer {
             $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx $pfx -OutCert ($pfx -replace '\.pfx$', '.cer')
-            $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
-            Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $appId) -Content $keyCreds -ErrorAction Stop
+            Add-SsmKeyCredentialToApp -AppId $appId -Cert $cert
             $script:RekeyThumb = [string]$cert.Thumbprint
         }
         $script:ExistingAppId = $appId
@@ -259,16 +311,12 @@ function Add-SsmCertToExistingApp {
             'New certificate attached to the existing app. App-only mode is active.')
     } catch {
         Write-SsmErrorLog -Context 'Re-key of existing app failed' -ErrorRecord $_
-        $msg = @($_.Exception.Message, '')
         if ($_.Exception.Message -match 'AADSTS700016') {
-            # PnP Management Shell has no service principal in this tenant yet
-            # and the interactive flow did not trigger consent (usually a stale
-            # cached session). Consent once via the adminconsent endpoint.
-            $msg += @(
-                'The PnP Management Shell app is not consented in this tenant yet.',
-                'Open this URL as Global Admin, consent, then retry:', '',
-                ("https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $Tenant, $script:PnPManagementShellClientId))
-        } elseif ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
+            Open-SsmPnpConsentPrompt -Tenant $Tenant
+            return
+        }
+        $msg = @($_.Exception.Message, '')
+        if ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
             $msg += @(
                 'The signed-in account needs Application Administrator (or',
                 'higher) in this tenant to add a key to the app.',
@@ -282,10 +330,10 @@ function Add-SsmCertToExistingApp {
 }
 
 function Update-SsmCertificate {
-    # Renew: generate a fresh 1-year self-signed cert and upload it to the
-    # EXISTING app via Graph (addKey). Needs Application Administrator; no new
-    # consent. Implementation: New-PnPAzureCertificate for the cert, then an
-    # operator-context (delegated) Graph addKey on
+    # Renew: generate a fresh 1-year self-signed cert and attach it to the
+    # EXISTING app. Needs Application Administrator; no new consent.
+    # Implementation: New-PnPAzureCertificate for the cert, then
+    # Add-SsmKeyCredentialToApp (PATCH keyCredentials) on
     # /applications(appId='<ClientId>') with the new public key.
     if ($script:Auth.AuthMode -ne 'AppOnly' -or -not $script:Auth.ClientId) {
         Show-MsgModal -Title 'Renew certificate' -Lines @('Only applies to app-only mode with a registered app.') -Kind Warn
@@ -306,8 +354,7 @@ function Update-SsmCertificate {
             $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx (Join-Path $outDir "renewed-$slug-$stamp.pfx") -OutCert (Join-Path $outDir "renewed-$slug-$stamp.cer")
             Write-Host 'New certificate generated. Uploading to the app registration...' -ForegroundColor Yellow
             Connect-SsmOperatorGraph -Tenant $script:Auth.Tenant
-            $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
-            Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $script:Auth.ClientId) -Content $keyCreds
+            Add-SsmKeyCredentialToApp -AppId $script:Auth.ClientId -Cert $cert
             $script:RenewedCert = $cert
         }
         $script:Auth.CertExpires = (Get-Date).AddYears(1).ToString('yyyy-MM-dd')
@@ -377,7 +424,7 @@ function Remove-SsmAppRegistration {
         } catch {
             Write-SsmErrorLog -Context 'App registration deletion failed' -ErrorRecord $_
             if ($_.Exception.Message -match 'AADSTS700016') {
-                $errors += ("Entra app: PnP Management Shell not consented in this tenant. Open as Global Admin, consent, retry: https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $tenantName, $script:PnPManagementShellClientId)
+                $errors += ("Entra app: PnP Management Shell (client id 31359c7f-..., Microsoft's sign-in app) not consented in this tenant. Open as Global Admin, consent, retry: https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $tenantName, $script:PnPManagementShellClientId)
             } elseif ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
                 $errors += 'Entra app: Forbidden - the signed-in account needs Application Administrator (or higher) in this tenant. Or delete the app in the Entra portal.'
             } else {
