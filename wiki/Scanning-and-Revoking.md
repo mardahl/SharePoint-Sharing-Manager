@@ -23,6 +23,8 @@ Files and folders are never deleted, and permission inheritance is never reset. 
 
 Per-site failure isolation: a site that will not connect or scan is logged and the run continues.
 
+Once anything is scanned, the status line above the target list always shows a running summary: `scanned:N (X clean, Y with findings, Z total findings)`. Per-target counts live in the Findings column; `Enter` drills into one target, `G` aggregates all findings.
+
 ## Keys: target list
 
 | Key | Action |

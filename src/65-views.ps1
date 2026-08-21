@@ -142,6 +142,12 @@ function Add-TargetsView {
     $dir = [string]$g.Up
     if ($Tab['SortDesc']) { $dir = [string]$g.Down }
     $ctx = (' {0} of {1} {2}   {3} selected   filter:{4}   sort:{5}{6}' -f @($view).Count, @($Tab['Items']).Count, $Tab['Noun'], $selCount, $Tab['Filter'], $Tab['SortCol'], $dir)
+    # Persistent scan summary: visible at all times once anything is scanned.
+    $done = @($Tab['Items'] | Where-Object { $_.Status -in @('Clean','Findings','Revoked') })
+    if ($done.Count -gt 0) {
+        $totalFindings = ($done | Measure-Object FindingCount -Sum).Sum
+        $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f $done.Count, @($done | Where-Object { $_.FindingCount -eq 0 }).Count, @($done | Where-Object { $_.FindingCount -gt 0 }).Count, $totalFindings)
+    }
     if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + $Tab['Search'] + '"') }
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)
 
