@@ -246,7 +246,7 @@ function Add-SsmKeyCredentialToApp {
     # -Content, and PSObject-wrapped values from its own GET response leak
     # phantom 'Members'/'Properties' keys into the payload (Graph: "Invalid
     # property 'Members'"). Bypass it: raw REST with the connection's token.
-    $token = Get-PnPAccessToken -ResourceUrl 'https://graph.microsoft.com' -ErrorAction Stop
+    $token = Get-PnPAccessToken -ResourceTypeName Graph -ErrorAction Stop
     $headers = @{ Authorization = "Bearer $token"; 'Content-Type' = 'application/json' }
     $graph = 'https://graph.microsoft.com/v1.0'
     $app = Invoke-RestMethod -Method Get -Uri ("{0}/applications(appId='{1}')?`$select=keyCredentials" -f $graph, $AppId) -Headers $headers -ErrorAction Stop

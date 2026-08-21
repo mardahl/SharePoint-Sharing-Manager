@@ -30,7 +30,7 @@ function Invoke-PnPGraphMethod { param($Method, $Url, $Content)
     $script:LastPatchContent = $Content
     if ($Method -eq 'Get') { return [pscustomobject]@{ keyCredentials = @(@{ type='AsymmetricX509Cert'; usage='Verify'; key='b2xk' }) } }
     [pscustomobject]@{} }
-function Get-PnPAccessToken { param($ResourceUrl) 'fake-token' }
+function Get-PnPAccessToken { param($ResourceTypeName) 'fake-token' }
 function Invoke-RestMethod { param($Method, $Uri, $Headers, $Body)
     $script:GraphCalls += "$Method $Uri"
     if ($Method -eq 'Get') { return [pscustomobject]@{ keyCredentials = @([pscustomobject]@{ type='AsymmetricX509Cert'; usage='Verify'; key='b2xk' }) } }
