@@ -10,6 +10,7 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant).
 - Admin consent for application permissions requires Global Administrator or Privileged Role Administrator. The wizard displays a consent URL that can be forwarded to whoever holds that role; the tool picks the app up once consent lands.
 - Certificate files live in `~/.sharepoint-sharing-manager-cert/`, one PFX per tenant (filename carries the tenant slug, non-Windows only). Renewal is built into the Setup tab's per-tenant actions.
 - Re-registering when the app already exists in Entra no longer fails outright: the wizard offers to re-key the existing registration (looks up the Client Id, attaches a fresh certificate).
+- Operator-context actions that manage the app registration itself (re-key, certificate renewal, app deletion) sign in through Microsoft's multi-tenant **PnP Management Shell** app, never through the tenant's own app-only registration — app-only apps hold no delegated Graph scopes, so their tokens cannot manage app registrations regardless of the operator's role. The first such action in a tenant prompts for admin consent to the PnP Management Shell app.
 
 ## Delegated interactive mode (`D`)
 

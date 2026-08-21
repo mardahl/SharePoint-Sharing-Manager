@@ -9,6 +9,11 @@
 - Add: re-registering when the Entra app already exists now offers a re-key
   flow (look up existing Client Id, attach a fresh certificate via Graph
   `addKey`) instead of failing outright.
+- Fix: operator-context Graph calls (app deletion, certificate renewal,
+  re-key) no longer sign in with the tenant's app-only registration - its
+  tokens lack delegated Graph scopes, so Global Admins got `Forbidden`.
+  These actions now use the PnP Management Shell multi-tenant app, which
+  prompts for admin consent on first use per tenant.
 - Add: all CIS-baseline knobs are now individually visible/adjustable on the
   Sharing tab: `LegacyAuthProtocolsEnabled`, `EnableAzureADB2BIntegration`,
   `EmailAttestationRequired`, `EmailAttestationReAuthDays` (19 settings).

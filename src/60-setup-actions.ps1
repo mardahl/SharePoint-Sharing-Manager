@@ -133,6 +133,24 @@ function Register-SsmAppOnlyApp {
     }
 }
 
+# PnP Management Shell: Microsoft's multi-tenant app for operator-context
+# (delegated) PnP sign-ins. Carries the delegated Graph scopes needed to
+# manage app registrations (Application.ReadWrite.All). The tenant's own
+# app-only registration must NOT be used for operator sign-ins - it has only
+# application permissions, so its delegated tokens get Forbidden from Graph
+# no matter how powerful the signed-in account is. First use in a tenant
+# prompts for admin consent.
+$script:PnPManagementShellClientId = '31359c7f-bd7e-475c-86db-fdb8c937548e'
+
+function Connect-SsmOperatorGraph {
+    # Operator-context connection for Graph app-management calls (addKey,
+    # delete application). Signs in interactively via the PnP Management
+    # Shell app so the token carries DELEGATED scopes + the operator's role.
+    param([Parameter(Mandatory)][string]$Tenant)
+    $rootUrl = "https://{0}.sharepoint.com" -f ($Tenant -replace '\.onmicrosoft\.com$', '')
+    Connect-PnPOnline -Url $rootUrl -Interactive -ClientId $script:PnPManagementShellClientId -Tenant $Tenant -ErrorAction Stop
+}
+
 function Add-SsmCertToExistingApp {
     # Fallback when Register-PnPAzureADApp fails with "already exists": the app
     # from a previous (possibly clobbered) registration is still in Entra. Look
@@ -153,8 +171,7 @@ function Add-SsmCertToExistingApp {
         $stamp = Get-Date -Format 'yyyyMMdd'
         $pfx   = Join-Path $outDir "SharePoint-Sharing-Manager-$slug.pfx"
         Invoke-OnMainBuffer {
-            $rootUrl = "https://{0}.sharepoint.com" -f ($Tenant -replace '\.onmicrosoft\.com$', '')
-            Connect-PnPOnline -Url $rootUrl -Interactive -ErrorAction Stop
+            Connect-SsmOperatorGraph -Tenant $Tenant
             $app = Get-PnPAzureADApp -Identity 'SharePoint-Sharing-Manager' -ErrorAction Stop
             $script:ExistingAppId = [string]$app.AzureAppId
             if (-not $script:ExistingAppId) { throw "App 'SharePoint-Sharing-Manager' found but no Client Id returned." }
@@ -180,18 +197,37 @@ function Add-SsmCertToExistingApp {
             'New certificate attached to the existing app. App-only mode is active.')
     } catch {
         Write-SsmErrorLog -Context 'Re-key of existing app failed' -ErrorRecord $_
-        Show-MsgModal -Title 'Failed' -Lines @(
-            $_.Exception.Message, '',
-            'Alternative: delete the app in the Entra portal, then register again.') -Kind Error
+        $msg = @($_.Exception.Message, '')
+        if ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
+            # GA account alone is not enough: delegated Graph calls need a
+            # delegated scope (Application.ReadWrite.All) CONSENTED on the
+            # ClientId used to sign in. The app-only registration only has
+            # application permissions, so tokens from it carry no delegated
+            # app-management rights regardless of the signed-in user's role.
+            $msg += @(
+                'Global Admin role is not the blocker here - the sign-in token',
+                'came from the app-only registration, which has no DELEGATED',
+                'Graph scope for managing apps (Application.ReadWrite.All).',
+                '',
+                'Fix in the Entra portal (2 min):',
+                '1. App registrations > SharePoint-Sharing-Manager > API permissions',
+                '2. Add permission > Microsoft Graph > DELEGATED > Application.ReadWrite.All',
+                '3. Grant admin consent, then retry this action.',
+                '',
+                'Or delete the app in the portal and register again (C).')
+        } else {
+            $msg += 'Alternative: delete the app in the Entra portal, then register again.'
+        }
+        Show-MsgModal -Title 'Failed' -Lines $msg -Kind Error
     }
 }
 
 function Update-SsmCertificate {
     # Renew: generate a fresh 1-year self-signed cert and upload it to the
     # EXISTING app via Graph (addKey). Needs Application Administrator; no new
-    # consent. Implementation: New-PnPAzureCertificate for the cert, then
-    # Connect-PnPOnline with the OLD cert and Invoke-PnPGraphMethod POST
-    # /applications(appId='<ClientId>')/addKey with the new public key.
+    # consent. Implementation: New-PnPAzureCertificate for the cert, then an
+    # operator-context (delegated) Graph addKey on
+    # /applications(appId='<ClientId>') with the new public key.
     if ($script:Auth.AuthMode -ne 'AppOnly' -or -not $script:Auth.ClientId) {
         Show-MsgModal -Title 'Renew certificate' -Lines @('Only applies to app-only mode with a registered app.') -Kind Warn
         return
@@ -210,7 +246,7 @@ function Update-SsmCertificate {
         Invoke-OnMainBuffer {
             $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx (Join-Path $outDir "renewed-$slug-$stamp.pfx") -OutCert (Join-Path $outDir "renewed-$slug-$stamp.cer")
             Write-Host 'New certificate generated. Uploading to the app registration...' -ForegroundColor Yellow
-            Connect-PnPOnline -Url ("https://{0}" -f ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '.sharepoint.com')) -Interactive -ClientId $script:Auth.ClientId
+            Connect-SsmOperatorGraph -Tenant $script:Auth.Tenant
             $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
             Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $script:Auth.ClientId) -Content $keyCreds
             $script:RenewedCert = $cert
@@ -262,25 +298,30 @@ function Remove-SsmAppRegistration {
     $appDeleted = $false
     $certDeleted = $false
 
-    # Step 1: delete the Entra app (needs delegated sign-in; app-only can't
-    # delete itself). Derive the admin host from Tenant, else AdminUrl.
-    $adminHost = $null
-    if ($script:Auth.Tenant) {
-        $adminHost = "https://{0}-admin.sharepoint.com" -f ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '')
-    } elseif ($script:Auth.AdminUrl) {
-        $adminHost = $script:Auth.AdminUrl
+    # Step 1: delete the Entra app via operator-context (delegated) Graph.
+    # Needs the operator to hold Application Administrator / Cloud App Admin /
+    # Global Admin AND the sign-in client to carry delegated
+    # Application.ReadWrite.All - hence the PnP Management Shell app, not the
+    # tenant's app-only registration.
+    $tenantName = $script:Auth.Tenant
+    if (-not $tenantName -and $script:Auth.AdminUrl -match 'https://([a-z0-9-]+)-admin') {
+        $tenantName = $Matches[1]
     }
-    if ($adminHost) {
+    if ($tenantName) {
         try {
             $clientId = $script:Auth.ClientId
             Invoke-OnMainBuffer {
-                Connect-PnPOnline -Url $adminHost -Interactive -ClientId $clientId -ErrorAction Stop
+                Connect-SsmOperatorGraph -Tenant $tenantName
                 Invoke-PnPGraphMethod -Method Delete -Url ("applications(appId='{0}')" -f $clientId) -ErrorAction Stop
             }
             $appDeleted = $true
         } catch {
             Write-SsmErrorLog -Context 'App registration deletion failed' -ErrorRecord $_
-            $errors += ("Entra app: {0}" -f $_.Exception.Message)
+            if ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
+                $errors += 'Entra app: Forbidden - the signed-in account needs Application Administrator (or higher) in this tenant. Or delete the app in the Entra portal.'
+            } else {
+                $errors += ("Entra app: {0}" -f $_.Exception.Message)
+            }
         }
     } else {
         $errors += 'Entra app: no tenant/admin URL on file - skipped, delete it manually in the Entra portal.'
