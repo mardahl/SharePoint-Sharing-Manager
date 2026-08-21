@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-08-21
+
 - Add: guest principals are tagged ` [guest]` in the findings view and CSV
   exports, so external identities stand out even when the display name looks
   like an internal member.
