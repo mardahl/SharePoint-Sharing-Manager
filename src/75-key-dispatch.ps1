@@ -322,6 +322,12 @@ function Invoke-KeyDispatch {
         $script:UI.Tab = ($script:UI.Tab + $delta + $script:Tabs.Count) % $script:Tabs.Count
         return
     }
+    # Left/Right arrows switch tabs, same as Shift+Tab / Tab.
+    if ($K.Key -eq 'LeftArrow' -or $K.Key -eq 'RightArrow') {
+        $delta = if ($K.Key -eq 'RightArrow') { 1 } else { -1 }
+        $script:UI.Tab = ($script:UI.Tab + $delta + $script:Tabs.Count) % $script:Tabs.Count
+        return
+    }
     # Digit keys jump to a tab by position. The Sharing tab no longer captures
     # digits for its own menu (it is arrow-navigated now), so digits switch
     # tabs from every tab.

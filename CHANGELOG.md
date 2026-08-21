@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add: Left/Right arrow keys switch tabs, same as Tab / Shift+Tab.
 - Add: persistent scan summary in the SharePoint/OneDrive target views. Once
   anything is scanned, the context line shows `scanned:N (X clean, Y with
   findings, Z total findings)` so current scan results are visible at all

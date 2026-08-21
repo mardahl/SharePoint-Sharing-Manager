@@ -583,6 +583,7 @@ function Show-HelpModal {
     $lines = @(
         @($t.ModalTitle, 'Navigation'),
         @($t.Row, '  Tab / Shift+Tab      switch tab            1-6  jump to tab'),
+        @($t.Row, '  Left / Right         switch tab'),
         @($t.Row, '  Up / Down            move cursor           PgUp / PgDn  page'),
         @($t.Row, '  Home / End           jump to first / last entry'),
         @($t.CtxHi, '  Q  or  Ctrl+C        quit the application'),

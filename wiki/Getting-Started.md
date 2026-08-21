@@ -37,7 +37,7 @@ The setup wizard walks through app registration and certificate issuance (1-year
 
 | Key | Action |
 |---|---|
-| `Tab` / `Shift+Tab` | Switch tabs |
+| `Tab` / `Shift+Tab` or `←` / `→` | Switch tabs |
 | `T` | Switch tenant (not on the target lists) |
 | `?` | Help |
 | `Q` | Quit |
