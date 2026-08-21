@@ -81,10 +81,10 @@ Download the zip from [Releases](https://github.com/mardahl/SharePoint-Sharing-M
 pwsh ./SharePoint-Sharing-Manager.ps1
 ```
 
-First run: open the **Setup** tab, press `Enter` on the tenant, and pick an auth mode -
+First run: open the **Setup** tab, press `Enter` on the tenant, and pick an auth mode from the actions list -
 
-- `C` - register an app-only certificate app (recommended; removes the per-OneDrive Site Collection Admin requirement)
-- `D` - register a delegated (interactive) app
+- **Register cert app** - app-only certificate auth (recommended; removes the per-OneDrive Site Collection Admin requirement)
+- **Register delegated app** - delegated (interactive) auth
 
 Full key reference, auth trade-offs, and per-setting docs live in the [wiki](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki).
 

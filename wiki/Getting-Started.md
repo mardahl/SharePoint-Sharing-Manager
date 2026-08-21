@@ -17,9 +17,9 @@ pwsh ./SharePoint-Sharing-Manager.ps1
 ## First run: pick an auth mode
 
 1. Open the **Setup** tab.
-2. Press `Enter` on the tenant and choose:
-   - `C`: register an **app-only certificate** app (recommended; removes the per-OneDrive Site Collection Admin requirement)
-   - `D`: register a **delegated (interactive)** app
+2. Press `Enter` on the tenant and choose an action:
+   - **Register cert app**: **app-only certificate** auth (recommended; removes the per-OneDrive Site Collection Admin requirement)
+   - **Register delegated app**: **delegated (interactive)** auth
 
 The setup wizard walks through app registration and certificate issuance (1-year validity), and displays an admin-consent URL that can be forwarded to whoever holds Global Administrator or Privileged Role Administrator. See [[Authentication]] for the trade-offs.
 

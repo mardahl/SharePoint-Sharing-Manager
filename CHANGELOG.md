@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Docs: README and wiki no longer claim `C`/`D` keys register apps on the
+  Setup tab - those flat keys were removed in 1.5.0; registration runs from
+  the per-tenant actions list (`Enter` → Register cert app / Register
+  delegated app).
 - Fix: registering an app-only cert app for a second tenant on macOS/Linux
   overwrote the first tenant's PFX (`SharePoint-Sharing-Manager.pfx` had a
   fixed name in a shared dir), breaking the first tenant's auth. PFX files

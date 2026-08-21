@@ -147,8 +147,14 @@ function Connect-SsmOperatorGraph {
     # delete application). Signs in interactively via the PnP Management
     # Shell app so the token carries DELEGATED scopes + the operator's role.
     param([Parameter(Mandatory)][string]$Tenant)
-    $rootUrl = "https://{0}.sharepoint.com" -f ($Tenant -replace '\.onmicrosoft\.com$', '')
-    Connect-PnPOnline -Url $rootUrl -Interactive -ClientId $script:PnPManagementShellClientId -Tenant $Tenant -ErrorAction Stop
+    $tenantShort = $Tenant -replace '\.onmicrosoft\.com$', ''
+    $rootUrl = "https://{0}.sharepoint.com" -f $tenantShort
+    # ponytail: -ForceAuthentication avoids PnP silently reusing a cached
+    # token for a different tenant (which produced AADSTS700016 "app not
+    # found in directory <guid>" - the request then lands in the tenant of
+    # the cached session, where PnP Management Shell has no service
+    # principal yet, instead of the intended one).
+    Connect-PnPOnline -Url $rootUrl -Interactive -ClientId $script:PnPManagementShellClientId -Tenant $Tenant -ForceAuthentication -ErrorAction Stop
 }
 
 function Add-SsmCertToExistingApp {
@@ -198,23 +204,20 @@ function Add-SsmCertToExistingApp {
     } catch {
         Write-SsmErrorLog -Context 'Re-key of existing app failed' -ErrorRecord $_
         $msg = @($_.Exception.Message, '')
-        if ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
-            # GA account alone is not enough: delegated Graph calls need a
-            # delegated scope (Application.ReadWrite.All) CONSENTED on the
-            # ClientId used to sign in. The app-only registration only has
-            # application permissions, so tokens from it carry no delegated
-            # app-management rights regardless of the signed-in user's role.
+        if ($_.Exception.Message -match 'AADSTS700016') {
+            # PnP Management Shell has no service principal in this tenant yet
+            # and the interactive flow did not trigger consent (usually a stale
+            # cached session). Consent once via the adminconsent endpoint.
             $msg += @(
-                'Global Admin role is not the blocker here - the sign-in token',
-                'came from the app-only registration, which has no DELEGATED',
-                'Graph scope for managing apps (Application.ReadWrite.All).',
+                'The PnP Management Shell app is not consented in this tenant yet.',
+                'Open this URL as Global Admin, consent, then retry:', '',
+                ("https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $Tenant, $script:PnPManagementShellClientId))
+        } elseif ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
+            $msg += @(
+                'The signed-in account needs Application Administrator (or',
+                'higher) in this tenant to add a key to the app.',
                 '',
-                'Fix in the Entra portal (2 min):',
-                '1. App registrations > SharePoint-Sharing-Manager > API permissions',
-                '2. Add permission > Microsoft Graph > DELEGATED > Application.ReadWrite.All',
-                '3. Grant admin consent, then retry this action.',
-                '',
-                'Or delete the app in the portal and register again (C).')
+                'Or delete the app in the Entra portal and register again (C).')
         } else {
             $msg += 'Alternative: delete the app in the Entra portal, then register again.'
         }
@@ -317,7 +320,9 @@ function Remove-SsmAppRegistration {
             $appDeleted = $true
         } catch {
             Write-SsmErrorLog -Context 'App registration deletion failed' -ErrorRecord $_
-            if ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
+            if ($_.Exception.Message -match 'AADSTS700016') {
+                $errors += ("Entra app: PnP Management Shell not consented in this tenant. Open as Global Admin, consent, retry: https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $tenantName, $script:PnPManagementShellClientId)
+            } elseif ($_.Exception.Message -match 'Forbidden|Insufficient privileges') {
                 $errors += 'Entra app: Forbidden - the signed-in account needs Application Administrator (or higher) in this tenant. Or delete the app in the Entra portal.'
             } else {
                 $errors += ("Entra app: {0}" -f $_.Exception.Message)
