@@ -42,7 +42,7 @@ function Register-SsmDelegatedApp {
         "Creates app 'SharePoint-Sharing-Manager' in $tenant for interactive sign-in.",
         'A browser window will open. A Global Admin must consent once.', '',
         'Note: delegated mode requires YOU to be Site Collection Admin on each',
-        'target site/OneDrive. The app-only certificate mode (C) avoids that.')
+        'target site/OneDrive. The app-only certificate mode avoids that.')
     if (-not $ok) { return }
     try {
         $result = $null
@@ -56,6 +56,11 @@ function Register-SsmDelegatedApp {
         Save-SsmAuth
         Show-MsgModal -Title 'Registered' -Lines @("Client Id: $appId", 'Saved to config. Delegated mode is now active.')
     } catch {
+        if ($_.Exception.Message -match 'already exists') {
+            Write-SsmLog -Message 'Delegated app already exists - offering adoption of the existing registration.'
+            Copy-SsmExistingAppId -Tenant $tenant -Mode 'Delegated'
+            return
+        }
         Write-SsmErrorLog -Context 'Delegated app registration failed' -ErrorRecord $_
         Show-MsgModal -Title 'Failed' -Lines @($_.Exception.Message) -Kind Error
     }
@@ -157,6 +162,60 @@ function Connect-SsmOperatorGraph {
     Connect-PnPOnline -Url $rootUrl -Interactive -ClientId $script:PnPManagementShellClientId -Tenant $Tenant -ForceAuthentication -ErrorAction Stop
 }
 
+function Find-SsmAppClientId {
+    # Operator-context Graph lookup of the well-known app by display name.
+    # Returns the client (application) id, or throws. Get-PnPAzureADApp returns
+    # PnP.PowerShell.Commands.Model.AzureADApp whose client-id property is
+    # AppId (AzureAppId does not exist on the returned object).
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Tenant',
+        Justification = 'Used inside the Invoke-OnMainBuffer scriptblock, which the analyzer cannot see.')]
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Tenant)
+    Invoke-OnMainBuffer {
+        Connect-SsmOperatorGraph -Tenant $Tenant
+        $script:FoundApp = Get-PnPAzureADApp -Identity 'SharePoint-Sharing-Manager' -ErrorAction Stop
+    }
+    $appId = [string](Get-SsmObjectProp -InputObject $script:FoundApp -Name @('AppId', 'AzureAppId', 'ClientId'))
+    if (-not $appId) { throw "App 'SharePoint-Sharing-Manager' found but no Client Id returned." }
+    return $appId
+}
+
+function Copy-SsmExistingAppId {
+    # Fallback when Register-PnPEntraIDAppForInteractiveLogin fails with
+    # "already exists": the app is still in Entra but the local config lost
+    # its ClientId (config cleared/edited, or machine move). Look the ClientId
+    # up by display name and point this tenant's config at it. No certificate
+    # work - delegated mode needs nothing else.
+    param([Parameter(Mandatory)][string]$Tenant, [Parameter(Mandatory)][string]$Mode)
+    $ok = Show-ConfirmModal -Title 'App already exists' -Lines @(
+        "An app named 'SharePoint-Sharing-Manager' already exists in $Tenant.",
+        'This happens when the local config lost track of an earlier setup.', '',
+        'Adopt it: look up the existing app Client Id and save it to config?',
+        '(You will sign in interactively.)')
+    if (-not $ok) { return }
+    try {
+        $appId = Find-SsmAppClientId -Tenant $Tenant
+        $script:Auth.AuthMode = $Mode
+        $script:Auth.ClientId = $appId
+        Save-SsmAuth
+        Show-MsgModal -Title 'Adopted' -Lines @(
+            "Client Id : $appId",
+            'Existing app saved to config. Delegated mode is now active.')
+    } catch {
+        Write-SsmErrorLog -Context 'Adoption of existing app failed' -ErrorRecord $_
+        $msg = @($_.Exception.Message, '')
+        if ($_.Exception.Message -match 'AADSTS700016') {
+            $msg += @(
+                'The PnP Management Shell app is not consented in this tenant yet.',
+                'Open this URL as Global Admin, consent, then retry:', '',
+                ("https://login.microsoftonline.com/{0}/adminconsent?client_id={1}" -f $Tenant, $script:PnPManagementShellClientId))
+        } else {
+            $msg += 'Alternative: delete the app in the Entra portal, then register again.'
+        }
+        Show-MsgModal -Title 'Failed' -Lines $msg -Kind Error
+    }
+}
+
 function Add-SsmCertToExistingApp {
     # Fallback when Register-PnPAzureADApp fails with "already exists": the app
     # from a previous (possibly clobbered) registration is still in Entra. Look
@@ -174,18 +233,15 @@ function Add-SsmCertToExistingApp {
         $outDir = Join-Path $HOME '.sharepoint-sharing-manager-cert'
         if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
         $slug  = ConvertTo-SsmTenantSlug -Name ($Tenant -replace '\.onmicrosoft\.com$', '')
-        $stamp = Get-Date -Format 'yyyyMMdd'
         $pfx   = Join-Path $outDir "SharePoint-Sharing-Manager-$slug.pfx"
+        $appId = Find-SsmAppClientId -Tenant $Tenant
         Invoke-OnMainBuffer {
-            Connect-SsmOperatorGraph -Tenant $Tenant
-            $app = Get-PnPAzureADApp -Identity 'SharePoint-Sharing-Manager' -ErrorAction Stop
-            $script:ExistingAppId = [string]$app.AzureAppId
-            if (-not $script:ExistingAppId) { throw "App 'SharePoint-Sharing-Manager' found but no Client Id returned." }
             $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx $pfx -OutCert ($pfx -replace '\.pfx$', '.cer')
             $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
-            Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $script:ExistingAppId) -Content $keyCreds -ErrorAction Stop
+            Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $appId) -Content $keyCreds -ErrorAction Stop
             $script:RekeyThumb = [string]$cert.Thumbprint
         }
+        $script:ExistingAppId = $appId
         $script:Auth.AuthMode = 'AppOnly'
         $script:Auth.ClientId = $script:ExistingAppId
         if ($script:IsWin -and $script:RekeyThumb) {
@@ -217,7 +273,7 @@ function Add-SsmCertToExistingApp {
                 'The signed-in account needs Application Administrator (or',
                 'higher) in this tenant to add a key to the app.',
                 '',
-                'Or delete the app in the Entra portal and register again (C).')
+                'Or delete the app in the Entra portal and register again.')
         } else {
             $msg += 'Alternative: delete the app in the Entra portal, then register again.'
         }
@@ -263,7 +319,7 @@ function Update-SsmCertificate {
         Write-SsmErrorLog -Context 'Certificate renewal failed' -ErrorRecord $_
         Show-MsgModal -Title 'Failed' -Lines @(
             $_.Exception.Message, '',
-            'Fallback: run Register-PnPAzureADApp again (C) or add a certificate',
+            'Fallback: register the app-only app again or add a certificate',
             'to the app manually in the Entra portal.') -Kind Error
     }
 }

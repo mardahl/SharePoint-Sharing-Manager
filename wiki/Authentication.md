@@ -18,6 +18,7 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant → act
 - The signed-in operator's permissions apply: **Site Collection Admin** on each target site/OneDrive to scan and revoke, **SharePoint Administrator** for the Sharing tab.
 - Every action is attributable to the signed-in operator in the audit log.
 - Practical for a handful of sites; painful for tenant-wide OneDrive cleanup.
+- Registering when the app already exists in Entra offers to adopt it: the tool looks the Client Id up by app name (operator sign-in via PnP Management Shell) and saves it to the tenant's config. Covers the case where the local config lost the Client Id.
 
 ## Comparison
 

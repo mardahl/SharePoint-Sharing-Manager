@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fix: the re-key flow for an existing Entra app always failed with "found
+  but no Client Id returned" - `Get-PnPAzureADApp` returns the client id as
+  `AppId`, not `AzureAppId`. The lookup (now shared as `Find-SsmAppClientId`)
+  reads the correct property.
+- Add: registering a delegated app that already exists in Entra now offers to
+  adopt the existing registration (look the Client Id up by name, save it to
+  the tenant's config) instead of failing outright - covers the case where
+  the local config lost the Client Id.
 - Docs: README and wiki no longer claim `C`/`D` keys register apps on the
   Setup tab - those flat keys were removed in 1.5.0; registration runs from
   the per-tenant actions list (`Enter` → Register cert app / Register
