@@ -197,11 +197,11 @@ function Get-CisSnapshot {
 
 function Invoke-CisBaseline {
     if (-not $script:Tabs[2].Loaded) { Show-MsgModal -Title 'CIS baseline' -Lines @('Load the posture first (Enter).'); return }
-    $profile = Show-ListModal -Title 'Apply CIS baseline' -Prompt 'Profile:' -Options @(
+    $choice = Show-ListModal -Title 'Apply CIS baseline' -Prompt 'Profile:' -Options @(
         'L1 only - recommended states that should not break workflows',
         'L1 + L2 - adds: OneDrive sharing Disabled, guest resharing blocked')
-    if (-not $profile) { return }
-    $includeL2 = $profile.StartsWith('L1 +')
+    if (-not $choice) { return }
+    $includeL2 = $choice.StartsWith('L1 +')
 
     $lines = @('The following CIS 7.2.x recommended states will be applied:', '')
     foreach ($k in $script:CisBaselineL1.Keys) { $lines += ("  {0} = {1}" -f $k, $script:CisBaselineL1[$k]) }
