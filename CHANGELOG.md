@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Change: the Sites tab now enables all six rule categories by default (was
+  org-wide links only), matching the OneDrives tab, so a first scan covers
+  every rule. `T` still narrows a run to specific categories.
 - Add: Left/Right arrow keys switch tabs, same as Tab / Shift+Tab.
 - Add: persistent scan summary in the SharePoint/OneDrive target views. Once
   anything is scanned, the context line shows `scanned:N (X clean, Y with

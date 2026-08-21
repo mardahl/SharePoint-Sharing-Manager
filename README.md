@@ -59,7 +59,7 @@ Files and folders are never deleted and permission inheritance is never reset. "
 
 - **Pure PowerShell TUI** (VT/ANSI) - no WinForms, no DLLs, works over SSH and in any VT-capable terminal
 - **PowerShell 7.4+** on Windows, macOS, and Linux
-- **Shared scan engine**, six togglable rule categories (`T`), per-tab defaults - Sites tab defaults to org-wide links only, OneDrives tab defaults to all categories
+- **Shared scan engine**, six togglable rule categories (`T`), all enabled by default on both the Sites and OneDrives tabs
 - **Per-finding multi-select revoke** with typed `REVOKE` confirmation and BEFORE/REVOKED CSV evidence for every run
 - **Target discovery**: auto-enumerate via `Get-PnPTenantSite`, manual URL entry, or CSV import
 - **Delegated (interactive) and app-only certificate authentication**, with a guided in-app setup wizard including 1-year certificate issuance and renewal

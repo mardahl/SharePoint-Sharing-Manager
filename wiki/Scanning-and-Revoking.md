@@ -1,19 +1,29 @@
 # Scanning and revoking
 
-The Sites and OneDrives tabs share one scan engine with six togglable rule categories (`T` opens the toggles). Defaults differ per tab: **Sites defaults to org-wide links only**, **OneDrives defaults to all categories**.
+The Sites and OneDrives tabs share one scan engine with six togglable rule categories (`T` opens the toggles). **Both tabs default to all six categories enabled** — the first scan covers every rule; press `T` to narrow a run to specific categories.
 
 ## Finding categories
 
-| Category | Pulled | Left alone |
+| Category | What it means | Why it is a risk |
 |---|---|---|
-| Anonymous links | Any "Anyone" sharing link | (nothing) |
-| Org-wide links | Any "People in your organization" link | (nothing) |
-| Guest-specific links | Specific-people links exposing an external grantee | Specific-people links shared only with internal members |
-| Guest direct grants | Role assignments where the login contains `#ext#` | Named internal members, default site groups (Owners/Members/Visitors), system/app accounts |
-| EEEU grants | `c:0-.f\|rolemanager\|spo-grid-all-users/*` claim | EEEU/Everyone nested inside a site permission group (group membership, not a direct grant) |
-| Everyone grants | `c:0(.s\|true` claim | (nothing) |
+| Anonymous links | "Anyone" sharing links — no sign-in required | Anyone holding the URL opens the content, and the link can be forwarded without limit. The most exposed share type. |
+| Org-wide links | "People in your organization" links | Every signed-in employee (and any AI agent they run, e.g. Copilot) can reach the content. Fine for deliberate broadcasts, risky when created casually. |
+| Guest-specific links | Specific-people links that expose an external grantee | External users keep access long after the collaboration ended. Links shared only with internal members are left alone. |
+| Guest direct grants | Permission grants where the login contains `#ext#` | Same staleness problem as guest links, but granted directly on the item. Named internal members, default site groups (Owners/Members/Visitors), and system/app accounts are left alone. |
+| EEEU grants | Grants to "Everyone except external users" (`spo-grid-all-users` claim) | One step below anonymous: every internal user has standing access, whether they know it or not. Grants nested inside a site permission group are group membership, not direct grants, and are left alone. |
+| Everyone grants | Grants to the "Everyone" claim (`c:0(.s|true`) | Includes external identities in most tenants. Effectively anonymous access. |
 
 Files and folders are never deleted, and permission inheritance is never reset. "Limited Access" rows (`RoleTypeKind = 1`) are skipped on purpose: that row is the traversal stub SharePoint auto-creates so someone can reach a deeper item, not a real grant. Removing the real grant on the item clears the stub automatically.
+
+## Reducing oversharing with the rules
+
+A practical sequence:
+
+1. **Run the defaults first.** With all six rules on, `X` (scan all) on each tab gives a full exposure inventory. Export (`E`) before revoking anything.
+2. **Kill the worst exposure first.** Anonymous links and Everyone grants are the two categories where access requires no account at all — filter the findings view (`F`) to those categories and revoke them in the first pass.
+3. **Then cut implicit internal blast radius.** Org-wide links and EEEU grants are what Copilot and other AI agents surface to any employee on demand. Most org-wide links were created for convenience ("share to the team") and are safe to replace with named-group access.
+4. **Triage guests last.** Guest links and guest grants are often legitimate. Sort by the Created column (Setup > tenant > "Enable link-date lookup") and revoke anything older than the project it belonged to, then spot-check the remainder with the external parties.
+5. **Lock the tenant down so it stays clean.** After revocation, use the [[Tenant-Hardening]] tab to disable anonymous links tenant-wide and default new links to specific people, so the categories stay quiet on rescan.
 
 ## Target discovery
 
