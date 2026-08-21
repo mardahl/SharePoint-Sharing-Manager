@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fix: PATCH keyCredentials kept failing with `Invalid property 'Members'` -
+  Invoke-PnPGraphMethod always JsonSerializer.Serialize()s its -Content, and
+  PSObject-wrapped values (from its own GET response, or a pre-serialized
+  string round-trip) leak phantom keys. The GET+PATCH now run as raw REST
+  (Invoke-RestMethod with the connection's access token), no PnP serializer
+  in the path.
 - Fix: operator-context Graph actions (re-key, renewal, app delete) no longer
   sign in with the retired PnP Management Shell client (31359c7f-...) - it has
   no service principal in tenants that never consented it (mandatory own-app

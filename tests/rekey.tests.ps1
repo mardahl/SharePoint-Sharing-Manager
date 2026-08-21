@@ -30,6 +30,12 @@ function Invoke-PnPGraphMethod { param($Method, $Url, $Content)
     $script:LastPatchContent = $Content
     if ($Method -eq 'Get') { return [pscustomobject]@{ keyCredentials = @(@{ type='AsymmetricX509Cert'; usage='Verify'; key='b2xk' }) } }
     [pscustomobject]@{} }
+function Get-PnPAccessToken { param($ResourceUrl) 'fake-token' }
+function Invoke-RestMethod { param($Method, $Uri, $Headers, $Body)
+    $script:GraphCalls += "$Method $Uri"
+    if ($Method -eq 'Get') { return [pscustomobject]@{ keyCredentials = @([pscustomobject]@{ type='AsymmetricX509Cert'; usage='Verify'; key='b2xk' }) } }
+    if ($Body) { $script:LastPatchContent = $Body }
+    return $null }
 
 function Reset-AdoptState {
     $script:Auth = @{ AuthMode=''; ClientId=''; Tenant='t.onmicrosoft.com'; AdminUrl=''; Thumbprint=''; CertPath=''; CertExpires=''; IncludeLinkDates=''; Loaded=$true }
@@ -74,8 +80,8 @@ Invoke-SsmTest 'Add-SsmCertToExistingApp re-keys via PATCH keyCredentials and sa
     Add-SsmCertToExistingApp -Tenant 't.onmicrosoft.com'
     Assert-Equal 'AppOnly' $script:Auth.AuthMode
     Assert-Equal 'real-app-id-123' $script:Auth.ClientId
-    Assert-Equal 'Get applications(appId=''real-app-id-123'')?$select=keyCredentials' $script:GraphCalls[0]
-    Assert-Equal 'Patch applications(appId=''real-app-id-123'')' $script:GraphCalls[1]
+    Assert-Equal 'Get https://graph.microsoft.com/v1.0/applications(appId=''real-app-id-123'')?$select=keyCredentials' $script:GraphCalls[0]
+    Assert-Equal 'Patch https://graph.microsoft.com/v1.0/applications(appId=''real-app-id-123'')' $script:GraphCalls[1]
 }
 
 Invoke-SsmTest 'Add-SsmKeyCredentialToApp sends base64 DER, keeps existing keys' {
@@ -83,7 +89,7 @@ Invoke-SsmTest 'Add-SsmKeyCredentialToApp sends base64 DER, keeps existing keys'
     $cert = New-PnPAzureCertificate -CommonName 'x' -ValidYears 1 -OutPfx 'x.pfx' -OutCert 'x.cer'
     Add-SsmKeyCredentialToApp -AppId 'app-1' -Cert $cert
     Assert-Equal 2 $script:GraphCalls.Count
-    Assert-Equal 'Patch applications(appId=''app-1'')' $script:GraphCalls[1]
+    Assert-Equal 'Patch https://graph.microsoft.com/v1.0/applications(appId=''app-1'')' $script:GraphCalls[1]
     # PATCH body is pre-serialized JSON; new key carries parsed DER, existing key kept
     $body = $script:LastPatchContent | ConvertFrom-Json
     Assert-Equal 2 $body.keyCredentials.Count

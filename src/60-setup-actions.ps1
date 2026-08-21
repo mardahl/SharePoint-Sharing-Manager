@@ -242,17 +242,20 @@ function Add-SsmKeyCredentialToApp {
     }
     if (-not $der -and $x509) { $der = [Convert]::ToBase64String($x509.GetRawCertData()) }
     if (-not $der) { throw 'Could not get base64 DER from the generated certificate.' }
-    $existing = Invoke-PnPGraphMethod -Method Get -Url ("applications(appId='{0}')?`$select=keyCredentials" -f $AppId) -ErrorAction Stop
-    # ponytail: PnP hands back PSObject-wrapped values; serializing those into
-    # the PATCH body produces phantom 'Members'/'Properties' keys (Graph:
-    # "Invalid property 'Members'"). Round-trip through JSON to get plain data.
-    $existing = $existing | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    # ponytail: Invoke-PnPGraphMethod always JsonSerializer.Serialize()s its
+    # -Content, and PSObject-wrapped values from its own GET response leak
+    # phantom 'Members'/'Properties' keys into the payload (Graph: "Invalid
+    # property 'Members'"). Bypass it: raw REST with the connection's token.
+    $token = Get-PnPAccessToken -ResourceUrl 'https://graph.microsoft.com' -ErrorAction Stop
+    $headers = @{ Authorization = "Bearer $token"; 'Content-Type' = 'application/json' }
+    $graph = 'https://graph.microsoft.com/v1.0'
+    $app = Invoke-RestMethod -Method Get -Uri ("{0}/applications(appId='{1}')?`$select=keyCredentials" -f $graph, $AppId) -Headers $headers -ErrorAction Stop
     $keys = @()
-    if ($existing.keyCredentials) { $keys = @($existing.keyCredentials | ForEach-Object { $_ | ConvertTo-Json -Depth 10 | ConvertFrom-Json }) }
-    $newKey = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $der }
-    $bodyJson = (@{ keyCredentials = @($keys + $newKey) } | ConvertTo-Json -Depth 10)
-    Write-SsmLog -Message ("Attaching cert to app {0} (PATCH keyCredentials, {1} existing + 1 new)." -f $AppId, $keys.Count)
-    Invoke-PnPGraphMethod -Method Patch -Url ("applications(appId='{0}')" -f $AppId) -Content $bodyJson -ErrorAction Stop
+    if ($app.keyCredentials) { $keys = @($app.keyCredentials) }
+    $newKey = [ordered]@{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $der }
+    $bodyJson = (@{ keyCredentials = @($keys + $newKey) } | ConvertTo-Json -Depth 10 -Compress)
+    Write-SsmLog -Message ("Attaching cert to app {0} (PATCH keyCredentials via REST, {1} existing + 1 new)." -f $AppId, $keys.Count)
+    Invoke-RestMethod -Method Patch -Uri ("{0}/applications(appId='{1}')" -f $graph, $AppId) -Headers $headers -Body $bodyJson -ErrorAction Stop | Out-Null
 }
 
 function Add-SsmCertToExistingApp {
