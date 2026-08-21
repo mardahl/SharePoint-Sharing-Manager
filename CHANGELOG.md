@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-21
+
+- Add: startup update check queries GitHub Releases and shows a one-line
+  modal when a newer version exists, with a link to the download page and an
+  assurance that settings, scan cache, and exports are untouched by updating.
+  Notify-only - no auto-download. `Y` opens the releases page in the default
+  browser.
 - Fix: PATCH keyCredentials kept failing with `Invalid property 'Members'` -
   Invoke-PnPGraphMethod always JsonSerializer.Serialize()s its -Content, and
   PSObject-wrapped values (from its own GET response, or a pre-serialized

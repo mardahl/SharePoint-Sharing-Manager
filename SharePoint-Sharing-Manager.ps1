@@ -110,6 +110,9 @@ Write-SsmLog -Message ('=' * 60)
 
 try {
     Enter-Tui
+    # Notify-only update check (never blocks startup; see src/72-update-check.ps1).
+    # Runs after Enter-Tui: Show-ConfirmModal calls Write-Screen, which needs the TUI buffer.
+    try { Show-SsmUpdateNotice } catch { Write-SsmLog -Message ("Update notice failed: {0}" -f $_.Exception.Message) -Level DEBUG }
     $lastW = 0; $lastH = 0
     while (-not $script:UI.Quit) {
         $size = Get-ConsoleSize

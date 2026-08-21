@@ -42,6 +42,14 @@ The UI is raw VT/ANSI. Use a VT-capable terminal (Windows Terminal, iTerm2, any 
 
 Logs, exports, and the scan cache contain directory data. Treat them accordingly. There is no telemetry, and nothing leaves the machine except operator-triggered calls to SharePoint Online and Microsoft Graph.
 
+## The tool says a newer version is available - how do I update?
+
+At startup the tool checks [GitHub Releases](https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest) and shows a notice if a newer version exists. Press `Y` to open the download page in your browser, then replace your copy of `SharePoint-Sharing-Manager.ps1` with the new one.
+
+Updating replaces only the script file. Your settings (`~/.sharepoint-sharing-manager.json`), scan cache (`SSM-Cache/`), and exports (`SSM-Exports/`) remain untouched.
+
+The check is notify-only: the tool never downloads or replaces itself. If the machine is offline or GitHub is unreachable, the check is skipped silently and the tool starts normally.
+
 ## Still stuck
 
 Open an issue at [github.com/mardahl/SharePoint-Sharing-Manager/issues](https://github.com/mardahl/SharePoint-Sharing-Manager/issues) with the relevant log excerpt (redact directory data as needed). For security issues, see `SECURITY.md` in the repo for private reporting.
