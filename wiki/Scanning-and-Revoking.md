@@ -15,6 +15,8 @@ The Sites and OneDrives tabs share one scan engine with six togglable rule categ
 
 Files and folders are never deleted, and permission inheritance is never reset. "Limited Access" rows (`RoleTypeKind = 1`) are skipped on purpose: that row is the traversal stub SharePoint auto-creates so someone can reach a deeper item, not a real grant. Removing the real grant on the item clears the stub automatically.
 
+Guest rows are tagged: any finding whose principal is external (guest direct grant or guest on a specific-people link) shows ` [guest]` after the name in the Principal column and in CSV exports, so external identities stand out even when their display name looks like an internal user.
+
 ## Reducing oversharing with the rules
 
 A practical sequence:

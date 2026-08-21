@@ -41,3 +41,11 @@ Invoke-SsmTest 'Link categories: anonymous / organization / internal users-link'
     $r = Get-LinkCategory -Scope 'users' -Link ([pscustomobject]@{ GrantedToIdentitiesV2 = @() })
     Assert-Equal '' $r    # internal-only specific-people link is KEPT
 }
+Invoke-SsmTest 'Guest users-link principal carries [guest] marker' {
+    $link = [pscustomobject]@{ GrantedToIdentitiesV2 = @(
+        [pscustomobject]@{ SiteUser = [pscustomobject]@{ LoginName = 'i:0#.f|membership|g_x.com#ext#@t.onmicrosoft.com' }; User = [pscustomobject]@{ Email = 'g@x.com' } }
+    )}
+    $r = Get-LinkCategory -Scope 'users' -Link $link
+    Assert-Equal 'GuestLink' $r.Key
+    Assert-Equal 'g@x.com [guest]' $r.Principal
+}

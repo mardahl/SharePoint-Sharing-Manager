@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Add: guest principals are tagged ` [guest]` in the findings view and CSV
+  exports, so external identities stand out even when the display name looks
+  like an internal member.
 - Change: the Sites tab now enables all six rule categories by default (was
   org-wide links only), matching the OneDrives tab, so a first scan covers
   every rule. `T` still narrows a run to specific categories.

@@ -36,7 +36,7 @@ function Get-LinkCategory {
         'organization' { return @{ Key = 'OrgLink'; Principal = 'People in your organization' } }
         'users'        {
             $g = @(Get-GuestGrantees -Link $Link)
-            if ($g.Count -gt 0) { return @{ Key = 'GuestLink'; Principal = ($g -join ';') } }
+            if ($g.Count -gt 0) { return @{ Key = 'GuestLink'; Principal = (($g -join ';') + ' [guest]') } }
             return $null
         }
     }
@@ -94,10 +94,12 @@ function Add-GrantsRest {
         $realRoles = @(@($ra.RoleDefinitionBindings) | Where-Object { [int]$_.RoleTypeKind -ne 1 })
         if ($realRoles.Count -eq 0) { continue }
         $roles = ($realRoles | ForEach-Object { $_.Name }) -join ';'
+        $principal = [string]$ra.Member.Title
+        if ($key -eq 'GuestGrant') { $principal += ' [guest]' }
         $Bag.Add([pscustomobject]@{
             Site = $Site; Location = $Location; Name = $Name
             CategoryKey = $key; Category = $script:RuleCategories[$key]
-            Access = $roles; Principal = $ra.Member.Title; Path = $Path; RemovalKind = 'DirectGrant'
+            Access = $roles; Principal = $principal; Path = $Path; RemovalKind = 'DirectGrant'
             LinkId = $null; ListId = $ListId; ItemId = $ItemId; PrincipalId = $ra.PrincipalId
             LinkCreated = ''
             RevokeStatus = 'NotAttempted'; Selected = $false
