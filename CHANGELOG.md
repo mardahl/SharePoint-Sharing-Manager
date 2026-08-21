@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fix: registering an app-only cert app for a second tenant on macOS/Linux
+  overwrote the first tenant's PFX (`SharePoint-Sharing-Manager.pfx` had a
+  fixed name in a shared dir), breaking the first tenant's auth. PFX files
+  are now named per tenant slug; cert renewal is slugged too.
+- Add: re-registering when the Entra app already exists now offers a re-key
+  flow (look up existing Client Id, attach a fresh certificate via Graph
+  `addKey`) instead of failing outright.
 - Add: all CIS-baseline knobs are now individually visible/adjustable on the
   Sharing tab: `LegacyAuthProtocolsEnabled`, `EnableAzureADB2BIntegration`,
   `EmailAttestationRequired`, `EmailAttestationReAuthDays` (19 settings).

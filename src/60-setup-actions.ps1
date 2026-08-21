@@ -99,7 +99,21 @@ function Register-SsmAppOnlyApp {
         $script:Auth.AuthMode = 'AppOnly'
         $script:Auth.ClientId = $appId
         $script:Auth.Thumbprint = if ($script:IsWin) { $thumb } else { '' }
-        $script:Auth.CertPath = if ($script:IsWin) { '' } else { (Join-Path $outDir 'SharePoint-Sharing-Manager.pfx') }
+        # Per-tenant PFX name: Register-PnPAzureADApp writes a fixed
+        # 'SharePoint-Sharing-Manager.pfx' into -OutPath, which would clobber
+        # the previous tenant's key when a second tenant registers. Move it to
+        # a tenant-slug name right after registration.
+        $certPath = ''
+        if (-not $script:IsWin) {
+            $fixed = Join-Path $outDir 'SharePoint-Sharing-Manager.pfx'
+            $slug  = ConvertTo-SsmTenantSlug -Name ($tenant -replace '\.onmicrosoft\.com$', '')
+            $named = Join-Path $outDir ("SharePoint-Sharing-Manager-{0}.pfx" -f $slug)
+            if ((Test-Path -LiteralPath $fixed) -and $fixed -ne $named) {
+                Move-Item -LiteralPath $fixed -Destination $named -Force
+            }
+            $certPath = if (Test-Path -LiteralPath $named) { $named } else { $fixed }
+        }
+        $script:Auth.CertPath = $certPath
         $script:Auth.CertExpires = (Get-Date).AddYears(1).ToString('yyyy-MM-dd')
         Save-SsmAuth
         Show-MsgModal -Title 'Registered' -Lines @(
@@ -109,8 +123,66 @@ function Register-SsmAppOnlyApp {
             'If consent was not granted yet, a Global Admin must approve the',
             'consent URL printed in the console before connections will work.')
     } catch {
+        if ($_.Exception.Message -match 'already exists') {
+            Write-SsmLog -Message 'App already exists - offering re-key of the existing registration.'
+            Add-SsmCertToExistingApp -Tenant $tenant
+            return
+        }
         Write-SsmErrorLog -Context 'App-only registration failed' -ErrorRecord $_
         Show-MsgModal -Title 'Failed' -Lines @($_.Exception.Message) -Kind Error
+    }
+}
+
+function Add-SsmCertToExistingApp {
+    # Fallback when Register-PnPAzureADApp fails with "already exists": the app
+    # from a previous (possibly clobbered) registration is still in Entra. Look
+    # up its ClientId by display name, generate a fresh cert, upload via Graph
+    # addKey, and point this tenant's config at it. Needs Application
+    # Administrator sign-in (interactive) to call addKey.
+    param([Parameter(Mandatory)][string]$Tenant)
+    $ok = Show-ConfirmModal -Title 'App already exists' -Lines @(
+        "An app named 'SharePoint-Sharing-Manager' already exists in $Tenant.",
+        'This happens when re-registering after an earlier setup.', '',
+        'Reuse it: generate a NEW certificate and attach it to the existing app?',
+        '(You will sign in interactively as Application Administrator.)')
+    if (-not $ok) { return }
+    try {
+        $outDir = Join-Path $HOME '.sharepoint-sharing-manager-cert'
+        if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+        $slug  = ConvertTo-SsmTenantSlug -Name ($Tenant -replace '\.onmicrosoft\.com$', '')
+        $stamp = Get-Date -Format 'yyyyMMdd'
+        $pfx   = Join-Path $outDir "SharePoint-Sharing-Manager-$slug.pfx"
+        Invoke-OnMainBuffer {
+            $rootUrl = "https://{0}.sharepoint.com" -f ($Tenant -replace '\.onmicrosoft\.com$', '')
+            Connect-PnPOnline -Url $rootUrl -Interactive -ErrorAction Stop
+            $app = Get-PnPAzureADApp -Identity 'SharePoint-Sharing-Manager' -ErrorAction Stop
+            $script:ExistingAppId = [string]$app.AzureAppId
+            if (-not $script:ExistingAppId) { throw "App 'SharePoint-Sharing-Manager' found but no Client Id returned." }
+            $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx $pfx -OutCert ($pfx -replace '\.pfx$', '.cer')
+            $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
+            Invoke-PnPGraphMethod -Method Post -Url ("applications(appId='{0}')/addKey" -f $script:ExistingAppId) -Content $keyCreds -ErrorAction Stop
+            $script:RekeyThumb = [string]$cert.Thumbprint
+        }
+        $script:Auth.AuthMode = 'AppOnly'
+        $script:Auth.ClientId = $script:ExistingAppId
+        if ($script:IsWin -and $script:RekeyThumb) {
+            $script:Auth.Thumbprint = $script:RekeyThumb
+            $script:Auth.CertPath = ''
+        } else {
+            $script:Auth.Thumbprint = ''
+            $script:Auth.CertPath = $pfx
+        }
+        $script:Auth.CertExpires = (Get-Date).AddYears(1).ToString('yyyy-MM-dd')
+        Save-SsmAuth
+        Show-MsgModal -Title 'Re-keyed' -Lines @(
+            "Client Id : $($script:ExistingAppId)",
+            ("Cert until: {0}" -f $script:Auth.CertExpires),
+            'New certificate attached to the existing app. App-only mode is active.')
+    } catch {
+        Write-SsmErrorLog -Context 'Re-key of existing app failed' -ErrorRecord $_
+        Show-MsgModal -Title 'Failed' -Lines @(
+            $_.Exception.Message, '',
+            'Alternative: delete the app in the Entra portal, then register again.') -Kind Error
     }
 }
 
@@ -134,8 +206,9 @@ function Update-SsmCertificate {
     try {
         $outDir = Join-Path $HOME '.sharepoint-sharing-manager-cert'
         $stamp = Get-Date -Format 'yyyyMMdd'
+        $slug  = ConvertTo-SsmTenantSlug -Name ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '')
         Invoke-OnMainBuffer {
-            $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx (Join-Path $outDir "renewed-$stamp.pfx") -OutCert (Join-Path $outDir "renewed-$stamp.cer")
+            $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx (Join-Path $outDir "renewed-$slug-$stamp.pfx") -OutCert (Join-Path $outDir "renewed-$slug-$stamp.cer")
             Write-Host 'New certificate generated. Uploading to the app registration...' -ForegroundColor Yellow
             Connect-PnPOnline -Url ("https://{0}" -f ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '.sharepoint.com')) -Interactive -ClientId $script:Auth.ClientId
             $keyCreds = @{ keyCredential = @{ type = 'AsymmetricX509Cert'; usage = 'Verify'; key = $cert.Certificate }; proof = $null }
@@ -144,7 +217,7 @@ function Update-SsmCertificate {
         }
         $script:Auth.CertExpires = (Get-Date).AddYears(1).ToString('yyyy-MM-dd')
         if ($script:IsWin -and $script:RenewedCert.Thumbprint) { $script:Auth.Thumbprint = $script:RenewedCert.Thumbprint }
-        else { $script:Auth.CertPath = Join-Path $outDir "renewed-$stamp.pfx" }
+        else { $script:Auth.CertPath = Join-Path $outDir "renewed-$slug-$stamp.pfx" }
         Save-SsmAuth
         Show-MsgModal -Title 'Renewed' -Lines @(("New certificate active until {0}." -f $script:Auth.CertExpires))
     } catch {
