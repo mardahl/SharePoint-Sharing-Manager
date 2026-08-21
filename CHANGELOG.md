@@ -2,16 +2,19 @@
 
 ## [Unreleased]
 
+- Fix: operator-context Graph actions (re-key, renewal, app delete) no longer
+  sign in with the retired PnP Management Shell client (31359c7f-...) - it has
+  no service principal in tenants that never consented it (mandatory own-app
+  registration since Sept 2024), which produced a browser AADSTS700016 and a
+  hung session. They now use the same first-party bootstrap client
+  PnP.PowerShell's own register cmdlets use (1950a258-...), which any tenant
+  that ever ran a registration has already consented.
 - Fix: cert attach (re-key and renewal) sent the PEM text as the Graph key
   (`Cannot convert ... to Edm.Binary`) and used the `addKey` action, which
   requires a proof JWT signed by an EXISTING key on the app - precisely the
   key the operator no longer holds. Both paths now PATCH `keyCredentials`
   with base64 DER (existing keys preserved, new one appended); Application
   Administrator suffices, no proof needed.
-- Change: AADSTS700016 (PnP Management Shell not consented in the tenant)
-  now offers to open the adminconsent URL in the browser directly, and the
-  error text states that 31359c7f-... is Microsoft's sign-in app, not the
-  tenant's registration.
 - Add: app-name lookup logs every matched app (displayName + appId) and
   warns when several apps share the name - the first match is used.
 - Fix: the re-key flow for an existing Entra app always failed with "found

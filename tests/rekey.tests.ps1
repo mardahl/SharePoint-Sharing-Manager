@@ -84,8 +84,11 @@ Invoke-SsmTest 'Add-SsmKeyCredentialToApp sends base64 DER, keeps existing keys'
     Add-SsmKeyCredentialToApp -AppId 'app-1' -Cert $cert
     Assert-Equal 2 $script:GraphCalls.Count
     Assert-Equal 'Patch applications(appId=''app-1'')' $script:GraphCalls[1]
-    # new key is the parsed DER value from KeyCredentials, not the PEM string
-    Assert-Equal 'REVJQg==' $script:LastPatchContent.keyCredentials[1].key
+    # PATCH body is pre-serialized JSON; new key carries parsed DER, existing key kept
+    $body = $script:LastPatchContent | ConvertFrom-Json
+    Assert-Equal 2 $body.keyCredentials.Count
+    Assert-Equal 'b2xk' $body.keyCredentials[0].key
+    Assert-Equal 'REVJQg==' $body.keyCredentials[1].key
 }
 
 Invoke-SsmTest 'Add-SsmCertToExistingApp does nothing when the operator cancels' {
