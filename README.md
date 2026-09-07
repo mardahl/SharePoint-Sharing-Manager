@@ -31,6 +31,7 @@ Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Mana
 - [TL;DR](#tldr)
 - [Why](#why)
 - [Features](#features)
+- [OneDrive secondary admin (RELEASE-BLOCKED)](#onedrive-secondary-admin-release-blocked)
 - [Quick start](#quick-start)
 - [Requirements](#requirements)
 - [Files the tool writes](#files-the-tool-writes)
@@ -72,6 +73,72 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **Bulk revocation across drives and across the full findings list** - revoke every finding on a set of selected targets, or every finding in the aggregate view, in one confirmed pass
 - **Multi-tenant** - manage multiple tenants from one install, switch between them (`T`), each with its own auth, scan cache, and exports; legacy single-tenant config migrates automatically
 - **Sharing-link age** (optional, per tenant) - Setup > tenant > "Enable link-date lookup" makes scans also fetch each link's Created date via CSOM (slower; one extra call per shared item). Shown as a Created column in the findings view and in CSV exports - useful when deciding whether an old link is safe to revoke
+- **OneDrive secondary-admin management** (`M`, OneDrives tab only) - add or remove the tenant's *secondary* site-collection-admin role on selected OneDrives, with typed confirmation and BEFORE/AFTER CSV evidence. **RELEASE-BLOCKED**: implemented against mocked tests only, not yet verified against a live tenant - see [Caveats](#caveats) and [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) before relying on it.
+
+## OneDrive secondary admin (RELEASE-BLOCKED)
+
+> This feature is implemented against mocked tests only. It has **not** been
+> verified against a live tenant and must not be relied on for production
+> access changes until that verification passes - see the "Auth mode
+> support" note below and the full [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) wiki page.
+
+```text
+Select one or more OneDrives, press M, choose Add or Remove, and enter one UPN.
+The tool resolves the account in the tenant directory and previews every selected
+target before requiring ADDADMIN or REMOVEADMIN. Removal changes only the named
+secondary administrator role; other access grants remain in place.
+```
+
+- **Full access, not a scoped role**: the *secondary site collection
+  administrator* role this tool adds/removes grants full access to that
+  OneDrive - the same level as the actual owner - not a limited "read-only"
+  or "helpdesk" role. There is no narrower built-in role to grant instead.
+- **Owner and primary-admin protection**: the request is blocked, before any
+  write, if the entered account is the OneDrive's actual owner or the
+  tenant's primary site-collection administrator on that drive - removing
+  either one that way is not supported by this tool.
+- **Unresolved/unknown owner or primary admin blocks the request**: if the
+  drive's owner or the tenant's primary-admin binding cannot be read (blank/
+  group-valued owner field, or a read failure), the target is blocked rather
+  than assumed safe - unknown never defaults to "not protected."
+- **Canonical UPN required**: the entered UPN is resolved to the account's
+  canonical `userPrincipalName`; an alias-only match is rejected, so mixed
+  case or trailing whitespace is normalized but a genuinely different alias
+  is not silently accepted.
+- **Deleted-user cleanup is out of scope**: this feature adds/removes one
+  named, currently-resolvable account. It is not a scan for stale/deleted
+  secondary admins already on a drive.
+- **Hidden selected targets are still included**: a OneDrive you selected
+  earlier and then filtered/searched out of view is still acted on - only
+  actual selection state matters, not what is currently visible.
+- **No sharing-scan prerequisite**: this feature does not require having
+  scanned the selected OneDrives first; it works from the target list alone.
+- **Partial outcomes are expected in a multi-target batch**: each selected
+  OneDrive is processed independently and reported with its own Blocked /
+  NoOp / Success / Failed / Unverified / Cancelled result - one target
+  failing does not stop the others (except a same-identity drift or a
+  protected-identity change mid-batch, which stops all remaining targets).
+- **No automatic rollback**: a Remove that fails partway, or an add later
+  found to be unwanted, is not automatically undone - use Add/Remove again
+  to restore a prior state.
+- **Evidence files**: writes `SSM_ADMIN_BEFORE_<operation-id>.csv` and
+  `SSM_ADMIN_AFTER_<operation-id>.csv` to `SSM-Exports/` (same directory and
+  sensitivity as every other export - see [Files the tool writes](#files-the-tool-writes)
+  and [Security](#security)). The AFTER file is re-written after every
+  target so partial progress is durable even if the batch is cancelled.
+- **Directory scopes needed**: exact UPN-to-account resolution needs a
+  directory-read permission beyond the scan/revoke scopes this tool already
+  requests. See [Requirements](#requirements) and the
+  [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication)
+  wiki page for exactly which mode(s) that has been added to and which
+  remain unverified.
+- **Missing consent**: if the required directory scope was never consented
+  (older registration, or delegated mode's documented default doesn't
+  apply), pressing `M` fails with a specific permission error - it never
+  silently falls back to a partial-match lookup. Existing scans and revokes
+  are unaffected; only this feature is blocked. See
+  [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication)
+  for how to add the missing consent to an existing app registration.
 
 ## Quick start
 
@@ -103,6 +170,7 @@ Full key reference, auth trade-offs, and per-setting docs live in the [wiki](htt
 | Delegated mode: scan/revoke on a target | **Site Collection Admin** on that site or OneDrive |
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
+| OneDrive secondary-admin feature (`M`, **RELEASE-BLOCKED**) | App-only mode's registration additionally requests Graph `User.Read.All` (application) for exact UPN resolution - added to new registrations by this version; existing app-only registrations need manual re-consent (guided in-app). Delegated mode's existing default consent set already covers this (`User.ReadWrite.All`); no change needed there. Neither path's directory-lookup or mutation behavior has been verified against a live tenant yet. |
 
 Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication) in the wiki.
 
@@ -117,6 +185,7 @@ Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode (PFX on non-Windows) |
 | `SSM-Cache/<tenant-slug>/session.json` | Cached scan results (targets + findings) per tenant, for restore; contains directory data |
 | `SSM-Cache/README.txt` | Sensitivity notice for the cache directory |
+| `SSM-Exports/SSM_ADMIN_<BEFORE\|AFTER>_<operation-id>.csv` | BEFORE/AFTER evidence for OneDrive secondary-admin changes (**RELEASE-BLOCKED**, see [above](#onedrive-secondary-admin-release-blocked)) |
 
 ## Caveats
 
@@ -129,6 +198,7 @@ Known limitations:
 - Cleanup does not prevent new sharing - use the Sharing tab's hardening toggles for that.
 - The SharePoint admin site URL is derived from the tenant name as `https://<tenant>-admin.sharepoint.com`; tenants where the SharePoint hostname doesn't follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 - The scan cache holds one session per install directory (`SSM-Cache/session.json`, next to the script); two installs on the same machine get independent caches. Restoring it loads whatever was scanned last, which may be stale relative to the tenant's current sharing state - rescan before acting on old results. Scan-all (`X`) scans one target at a time.
+- **OneDrive secondary-admin management (`M`) is RELEASE-BLOCKED**: built and tested entirely against mocked PnP/Graph calls, per an explicit, deliberate deferral - not a failed live test. It must not be relied on for production access changes until an authorized test tenant validates owner-resolution and add/remove behavior live. See [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management).
 
 ## References
 

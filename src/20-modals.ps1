@@ -600,6 +600,7 @@ function Show-HelpModal {
         @($t.Row, '  R                    revoke all findings on selected targets'),
         @($t.Row, '  L                    restore the saved scan session'),
         @($t.Row, '  E                    export current view to CSV'),
+        @($t.Row, '  M                    manage secondary admin (OneDrives only)'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Findings (inside a target)'),
         @($t.Row, '  Space / A / N        select findings                /  find     F  filter'),

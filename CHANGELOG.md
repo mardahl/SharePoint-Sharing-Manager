@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+- Add: OneDrive secondary-admin management (`M`, OneDrives tab only) - add
+  or remove the tenant's secondary site-collection-admin role on selected
+  OneDrives, with directory UPN resolution, per-target preflight preview,
+  typed `ADDADMIN`/`REMOVEADMIN` confirmation, and
+  `SSM_ADMIN_<BEFORE|AFTER>_<operation-id>.csv` evidence.
+  **RELEASE-BLOCKED**: implemented and tested entirely with mocked PnP/Graph
+  calls, by explicit deliberate deferral - no live tenant, sign-in, or
+  credential was used, and owner-resolution/mutation behavior is not yet
+  verified against a real tenant. App-only registration now additionally
+  requests Graph `User.Read.All` (application) for exact UPN lookup;
+  delegated mode needs no change (its existing default consent set already
+  covers this). See the wiki's
+  [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management)
+  page.
+
 ## [1.8.0] - 2026-08-21
 
 - Add: guest principals are tagged ` [guest]` in the findings view and CSV

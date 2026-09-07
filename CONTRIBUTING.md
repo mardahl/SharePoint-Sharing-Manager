@@ -87,6 +87,7 @@ The code is split into a bootstrap plus one file per region under `src/`:
 | `src/35-scan-engine.ps1` | Shared scan engine: sharing links + direct grants across both rule presets |
 | `src/40-revoke.ps1` | Removal ordering (links before grants, leaf before library before web), `AlreadyRevoked` handling |
 | `src/45-targets.ps1` | Target enumeration (`Get-PnPTenantSite`), manual URL, CSV import |
+| `src/46-onedrive-admin.ps1` | OneDrive secondary-admin management: directory user resolution, read-only state/decision, guarded mutation (**RELEASE-BLOCKED**, mocked-only - see `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md`) |
 | `src/50-csv.ps1` | BEFORE/REVOKED evidence export, current-view export |
 | `src/55-tenant-actions.ps1` | Tenant posture (`Get-PnPTenant`) and hardening setters (`Set-PnPTenant`) |
 | `src/60-setup-actions.ps1` | Delegated/app-only app registration, certificate renewal, config editor |

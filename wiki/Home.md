@@ -16,6 +16,7 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 | [[Requirements]] | PowerShell, modules, Entra roles per task |
 | [[Authentication]] | Delegated vs app-only certificate mode |
 | [[Scanning-and-Revoking]] | Findings categories, keys, evidence CSVs |
+| [[OneDrive-Admin-Management]] | Add or remove secondary administrators on selected OneDrives (**RELEASE-BLOCKED**) |
 | [[Tenant-Hardening]] | Sharing tab settings and the CIS baseline |
 | [[Multi-Tenant-Support]] | Managing several tenants from one install |
 | [[FAQ-and-Troubleshooting]] | Caveats, known limitations, common issues |
