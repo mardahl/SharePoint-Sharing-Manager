@@ -4,7 +4,9 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant → act
 
 ## App-only certificate mode ("Register cert app"): recommended
 
-- Registers an Entra app with **application** permissions `Sites.FullControl.All` (SharePoint) and `Sites.FullControl.All` (Graph).
+- Registers an Entra app with **application** permissions `Sites.FullControl.All` (SharePoint), `Sites.FullControl.All` (Graph), and `User.Read.All` (Graph).
+- `User.Read.All` is requested so the OneDrive secondary-admin feature (`M`, OneDrives tab, **RELEASE-BLOCKED** - see [[OneDrive-Admin-Management]]) can resolve an entered UPN to an exact directory user. New registrations get it automatically; the wizard shows the added scope and the reason before you confirm.
+- **Existing app-only registrations made before this scope was added are not automatically changed.** The tool never PATCHes permissions onto an existing registration. If re-registering hits "already exists," the wizard's re-key path attaches a fresh certificate only - it does not add `User.Read.All`. To grant it: in the Entra portal, open the `SharePoint-Sharing-Manager` app registration → API permissions → add Microsoft Graph → Application → `User.Read.All` → grant admin consent (Global Administrator or Privileged Role Administrator).
 - Generates and uploads a **self-signed certificate valid one year**.
 - Once consented, **no per-target admin role is needed**. This removes the requirement to be Site Collection Admin on every OneDrive, which is what makes large-scale OneDrive cleanup practical.
 - Admin consent for application permissions requires Global Administrator or Privileged Role Administrator. The wizard displays a consent URL that can be forwarded to whoever holds that role; the tool picks the app up once consent lands.
@@ -14,7 +16,8 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant → act
 
 ## Delegated interactive mode ("Register delegated app")
 
-- Registers an app for interactive sign-in (MSAL, via PnP.PowerShell).
+- Registers an app for interactive sign-in (MSAL, via PnP.PowerShell) with PnP.PowerShell 3.3.0's documented **default** delegated scopes: `AllSites.FullControl`, `Group.ReadWrite.All`, `User.ReadWrite.All`, `TermStore.ReadWrite.All`. No narrower scope override is requested by this tool.
+- `User.ReadWrite.All` already exceeds what the OneDrive secondary-admin feature (`M`, **RELEASE-BLOCKED** - see [[OneDrive-Admin-Management]]) needs for exact UPN lookup, so delegated mode needs no additional consent for that feature.
 - The signed-in operator's permissions apply: **Site Collection Admin** on each target site/OneDrive to scan and revoke, **SharePoint Administrator** for the Sharing tab.
 - Every action is attributable to the signed-in operator in the audit log.
 - Practical for a handful of sites; painful for tenant-wide OneDrive cleanup.
@@ -32,3 +35,14 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant → act
 ## Configuration storage
 
 Sign-in configuration lives in `~/.sharepoint-sharing-manager.json`, one entry per tenant, plus a default tenant name. A legacy flat single-tenant config migrates to the multi-tenant format automatically on first launch.
+
+## OneDrive secondary-admin auth-mode status (RELEASE-BLOCKED)
+
+Neither auth mode's directory-lookup or admin-mutation behavior for the `M` feature has been verified against a live tenant. What's confirmed from documentation only (PnP.PowerShell 3.3.0, Microsoft Graph docs):
+
+| Mode | Directory scope present | Live-verified? |
+|---|---|---|
+| App-only | `User.Read.All` (Graph, application) - new registrations only | No |
+| Delegated | `User.ReadWrite.All` (Graph, default) | No |
+
+Graph's `Get drive` API is documented "Not supported" for application permissions in every variant, ruling it out for app-only owner reads; `List Drives` (`GET /sites/{siteId}/drives`) documents an application-permission path but is untested. See [[OneDrive-Admin-Management]] and `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md` in the repo for the full gate.

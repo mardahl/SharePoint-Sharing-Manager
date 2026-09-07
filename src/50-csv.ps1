@@ -14,6 +14,39 @@ function Export-FindingsCsv {
     return $path
 }
 
+function Export-SsmAdminCsv {
+    # Dedicated secondary-admin evidence export. Never mixed into the
+    # findings CSV schema/columns. Writes to a same-directory temporary file
+    # first and only replaces the final path once serialization succeeds, so
+    # a failed write (disk full, locked file) never leaves a half-written or
+    # missing evidence file in place.
+    param(
+        [Parameter(Mandatory)][object[]]$Rows,
+        [Parameter(Mandatory)][guid]$OperationId,
+        [Parameter(Mandatory)][ValidateSet('BEFORE', 'AFTER')][string]$Phase
+    )
+    if (-not (Test-Path -LiteralPath $script:ExportDir)) {
+        New-Item -ItemType Directory -Path $script:ExportDir -Force | Out-Null
+    }
+    $columns = @(
+        'OperationId', 'TimestampUtc', 'ResultTimestampUtc', 'TenantId', 'Actor', 'Action', 'TargetUrl',
+        'EnteredUpn', 'ResolvedUpn', 'ResolvedUserId', 'OwnerUpn', 'OwnerId',
+        'PrimaryAdminUpn', 'PrimaryAdminId', 'AdminLogin', 'AdminBefore', 'AdminAfter',
+        'Result', 'Error'
+    )
+    $path = Join-Path $script:ExportDir ("SSM_ADMIN_{0}_{1}.csv" -f $Phase, $OperationId)
+    $tmp = "$path.tmp"
+    try {
+        $Rows | Select-Object $columns | Export-Csv -LiteralPath $tmp -NoTypeInformation -Encoding UTF8BOM -ErrorAction Stop
+        Move-Item -LiteralPath $tmp -Destination $path -Force -ErrorAction Stop
+    } catch {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+        throw "Export-SsmAdminCsv: failed to write $Phase evidence: $($_.Exception.Message)"
+    }
+    Write-SsmLog -Message ("{0} admin evidence: {1}" -f $Phase, $path)
+    return $path
+}
+
 function Export-ViewCsv {
     # Export the current view (targets or findings) for the active tab.
     param($Tab)
