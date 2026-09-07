@@ -8,12 +8,13 @@ $script:SsmReleasesApi = 'https://api.github.com/repos/mardahl/SharePoint-Sharin
 $script:SsmReleasesUrl = 'https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest'
 
 function Get-SsmLatestVersion {
-    # Latest release tag from GitHub as [version]; $null on any failure.
-    # Tests shadow Invoke-RestMethod to drive the branches.
+    # Latest release tag from GitHub as [semver] (supports '-rc.N' prerelease
+    # suffixes, unlike [version]); $null on any failure. Tests shadow
+    # Invoke-RestMethod to drive the branches.
     try {
         $r = Invoke-RestMethod -Uri $script:SsmReleasesApi -TimeoutSec 5 -Headers @{ 'User-Agent' = 'SharePoint-Sharing-Manager' }
         $tag = [string]$r.tag_name -replace '^[vV]', ''
-        return [version]$tag
+        return [semver]$tag
     } catch {
         Write-SsmLog -Message ("Update check skipped: {0}" -f $_.Exception.Message) -Level DEBUG
         return $null
@@ -21,7 +22,7 @@ function Get-SsmLatestVersion {
 }
 
 function Test-SsmNewerVersion {
-    param([Parameter(Mandatory)][version]$Latest, [Parameter(Mandatory)][version]$Current)
+    param([Parameter(Mandatory)][semver]$Latest, [Parameter(Mandatory)][semver]$Current)
     return ($Latest -gt $Current)
 }
 
@@ -30,7 +31,7 @@ function Show-SsmUpdateNotice {
     # Y opens the releases page in the default browser; N/Esc just continues.
     $latest = Get-SsmLatestVersion
     if ($null -eq $latest) { return }
-    if (-not (Test-SsmNewerVersion -Latest $latest -Current ([version]$script:Version))) { return }
+    if (-not (Test-SsmNewerVersion -Latest $latest -Current ([semver]$script:Version))) { return }
     Write-SsmLog -Message ("Update available: v{0} -> v{1}" -f $script:Version, $latest) -Level INFO
     $open = Show-ConfirmModal -Title 'Update available' -Lines @(
         ("A newer version is available:  v{0} -> v{1}" -f $script:Version, $latest),

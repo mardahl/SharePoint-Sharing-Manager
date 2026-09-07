@@ -2,12 +2,18 @@
 
 Date: 2026-09-07
 
-Status: Local/documentation stage COMPLETE. Live-fixture stage DEFERRED (not
-passing) by explicit user decision. Implementation may proceed using mocked
-tests against the documented findings below. The feature remains
-RELEASE-BLOCKED: it must not ship, be enabled by default, or be exercised
-against a live tenant until the deferred live checks in "Unmet tests" below
-are run and pass, and this document is updated with the result.
+**Current status (v1.9.0-rc.1, authoritative):** shipped as a GitHub
+prerelease, available for an authorized test tenant to run the live-fixture
+checks deferred below. That live validation is still outstanding - the
+feature must not ship in a stable release, be enabled by default, or be
+exercised against a production tenant until it passes and this document is
+updated with the result.
+
+> **Historical status (as authored, 2026-09-07):** Local/documentation stage
+> COMPLETE. Live-fixture stage DEFERRED (not passing) by explicit user
+> decision. Implementation proceeded using mocked tests against the
+> documented findings below. Everything from here down is that original,
+> unchanged record - see the current status above for what applies now.
 
 ## Scope of this document
 

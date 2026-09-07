@@ -1,10 +1,12 @@
 # OneDrive secondary admin management
 
-> **RELEASE-BLOCKED.** This feature is implemented and tested entirely
-> against mocked PnP/Graph calls, by explicit, deliberate deferral - not a
-> failed live test. No live tenant, sign-in, or credential has been used to
-> verify owner-resolution or add/remove behavior. Do not rely on it for
-> production access changes until an authorized test tenant validates it.
+> **Prerelease (v1.9.0-rc.1), pending live-tenant validation.** This
+> feature is implemented and tested entirely against mocked PnP/Graph
+> calls, by explicit, deliberate deferral - not a failed live test. It
+> ships as a prerelease so an authorized test tenant can run that
+> deferred live validation; the stable release line (currently v1.8.0)
+> does not include this feature and does not move until validation
+> passes. Do not rely on it for production access changes until then.
 > See `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md`
 > in the repo for the full gate and what is still unproven.
 
@@ -109,5 +111,5 @@ and existing scans/revokes are unaffected. See
 [[FAQ-and-Troubleshooting]] and [[Authentication]] for recovery steps.
 
 Neither auth mode's directory-lookup or mutation behavior has been proven
-against a real tenant - see the RELEASE-BLOCKED notice at the top of this
+against a real tenant - see the prerelease notice at the top of this
 page.

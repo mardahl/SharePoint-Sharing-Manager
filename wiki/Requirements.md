@@ -18,7 +18,7 @@
 | Delegated mode: scan/revoke on a target | **Site Collection Admin** on that site or OneDrive |
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
-| OneDrive secondary-admin feature (`M`, **RELEASE-BLOCKED**) | App-only: `User.Read.All` (Graph, application) - new registrations only, manual re-consent for existing apps. Delegated: already covered by the default consent set, no extra role/consent needed. Neither is live-verified yet; see [[OneDrive-Admin-Management]]. |
+| OneDrive secondary-admin feature (`M`, **prerelease**) | App-only: `User.Read.All` (Graph, application) - new registrations only, manual re-consent for existing apps. Delegated: already covered by the default consent set, no extra role/consent needed. Neither is live-verified yet; see [[OneDrive-Admin-Management]]. |
 
 ## App-only permissions
 

@@ -9,7 +9,7 @@
 - Cleanup does not prevent new sharing. Use the Sharing tab's hardening toggles for that (see [[Tenant-Hardening]]).
 - The SharePoint admin site URL is derived as `https://<tenant>-admin.sharepoint.com`; tenants that do not follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 - Restored scan-cache sessions may be stale relative to the tenant's current sharing state; rescan before acting on old results. Scan-all (`X`) scans one target at a time.
-- OneDrive secondary-admin management (`M`) is **RELEASE-BLOCKED**: built and tested against mocked PnP/Graph calls only, not yet verified against a live tenant. See [[OneDrive-Admin-Management]].
+- OneDrive secondary-admin management (`M`) ships in prerelease v1.9.0-rc.1, built and tested against mocked PnP/Graph calls only, pending live-tenant validation before it can be part of a stable release. See [[OneDrive-Admin-Management]].
 
 ## Common issues
 
@@ -39,7 +39,7 @@ The OneDrive secondary-admin feature needs Graph `User.Read.All` (app-only) or t
 | Location | Content |
 |---|---|
 | `SharePoint-Sharing-Manager_<timestamp>.log` | Session log (also viewable on the Log tab) |
-| `SSM-Exports/` | BEFORE/REVOKED evidence, view exports, and OneDrive secondary-admin BEFORE/AFTER evidence (**RELEASE-BLOCKED**, see [[OneDrive-Admin-Management]]) |
+| `SSM-Exports/` | BEFORE/REVOKED evidence, view exports, and OneDrive secondary-admin BEFORE/AFTER evidence (**prerelease**, see [[OneDrive-Admin-Management]]) |
 | `~/.sharepoint-sharing-manager.json` | Sign-in configuration, one entry per tenant |
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode |
 | `SSM-Cache/<tenant-slug>/session.json` | Cached scan results per tenant; contains directory data |

@@ -1,13 +1,11 @@
 # ============================================================================
 #region OneDrive secondary admin
 # ============================================================================
-# ponytail: RELEASE-BLOCKED. This region implements directory validation and
-# read-only preflight for secondary-admin management against Task 1's
-# documented-only API findings (see
-# docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md). No live
-# tenant, sign-in, or credential discovery has proven owner-resolution or
-# mutation-permission behavior. Do not enable, ship, or invoke this region
-# against a real tenant until that deferred live validation passes.
+# ponytail: this region's directory validation, preflight, and mutation
+# logic for secondary-admin management is unverified against a live tenant
+# (see docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md).
+# Do not enable, ship, or invoke it against a production tenant until that
+# live validation passes and the doc above is updated with the result.
 
 function Get-SsmFieldValue {
     # StrictMode-safe field read that works for both a hashtable (used by

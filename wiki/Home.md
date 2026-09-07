@@ -16,7 +16,7 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 | [[Requirements]] | PowerShell, modules, Entra roles per task |
 | [[Authentication]] | Delegated vs app-only certificate mode |
 | [[Scanning-and-Revoking]] | Findings categories, keys, evidence CSVs |
-| [[OneDrive-Admin-Management]] | Add or remove secondary administrators on selected OneDrives (**RELEASE-BLOCKED**) |
+| [[OneDrive-Admin-Management]] | Add or remove secondary administrators on selected OneDrives (**prerelease v1.9.0-rc.1**, pending live-tenant validation) |
 | [[Tenant-Hardening]] | Sharing tab settings and the CIS baseline |
 | [[Multi-Tenant-Support]] | Managing several tenants from one install |
 | [[FAQ-and-Troubleshooting]] | Caveats, known limitations, common issues |
@@ -29,5 +29,6 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 - **No telemetry**: the only network calls are to SharePoint Online and Microsoft Graph, triggered explicitly by the operator
 - Destructive operations sit behind typed confirmations (`REVOKE` / `APPLY` / `CIS`), and every scan and revoke run writes BEFORE/REVOKED CSV evidence
 - License: MIT. Provided as-is. Test in a non-production tenant first.
+- **Latest stable release: v1.8.0.** OneDrive secondary-admin management (`M`) ships separately as prerelease v1.9.0-rc.1, for authorized test-tenant validation only - see [[OneDrive-Admin-Management]].
 
 Source, releases, and issue tracker: [github.com/mardahl/SharePoint-Sharing-Manager](https://github.com/mardahl/SharePoint-Sharing-Manager)

@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Test release classification
+        run: bash tests/attach-release.test.sh
+
       - name: Build single-file artifact
         shell: pwsh
         run: ./build/New-SingleFile.ps1
@@ -27,12 +30,4 @@ jobs:
       - name: Attach to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          ver="${GITHUB_REF_NAME#v}"
-          awk -v ver="$ver" '
-            $0 ~ "^## \\[" ver "\\]" { flag=1; next }
-            flag && /^## \[/ { exit }
-            flag { print }
-          ' CHANGELOG.md > notes.md
-          gh release upload "$GITHUB_REF_NAME" SharePoint-Sharing-Manager-*.zip --clobber \
-            || gh release create "$GITHUB_REF_NAME" SharePoint-Sharing-Manager-*.zip --notes-file notes.md
+        run: ./build/attach-release.sh

@@ -31,7 +31,7 @@ Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Mana
 - [TL;DR](#tldr)
 - [Why](#why)
 - [Features](#features)
-- [OneDrive secondary admin (RELEASE-BLOCKED)](#onedrive-secondary-admin-release-blocked)
+- [OneDrive secondary admin (prerelease, pending live validation)](#onedrive-secondary-admin-prerelease-pending-live-validation)
 - [Quick start](#quick-start)
 - [Requirements](#requirements)
 - [Files the tool writes](#files-the-tool-writes)
@@ -73,13 +73,17 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **Bulk revocation across drives and across the full findings list** - revoke every finding on a set of selected targets, or every finding in the aggregate view, in one confirmed pass
 - **Multi-tenant** - manage multiple tenants from one install, switch between them (`T`), each with its own auth, scan cache, and exports; legacy single-tenant config migrates automatically
 - **Sharing-link age** (optional, per tenant) - Setup > tenant > "Enable link-date lookup" makes scans also fetch each link's Created date via CSOM (slower; one extra call per shared item). Shown as a Created column in the findings view and in CSV exports - useful when deciding whether an old link is safe to revoke
-- **OneDrive secondary-admin management** (`M`, OneDrives tab only) - add or remove the tenant's *secondary* site-collection-admin role on selected OneDrives, with typed confirmation and BEFORE/AFTER CSV evidence. **RELEASE-BLOCKED**: implemented against mocked tests only, not yet verified against a live tenant - see [Caveats](#caveats) and [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) before relying on it.
+- **OneDrive secondary-admin management** (`M`, OneDrives tab only) - add or remove the tenant's *secondary* site-collection-admin role on selected OneDrives, with typed confirmation and BEFORE/AFTER CSV evidence. **Prerelease (v1.9.0-rc.1)**: implemented against mocked tests only, pending live-tenant validation - see [Caveats](#caveats) and [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) before relying on it.
 
-## OneDrive secondary admin (RELEASE-BLOCKED)
+## OneDrive secondary admin (prerelease, pending live validation)
 
-> This feature is implemented against mocked tests only. It has **not** been
-> verified against a live tenant and must not be relied on for production
-> access changes until that verification passes - see the "Auth mode
+> This feature ships in prerelease v1.9.0-rc.1, implemented and tested
+> against mocked PnP/Graph calls only. It is available for an authorized
+> test tenant to run the deferred live validation of owner-resolution and
+> add/remove behavior; it has not yet had that validation, and it must not
+> be relied on for production access changes until it does. The stable
+> release line (v1.8.0) does not include this feature and does not move
+> until validation passes - see the "Auth mode
 > support" note below and the full [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) wiki page.
 
 ```text
@@ -170,7 +174,7 @@ Full key reference, auth trade-offs, and per-setting docs live in the [wiki](htt
 | Delegated mode: scan/revoke on a target | **Site Collection Admin** on that site or OneDrive |
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
-| OneDrive secondary-admin feature (`M`, **RELEASE-BLOCKED**) | App-only mode's registration additionally requests Graph `User.Read.All` (application) for exact UPN resolution - added to new registrations by this version; existing app-only registrations need manual re-consent (guided in-app). Delegated mode's existing default consent set already covers this (`User.ReadWrite.All`); no change needed there. Neither path's directory-lookup or mutation behavior has been verified against a live tenant yet. |
+| OneDrive secondary-admin feature (`M`, **prerelease**, see [Caveats](#caveats)) | App-only mode's registration additionally requests Graph `User.Read.All` (application) for exact UPN resolution - added to new registrations by this version; existing app-only registrations need manual re-consent (guided in-app). Delegated mode's existing default consent set already covers this (`User.ReadWrite.All`); no change needed there. Neither path's directory-lookup or mutation behavior has been verified against a live tenant yet. |
 
 Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication) in the wiki.
 
@@ -185,7 +189,7 @@ Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode (PFX on non-Windows) |
 | `SSM-Cache/<tenant-slug>/session.json` | Cached scan results (targets + findings) per tenant, for restore; contains directory data |
 | `SSM-Cache/README.txt` | Sensitivity notice for the cache directory |
-| `SSM-Exports/SSM_ADMIN_<BEFORE\|AFTER>_<operation-id>.csv` | BEFORE/AFTER evidence for OneDrive secondary-admin changes (**RELEASE-BLOCKED**, see [above](#onedrive-secondary-admin-release-blocked)) |
+| `SSM-Exports/SSM_ADMIN_<BEFORE\|AFTER>_<operation-id>.csv` | BEFORE/AFTER evidence for OneDrive secondary-admin changes (**prerelease**, see [above](#onedrive-secondary-admin-prerelease-pending-live-validation)) |
 
 ## Caveats
 
@@ -198,7 +202,7 @@ Known limitations:
 - Cleanup does not prevent new sharing - use the Sharing tab's hardening toggles for that.
 - The SharePoint admin site URL is derived from the tenant name as `https://<tenant>-admin.sharepoint.com`; tenants where the SharePoint hostname doesn't follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 - The scan cache holds one session per install directory (`SSM-Cache/session.json`, next to the script); two installs on the same machine get independent caches. Restoring it loads whatever was scanned last, which may be stale relative to the tenant's current sharing state - rescan before acting on old results. Scan-all (`X`) scans one target at a time.
-- **OneDrive secondary-admin management (`M`) is RELEASE-BLOCKED**: built and tested entirely against mocked PnP/Graph calls, per an explicit, deliberate deferral - not a failed live test. It must not be relied on for production access changes until an authorized test tenant validates owner-resolution and add/remove behavior live. See [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management).
+- **OneDrive secondary-admin management (`M`) ships in prerelease v1.9.0-rc.1**, built and tested entirely against mocked PnP/Graph calls, per an explicit, deliberate deferral - not a failed live test. It is not part of the stable release line (v1.8.0) and must not be relied on for production access changes until an authorized test tenant validates owner-resolution and add/remove behavior live. See [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management).
 
 ## References
 

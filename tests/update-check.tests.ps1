@@ -13,6 +13,20 @@ Invoke-SsmTest 'Test-SsmNewerVersion: older version returns false' {
     Assert-Equal 'False' (Test-SsmNewerVersion -Latest ([version]'1.5.9') -Current ([version]'1.6.0'))
 }
 
+Invoke-SsmTest 'Test-SsmNewerVersion: stable release is newer than a prerelease of the same number' {
+    Assert-Equal 'True' (Test-SsmNewerVersion -Latest ([semver]'1.9.0') -Current ([semver]'1.9.0-rc.1'))
+}
+
+Invoke-SsmTest 'Test-SsmNewerVersion: older stable release does not update a newer prerelease' {
+    Assert-Equal 'False' (Test-SsmNewerVersion -Latest ([semver]'1.8.0') -Current ([semver]'1.9.0-rc.1'))
+}
+
+Invoke-SsmTest 'Get-SsmLatestVersion parses a prerelease tag_name' {
+    function Invoke-RestMethod { param($Uri, $Headers, $TimeoutSec) @{ tag_name = 'v1.9.0-rc.1' } }
+    $r = Get-SsmLatestVersion
+    Assert-Equal '1.9.0-rc.1' $r
+}
+
 Invoke-SsmTest 'Get-SsmLatestVersion parses v-prefixed tag_name' {
     function Invoke-RestMethod { param($Uri, $Headers, $TimeoutSec) @{ tag_name = 'v1.7.0' } }
     $r = Get-SsmLatestVersion

@@ -2,20 +2,28 @@
 
 ## [Unreleased]
 
+## [1.9.0-rc.1] - 2026-09-07
+
 - Add: OneDrive secondary-admin management (`M`, OneDrives tab only) - add
   or remove the tenant's secondary site-collection-admin role on selected
   OneDrives, with directory UPN resolution, per-target preflight preview,
   typed `ADDADMIN`/`REMOVEADMIN` confirmation, and
   `SSM_ADMIN_<BEFORE|AFTER>_<operation-id>.csv` evidence.
-  **RELEASE-BLOCKED**: implemented and tested entirely with mocked PnP/Graph
-  calls, by explicit deliberate deferral - no live tenant, sign-in, or
-  credential was used, and owner-resolution/mutation behavior is not yet
-  verified against a real tenant. App-only registration now additionally
-  requests Graph `User.Read.All` (application) for exact UPN lookup;
-  delegated mode needs no change (its existing default consent set already
-  covers this). See the wiki's
+  **PRERELEASE**: this is a release candidate, published so an authorized
+  test tenant can validate owner-resolution and add/remove behavior live -
+  it has not yet had that live validation, and the stable release line
+  (currently v1.8.0) stays put until it does. App-only registration now
+  additionally requests Graph `User.Read.All` (application) for exact UPN
+  lookup; delegated mode needs no change (its existing default consent set
+  already covers this). See the wiki's
   [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management)
   page.
+- Change: `.github/workflows/release.yml` now tags a release as a GitHub
+  prerelease (`--prerelease --latest=false`) when the pushed tag has a
+  `-suffix` (e.g. `v1.9.0-rc.1`), so it never displaces the "Latest" stable
+  release; it also uses `gh release edit`/`gh release view` to decide
+  create-vs-upload instead of relying on upload failure to imply "doesn't
+  exist yet".
 
 ## [1.8.0] - 2026-08-21
 
