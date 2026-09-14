@@ -598,6 +598,7 @@ function Show-HelpModal {
         @($t.Row, '  U                    add a URL                     I  import CSV'),
         @($t.Row, '  Enter                open target / drill into findings'),
         @($t.Row, '  R                    revoke all findings on selected targets'),
+        @($t.Row, '  C                    clear the list and reload it from the tenant'),
         @($t.Row, '  L                    restore the saved scan session'),
         @($t.Row, '  E                    export current view to CSV'),
         @($t.Row, '  M                    manage secondary admin (OneDrives only): List is read-only'),

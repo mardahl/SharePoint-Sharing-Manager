@@ -127,6 +127,19 @@ function Invoke-TargetsKey {
             Invoke-BulkRevoke -Findings $findings -Tab $Tab
             return
         }
+        'C' {
+            if (@($Tab['Items']).Count -eq 0) { Invoke-TabEnumerate -Tab $Tab; return }
+            $ok = Show-ConfirmModal -Title 'Clear and reload' -Lines @(
+                ('Discard {0} {1} and their scan results from the list and the' -f @($Tab['Items']).Count, $Tab['Noun']),
+                'session cache, then enumerate the tenant again?') -Danger
+            if (-not $ok) { return }
+            $Tab['Items'] = @(); $Tab['Loaded'] = $false; $Tab['CachedAt'] = $null
+            Update-TabView -Tab $Tab
+            Save-SsmCache
+            Write-SsmLog -Message ("Cleared {0} list; re-enumerating." -f $Tab['Noun'])
+            Invoke-TabEnumerate -Tab $Tab
+            return
+        }
         'L' {
             if (-not $script:UI.RestoreInfo) { Show-MsgModal -Title 'Restore' -Lines @('No saved session cache to restore.'); return }
             if (Restore-SsmCache) {

@@ -23,6 +23,11 @@ Invoke-SsmTest 'Add-TargetsToTab dedupes by URL' {
     Add-TargetsToTab -Tab $tab -Targets @((New-Target -Url 'https://a'), (New-Target -Url 'https://a/'), (New-Target -Url 'https://b'))
     Assert-Equal 2 @($tab.Items).Count
 }
+Invoke-SsmTest 'Add-TargetsToTab clears the from-cache marker' {
+    $tab = @{ Items = @(); View = @(); Cursor = 0; Search=''; Filter='All'; SortCol='Url'; SortDesc=$false; CachedAt='2026-01-01T00:00:00' }
+    Add-TargetsToTab -Tab $tab -Targets @((New-Target -Url 'https://a'))
+    Assert-Equal '' ([string]$tab.CachedAt)
+}
 Invoke-SsmTest 'Get-TabFindings flattens findings across targets' {
     $tab = @{ Items = @(
         @{ Url='https://x/a'; Findings=@([pscustomobject]@{ Site='https://x/a'; Name='f1' }) },

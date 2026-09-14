@@ -1,3 +1,13 @@
+Invoke-SsmTest 'Get-FooterBar keeps ? and Q visible when the width is too small for every hint' {
+    $hints = @(@('Spc','select'),@('A','all'),@('N','none'),@('S','scan'),@('X','scan all'),@('?','help'),@('Q','quit'))
+    $bar = Get-FooterBar -Hints $hints -Width 30
+    $plain = $bar -replace "`e\[[0-9;]*m", ''
+    Assert-Equal 'True' ([string]($plain -match ' \? help '))
+    Assert-Equal 'True' ([string]($plain -match ' Q quit '))
+    Assert-Equal 'False' ([string]($plain -match 'scan all'))
+    Assert-Equal 30 $plain.Length
+}
+
 Invoke-SsmTest 'Update-TabView on an empty tab does not throw (regression)' {
     $tab = @{ Items = @(); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @() }
     Update-TabView -Tab $tab

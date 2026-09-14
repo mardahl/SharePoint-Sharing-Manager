@@ -52,6 +52,7 @@ Once anything is scanned, the status line above the target list always shows a r
 | `U` | Add URL |
 | `I` | Import CSV |
 | `Enter` | Open/load |
+| `C` | Clear the list and reload it from the tenant (Y/N confirm; discards scan results for the tab) |
 | `L` | Restore the saved scan session |
 | `E` | Export |
 
@@ -83,7 +84,7 @@ Revoked links and grants cannot be restored from within the tool. Review the BEF
 
 ## Scan cache
 
-Enumerated target lists and scan results are cached per tenant in `SSM-Cache/<tenant-slug>/session.json` and survive a restart; `L` restores the saved session on demand. The cache holds one session per install directory, so two installs on the same machine get independent caches. A restored session may be stale relative to the tenant's current sharing state; rescan before acting on old results. The cache contains directory data, so treat the directory accordingly.
+Enumerated target lists and scan results are cached per tenant in `SSM-Cache/<tenant-slug>/session.json` and survive a restart; `L` restores the saved session on demand. The cache holds one session per install directory, so two installs on the same machine get independent caches. When the list on screen came from the cache, the status line above it reads `from cache (saved <date>, C reloads)`. A restored session may be stale relative to the tenant's current sharing state; rescan before acting on old results, or press `C` to discard the list and enumerate the tenant afresh. The cache contains directory data, so treat the directory accordingly.
 
 ## Sharing-link age (optional)
 

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Add: the Sites/OneDrives status line shows `from cache (saved <date>,
+  C reloads)` whenever the list on screen was restored from
+  `session.json`, so a stale list is never mistaken for a fresh one.
+- Add: `C` on the Sites/OneDrives tabs clears the list (Y/N confirm),
+  drops it from the session cache, and re-enumerates the tenant.
+- Fix: the footer key bar always shows `? help` and `Q quit`; on narrow
+  terminals the middle hints are trimmed instead.
+
 ## [1.9.0-rc.2] - 2026-09-14
 
 - Fix: target enumeration (`Enter` / Scan all on an empty Sites or

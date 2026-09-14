@@ -50,6 +50,7 @@ function ConvertFrom-SsmCacheObject {
         }
         $tab['Items'] = @($items)
         $tab['Loaded'] = $true
+        $tab['CachedAt'] = [string]$Cache.SavedAt
     }
 }
 

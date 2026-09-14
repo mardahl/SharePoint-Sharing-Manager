@@ -149,6 +149,11 @@ function Add-TargetsView {
         $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f $done.Count, @($done | Where-Object { $_.FindingCount -eq 0 }).Count, @($done | Where-Object { $_.FindingCount -gt 0 }).Count, $totalFindings)
     }
     if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + $Tab['Search'] + '"') }
+    if ($Tab['CachedAt']) {
+        $saved = $Tab['CachedAt']
+        try { $saved = ([datetime]$Tab['CachedAt']).ToString('yyyy-MM-dd HH:mm') } catch { }
+        $ctx += ('   from cache (saved {0}, C reloads)' -f $saved)
+    }
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)
 
     $col = Get-TargetsLayout -W $W
@@ -1176,7 +1181,7 @@ function Get-TabHints {
             $base = @(@('Spc','select'),@('A','all'),@('N','none'),@('/','find'),@('F','filter'),
                      @('S','scan'),@('X','scan all'),@('T','rules'),@('G','all findings'),
                      @('R','revoke selected'),@('U','add url'),@('I','import csv'),
-                     @('Enter','open/load'),@('L','restore'),@('E','export'))
+                     @('Enter','open/load'),@('C','reload'),@('L','restore'),@('E','export'))
             if ($Tab['OneDrive']) { $base += ,@('M','manage admins') }
             return $base + @(@('?','help'),@('Q','quit'))
         }

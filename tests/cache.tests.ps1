@@ -29,6 +29,7 @@ Invoke-SsmTest 'Cache round-trips a target and finding' {
     Assert-Equal 'False' $dstTabs[0].Items[0].Findings[0].Selected   # reset on restore
     Assert-Equal 'True'  $dstTabs[0].Loaded
     Assert-Equal 'OrgLink' $dstTabs[0].Categories[0]
+    Assert-Equal ([string]$back.SavedAt) $dstTabs[0].CachedAt   # list marked as coming from cache
 }
 
 Invoke-SsmTest 'Save then restore via disk round-trips' {

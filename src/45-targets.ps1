@@ -38,6 +38,7 @@ function Add-TargetsToTab {
     }
     $Tab['Items'] = @($items)
     $Tab['Loaded'] = $true
+    $Tab['CachedAt'] = $null
     if (Get-Command Update-TabView -ErrorAction SilentlyContinue) { Update-TabView -Tab $Tab }
     # Persist the target list so a restart does not force a full re-enumeration.
     if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }

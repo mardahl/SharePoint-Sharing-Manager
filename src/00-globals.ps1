@@ -81,6 +81,7 @@ function New-TargetsTab {
         Items     = @()            # target objects (see New-Target in 45-targets)
         View      = @()
         Loaded    = $false
+        CachedAt  = $null          # cache SavedAt when Items came from session.json, else $null
         Cursor    = 0
         Scroll    = 0
         Search    = ''

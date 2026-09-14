@@ -44,12 +44,28 @@ function Get-StatusBadge {
 
 function Get-FooterBar {
     # Render key hints: array of @(key,label) pairs, truncated to width.
-    param([object[]]$Hints, [int]$Width)
+    # The last -Pinned entries (help/quit) are always drawn: their width is
+    # reserved first, the rest fill whatever is left in order.
+    param([object[]]$Hints, [int]$Width, [int]$Pinned = 2)
     $t = $script:T
     $sb = New-Object System.Text.StringBuilder
     [void]$sb.Append($t.FootBg)
+    $hints = @($Hints)
+    if ($Pinned -gt $hints.Count) { $Pinned = $hints.Count }
+    $tail = @($hints | Select-Object -Last $Pinned)
+    $head = @($hints | Select-Object -First ($hints.Count - $Pinned))
+    $reserve = 0
+    foreach ($pair in $tail) { $reserve += (' ' + [string]$pair[0] + ' ' + [string]$pair[1] + ' ').Length }
     $plainLen = 0
-    foreach ($pair in $Hints) {
+    $limit = $Width - $reserve
+    foreach ($pair in $head) {
+        $k = [string]$pair[0]; $l = [string]$pair[1]
+        $piece = ' ' + $k + ' ' + $l + ' '
+        if (($plainLen + $piece.Length) -gt $limit) { break }
+        [void]$sb.Append($t.FootKey).Append(' ').Append($k).Append($t.FootTxt).Append(' ').Append($l).Append(' ')
+        $plainLen += $piece.Length
+    }
+    foreach ($pair in $tail) {
         $k = [string]$pair[0]; $l = [string]$pair[1]
         $piece = ' ' + $k + ' ' + $l + ' '
         if (($plainLen + $piece.Length) -gt $Width) { break }
