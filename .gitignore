@@ -14,3 +14,6 @@ Thumbs.db
 .worktrees/
 .superpowers/
 SSM-Cache/
+
+# Local clone of the GitHub wiki remote
+wiki-remote/

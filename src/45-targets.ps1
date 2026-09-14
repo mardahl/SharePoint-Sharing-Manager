@@ -39,18 +39,37 @@ function Add-TargetsToTab {
     $Tab['Items'] = @($items)
     $Tab['Loaded'] = $true
     if (Get-Command Update-TabView -ErrorAction SilentlyContinue) { Update-TabView -Tab $Tab }
+    # Persist the target list so a restart does not force a full re-enumeration.
+    if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
 }
 
 function Get-TenantTargets {
     # Enumerate site collections via the tenant admin connection.
     # OneDrive tab: personal sites (SPSPERS template); Sites tab: everything else.
-    param([bool]$OneDrive)
+    # -Progress: scriptblock invoked after each server page with the running
+    # site count, so the caller can show real progress instead of a spinner.
+    param([bool]$OneDrive, [scriptblock]$Progress)
     if (-not (Connect-SsmAdmin)) { return @() }
-    # -Detailed is required for LockState to be populated reliably; without it
+    # Same paged CSOM loop Get-PnPTenantSite runs internally, unrolled so we can
+    # report per page (the cmdlet buffers every page and returns once at the end).
+    # IncludeDetail is required for LockState to be populated reliably; without it
     # the property comes back uninitialized. LockState 'Unlock' = accessible;
     # anything else (NoAccess/ReadOnly/NoAdditions) is a locked or deprovisioned
     # site that would only 403 on scan, so filter it out here.
-    $sites = @(Get-PnPTenantSite -IncludeOneDriveSites:$OneDrive -Detailed -ErrorAction Stop)
+    $ctx = Get-PnPContext
+    $tenant = New-Object Microsoft.Online.SharePoint.TenantAdministration.Tenant($ctx)
+    $filter = New-Object Microsoft.Online.SharePoint.TenantAdministration.SPOSitePropertiesEnumerableFilter
+    $filter.IncludePersonalSite = $OneDrive ? [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::Include : [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::UseServerDefault
+    $filter.IncludeDetail = $true
+    $sites = [System.Collections.ArrayList]::new()
+    do {
+        $page = $tenant.GetSitePropertiesFromSharePointByFilters($filter)
+        $ctx.Load($page)
+        Invoke-PnPQuery -ErrorAction Stop
+        foreach ($p in $page) { [void]$sites.Add($p) }
+        $filter.StartIndex = $page.NextStartIndexFromSharePoint
+        if ($Progress) { & $Progress $sites.Count }
+    } while (-not [string]::IsNullOrWhiteSpace($page.NextStartIndexFromSharePoint))
     $out = @()
     $locked = 0
     foreach ($s in $sites) {

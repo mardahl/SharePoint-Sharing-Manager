@@ -208,6 +208,42 @@ Invoke-SsmTest 'Resolve-SsmDirectoryUser accepts and trims ordinary leading/trai
     Assert-Equal '22222222-2222-2222-2222-222222222222' $r.Id
 }
 
+Invoke-SsmTest 'DIAGNOSTICS: Resolve-SsmDirectoryUser logs the original ErrorRecord (Graph error body, not just the wrapped message)' {
+    # Regression: the directory-lookup catch wraps the exception into a
+    # short "throw " string, discarding the rich Graph error body
+    # (ErrorDetails.Message) entirely. This loads the real logger (not the
+    # test-runner's no-op stub) and asserts the full original error body
+    # reached the log before the short wrapped message was thrown.
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+    function Get-SsmConnectionTenantId { param($Connection) [guid]'11111111-1111-1111-1111-111111111111' }
+    function Invoke-PnPGraphMethod {
+        param($Method, $Url, $Connection, $ErrorAction)
+        $err = New-Object System.Management.Automation.ErrorRecord(
+            [Exception]::new('Graph request failed'), 'GraphError',
+            [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+        $err.ErrorDetails = [System.Management.Automation.ErrorDetails]::new(
+            '{"error":{"code":"AccessDenied","message":"resolve-diagnostics-json-body-probe"}}')
+        throw $err
+    }
+    $caught = $false
+    try {
+        Resolve-SsmDirectoryUser -Upn 'admin@contoso.com' `
+            -TenantId '11111111-1111-1111-1111-111111111111' -Connection @{} | Out-Null
+    } catch { $caught = $true }
+    Assert-Equal $true $caught
+    $errLines = @($script:LogBuffer | Where-Object { $_.Level -eq 'ERROR' })
+    if (-not ($errLines | Where-Object { $_.Message -like '*resolve-diagnostics-json-body-probe*' })) {
+        throw "original Graph error body was not logged; buffer: $(($errLines | ForEach-Object { $_.Message }) -join ' | ')"
+    }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Get-SsmConnectionTenantId
 # ---------------------------------------------------------------------------
@@ -404,7 +440,18 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState binds the owner-bearing drive via pagi
         Assert-Equal $false $s.AdminPresent
         Assert-Equal $true ($script:pageCalls -eq 2)
         Assert-Equal $true ($script:capturedGraphUrl -like 'sites/contoso-my.sharepoint.com,44444444-4444-4444-4444-444444444444,66666666-6666-6666-6666-666666666666/drives*')
-        Assert-Equal $true (@($script:capturedIncludes) -contains 'AadObjectId.NameId')
+        # AadObjectId must be requested as a bare top-level scalar - PnP.PowerShell's
+        # CSOM query translator (ClientContext.LoadQuery) throws
+        # InvalidQueryExpressionException ("The query expression is not
+        # supported.") for a dotted nested path through a ClientValueObject
+        # such as AadObjectId.NameId/.NameIdIssuer, even though the cmdlet's
+        # -Includes ValidateSet lists those dotted names as accepted strings
+        # (see tests/onedrive-admin-csom.ps1 for the live CSOM-translator
+        # proof). Requesting the parent AadObjectId scalar alone already
+        # hydrates all of its own fields (NameId/NameIdIssuer/TypeId).
+        Assert-Equal $true (@($script:capturedIncludes) -contains 'AadObjectId')
+        Assert-Equal $false (@($script:capturedIncludes) -contains 'AadObjectId.NameId')
+        Assert-Equal $false (@($script:capturedIncludes) -contains 'AadObjectId.NameIdIssuer')
         Assert-Equal $true (@($script:capturedIncludes) -contains 'UserPrincipalName')
     } finally {
         Remove-Variable -Scope Script -Name pageCalls, capturedGraphUrl, capturedIncludes -ErrorAction SilentlyContinue
@@ -578,6 +625,46 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState reports AdminPresent=$null (not $false
     Assert-Equal 'Blocked' $decision
 }
 
+Invoke-SsmTest 'DIAGNOSTICS: Get-SsmOneDriveAdminState logs the original ErrorRecord (Graph error body, not just the wrapped message) for a drive-read failure' {
+    # Regression: the drive-listing catch previously threw only
+    # "$($_.Exception.Message)", discarding ErrorDetails/inner-exception
+    # detail entirely. Loads the real logger to assert the full original
+    # error body reached the log before the short wrapped message is thrown.
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+    $identity = @{ Id = [guid]'22222222-2222-2222-2222-222222222222'; Upn = 'user@contoso.com'; TenantId = [guid]'11111111-1111-1111-1111-111111111111' }
+    function Get-SsmConnectionTenantId { param($Connection) [guid]'11111111-1111-1111-1111-111111111111' }
+    function Connect-SsmAdmin { $true }
+    function Get-PnPConnection { @{ Url = 'https://contoso-admin.sharepoint.com' } }
+    function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
+    function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
+    function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Invoke-PnPGraphMethod {
+        param($Method, $Url, $Connection, $ErrorAction)
+        $err = New-Object System.Management.Automation.ErrorRecord(
+            [Exception]::new('Graph request failed'), 'GraphError',
+            [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+        $err.ErrorDetails = [System.Management.Automation.ErrorDetails]::new(
+            '{"error":{"code":"ServiceUnavailable","message":"drivestate-diagnostics-json-body-probe"}}')
+        throw $err
+    }
+    $caught = $false
+    try {
+        Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{} | Out-Null
+    } catch { $caught = $true }
+    Assert-Equal $true $caught
+    $errLines = @($script:LogBuffer | Where-Object { $_.Level -eq 'ERROR' })
+    if (-not ($errLines | Where-Object { $_.Message -like '*drivestate-diagnostics-json-body-probe*' })) {
+        throw "original Graph error body was not logged; buffer: $(($errLines | ForEach-Object { $_.Message }) -join ' | ')"
+    }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Invoke-SsmOneDriveAdminChange
 # ---------------------------------------------------------------------------
@@ -715,6 +802,33 @@ Invoke-SsmTest 'A resolver failure during revalidation stops the whole batch, no
     $result = Invoke-SsmOneDriveAdminChange -Action Remove -Identity $f.Candidate -Snapshot $f.Preview -Connection 'c'
     Assert-Equal 'Blocked' $result.Result
     Assert-Equal $true $result.StopBatch
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: a revalidation failure inside Invoke-SsmOneDriveAdminChange logs the original exception, not only the stringified Detail' {
+    # Regression for the swallowed-error bug: the mutation function only
+    # ever surfaced $_.Exception.Message inside a Detail string. This test
+    # loads the real logger (not the test-runner's no-op stub) so it can
+    # assert the full original error - type, message, stack trace - reached
+    # the log, matching what Write-SsmErrorLog produces at every other
+    # boundary in this file.
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+        $f = New-SsmChangeFixture
+        function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) throw 'account not found: revalidation-diagnostics-probe' }
+        function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) throw 'must not be called' }
+        function Remove-PnPSiteCollectionAdmin { param($Owners, $Connection, $ErrorAction) throw 'must not be called' }
+        $result = Invoke-SsmOneDriveAdminChange -Action Remove -Identity $f.Candidate -Snapshot $f.Preview -Connection 'c'
+        Assert-Equal 'Blocked' $result.Result
+        $errLines = @($script:LogBuffer | Where-Object { $_.Level -eq 'ERROR' })
+        if (-not ($errLines | Where-Object { $_.Message -like '*revalidation-diagnostics-probe*' })) {
+            throw "original exception was not logged; buffer: $(($errLines | ForEach-Object { $_.Message }) -join ' | ')"
+        }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
 }
 
 Invoke-SsmTest 'A stale target (SiteId changed since preview) blocks only this target, no write' {

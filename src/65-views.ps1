@@ -324,15 +324,26 @@ function Invoke-TabScan {
     Update-TabView -Tab $Tab
 }
 
+function Invoke-TabEnumerate {
+    # Enumerate tenant targets into an empty tab with a live progress modal.
+    # Connect + first page is a blocking call, so a background spinner covers
+    # the gap; after that the modal updates once per server page.
+    param($Tab)
+    $label = $Tab['OneDrive'] ? 'Loading OneDrives...' : 'Loading sites...'
+    Start-LoadSpinner
+    Write-ProgressModal -Title 'Enumerating tenant' -Done 0 -Total 0 -Label $label -Ok 0 -Failed 0
+    $cb = { param($n) Write-ProgressModal -Title 'Enumerating tenant' -Done $n -Total 0 -Label $label -Ok 0 -Failed 0 }.GetNewClosure()
+    try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] -Progress $cb } finally { Stop-LoadSpinner }
+    Add-TargetsToTab -Tab $Tab -Targets $targets
+    $script:UI.Dirty = $true
+}
+
 function Invoke-TabScanAll {
     # Enumerate if empty, then scan every NotScanned target. Cache is saved
     # after each target by Invoke-TabScan, so an interrupted run resumes.
     param($Tab)
     if (-not $Tab['Loaded'] -or @($Tab['Items']).Count -eq 0) {
-        Start-LoadSpinner
-        Write-ProgressModal -Title 'Enumerating tenant' -Done 0 -Total 0 -Label ($Tab['OneDrive'] ? 'Loading OneDrives...' : 'Loading sites...') -Ok 0 -Failed 0
-        try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] } finally { Stop-LoadSpinner }
-        Add-TargetsToTab -Tab $Tab -Targets $targets
+        Invoke-TabEnumerate -Tab $Tab
     }
     $items = @($Tab['Items'])
     if ($items.Count -eq 0) {
@@ -775,6 +786,91 @@ function New-SsmOneDriveAdminRow {
     }
 }
 
+function Invoke-SsmOneDriveAdminList {
+    # Read-only List action: every current site collection admin, grouped by
+    # target, for the frozen selection. No UPN prompt, no confirmation, no
+    # CSV/snapshot export, no directory/Graph lookups - Title/UPN/login and
+    # the Entra object id (when the membership query resolves it) are shown
+    # exactly as the site reports them. Unresolved principals stay visible;
+    # nothing is guessed or hidden. A failure on one target logs and moves
+    # on to the rest.
+    param($Targets)
+
+    $state = @{ LastTick = 0; Offset = 0; Total = $Targets.Count; Cancel = $false }
+    $cb = New-SsmProgressCallback -Title 'Listing OneDrive Admins' -State $state -CancelMode 'Flag'
+
+    $lines = New-Object System.Collections.ArrayList
+    $done = 0
+    $notListed = 0
+    foreach ($tgt in $Targets) {
+        if ($state.Cancel) { $notListed++; continue }
+        $done++
+        & $cb $done $Targets.Count (ConvertTo-SsmSafeDisplay $tgt.Title) $done 0
+        # Cancel may also be raised synchronously inside the callback above
+        # (matching the real Esc-then-confirm flow) - re-check before this
+        # target is connected to or read, so a cancel noticed mid-callback
+        # still stops before any further work, not just on the next loop turn.
+        if ($state.Cancel) { $notListed++; continue }
+        [void]$lines.Add(('{0}  {1}' -f (ConvertTo-SsmSafeDisplay $tgt.Title), (ConvertTo-SsmSafeDisplay $tgt.Url)))
+
+        if (-not (Connect-SsmSite -Url $tgt.Url)) {
+            Write-SsmLog -Message "Invoke-SsmOneDriveAdminList: site connection failed for target '$($tgt.Url)'" -Level WARN
+            [void]$lines.Add('    -> site connection failed')
+            [void]$lines.Add('')
+            continue
+        }
+        # Explicit per-site connection, verified bound to the exact target
+        # URL - never an imported/cached one - before the membership read is
+        # trusted, matching Get-SsmOneDriveAdminState's own guard.
+        $siteConn = Get-PnPConnection
+        $connUrl = Get-SsmFieldValue -InputObject $siteConn -Name 'Url'
+        if ($connUrl -and ([string]$connUrl).TrimEnd('/') -ne ([string]$tgt.Url).TrimEnd('/')) {
+            Write-SsmLog -Message "Invoke-SsmOneDriveAdminList: connection bound to '$connUrl', not target '$($tgt.Url)'" -Level WARN
+            [void]$lines.Add('    -> connection did not match target URL')
+            [void]$lines.Add('')
+            continue
+        }
+
+        try {
+            $admins = @(Get-SsmOneDriveAdmins -Connection $siteConn)
+        } catch {
+            Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdminList: admin read failed for target '$($tgt.Url)'" -ErrorRecord $_
+            [void]$lines.Add(('    -> admin read failed: {0}' -f (ConvertTo-SsmSafeDisplay $_.Exception.Message)))
+            [void]$lines.Add('')
+            continue
+        }
+
+        if (@($admins).Count -eq 0) {
+            [void]$lines.Add('    -> no administrators found')
+            [void]$lines.Add('')
+            continue
+        }
+        foreach ($a in $admins) {
+            $title = [string](Get-SsmFieldValue -InputObject $a -Name 'Title')
+            $upn = [string](Get-SsmFieldValue -InputObject $a -Name 'UserPrincipalName')
+            $login = [string](Get-SsmFieldValue -InputObject $a -Name 'LoginName')
+            $objId = $null
+            $aadObj = Get-SsmFieldValue -InputObject $a -Name 'AadObjectId'
+            if ($aadObj) {
+                $nameId = Get-SsmFieldValue -InputObject $aadObj -Name 'NameId'
+                if ($nameId) { $objId = [string]$nameId }
+            }
+            $parts = New-Object System.Collections.Generic.List[string]
+            if ($title) { [void]$parts.Add((ConvertTo-SsmSafeDisplay $title)) } else { [void]$parts.Add('(unresolved)') }
+            if ($upn) { [void]$parts.Add("<$(ConvertTo-SsmSafeDisplay $upn)>") }
+            if ($login) { [void]$parts.Add("[$(ConvertTo-SsmSafeDisplay $login)]") }
+            if ($objId) { [void]$parts.Add("{$(ConvertTo-SsmSafeDisplay $objId)}") }
+            [void]$lines.Add('    - ' + ($parts -join ' '))
+        }
+        [void]$lines.Add('')
+    }
+    if ($notListed -gt 0) {
+        [void]$lines.Add("Cancelled by operator; $notListed target(s) were not listed.")
+    }
+
+    Show-ReportModal -Title 'Current OneDrive Site Collection Admins' -Lines $lines.ToArray()
+}
+
 function Invoke-SsmOneDriveAdmin {
     # Sole UI entry point for OneDrive secondary-admin management. Consumes
     # Task 2/3's validation, preflight and guarded-mutation primitives
@@ -799,8 +895,13 @@ function Invoke-SsmOneDriveAdmin {
     }
 
     $action = Show-ListModal -Title 'Manage Secondary Admin' `
-        -Prompt 'Choose an operation' -Options @('Add', 'Remove')
+        -Prompt 'Choose an operation' -Options @('List', 'Add', 'Remove')
     if (-not $action) { return }
+
+    if ($action -eq 'List') {
+        Invoke-SsmOneDriveAdminList -Targets $targets
+        return
+    }
 
     $enteredUpn = Show-InputModal -Title 'Secondary Admin Account' `
         -Prompt 'Enter the account UPN'
@@ -821,6 +922,7 @@ function Invoke-SsmOneDriveAdmin {
     try {
         $tenantId = Get-SsmConnectionTenantId -Connection $adminConn
     } catch {
+        Write-SsmErrorLog -Context 'Invoke-SsmOneDriveAdmin: tenant identity lookup failed' -ErrorRecord $_
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Could not determine the tenant identity - no changes were made:',
             (ConvertTo-SsmSafeDisplay $_.Exception.Message)) -Kind Error
@@ -833,6 +935,7 @@ function Invoke-SsmOneDriveAdmin {
     try {
         $identity = Resolve-SsmDirectoryUser -Upn $trimmedUpn -TenantId $tenantId -Connection $adminConn
     } catch {
+        Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdmin: account validation failed for '$trimmedUpn'" -ErrorRecord $_
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Account validation failed - no changes were made:',
             (ConvertTo-SsmSafeDisplay $_.Exception.Message)) -Kind Error
@@ -854,6 +957,7 @@ function Invoke-SsmOneDriveAdmin {
             $row.Result = 'Blocked'; $row.Classification = 'Failed'
             $row.Error = 'site connection failed'
             $row.ResultTimestampUtc = Get-SsmUtcNowStamp
+            Write-SsmLog -Message "Invoke-SsmOneDriveAdmin: site connection failed for target '$($tgt.Url)'" -Level WARN
             [void]$rows.Add($row)
             continue
         }
@@ -864,6 +968,7 @@ function Invoke-SsmOneDriveAdmin {
             $row.Result = 'Blocked'; $row.Classification = 'Failed'
             $row.Error = "preflight read failed: $($_.Exception.Message)"
             $row.ResultTimestampUtc = Get-SsmUtcNowStamp
+            Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdmin: preflight read failed for target '$($tgt.Url)'" -ErrorRecord $_
             [void]$rows.Add($row)
             continue
         }
@@ -902,20 +1007,37 @@ function Invoke-SsmOneDriveAdmin {
     [void]$lines.Add('')
     foreach ($row in $rows) {
         [void]$lines.Add(('[{0}] {1}  {2}' -f $row.Classification, (ConvertTo-SsmSafeDisplay $row.TargetUrl), (ConvertTo-SsmSafeDisplay $row.Title)))
+        if (($row.Classification -eq 'Failed' -or $row.Classification -eq 'Blocked') -and $row.Error) {
+            [void]$lines.Add(('    -> {0}' -f (ConvertTo-SsmSafeDisplay $row.Error)))
+        }
     }
     [void]$lines.Add('')
     [void]$lines.Add(('Selected: {0}   Eligible: {1}   No-op: {2}   Blocked: {3}   Failed: {4}' `
         -f $rows.Count, $eligible.Count, $noopCount, $blockedCount, $failedCount))
 
     if ($eligible.Count -eq 0) {
-        # Nothing destructive to confirm - still write both evidence reports.
-        Show-ReportModal -Title 'Manage Secondary Admin' -Lines $lines.ToArray()
+        # Nothing destructive to confirm - still write both evidence reports,
+        # and only ever claim a path was saved once the export call actually
+        # returned it - a failed export must never be reported as saved.
+        foreach ($row in $rows) {
+            $detail = if ($row.Error) { " - $(ConvertTo-SsmSafeDisplay $row.Error)" } else { '' }
+            Write-SsmLog -Message ("Manage Secondary Admin: action={0} target={1} result={2}{3}" `
+                -f $action, $row.TargetUrl, $row.Result, $detail)
+        }
+        $beforePath = $null; $afterPath = $null; $exportError = $null
         try {
-            [void](Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase BEFORE)
-            [void](Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER)
+            $beforePath = Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase BEFORE
+            $afterPath = Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER
         } catch {
+            $exportError = $_
+            Write-SsmErrorLog -Context 'Invoke-SsmOneDriveAdmin: zero-eligible evidence export failed' -ErrorRecord $_
+        }
+        if ($beforePath) { [void]$lines.Add("BEFORE evidence saved: $beforePath") }
+        if ($afterPath) { [void]$lines.Add("AFTER evidence saved: $afterPath") }
+        Show-ReportModal -Title 'Manage Secondary Admin' -Lines $lines.ToArray()
+        if ($exportError) {
             Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
-                'Evidence export failed:', (ConvertTo-SsmSafeDisplay $_.Exception.Message)) -Kind Error
+                'Evidence export failed:', (ConvertTo-SsmSafeDisplay $exportError.Exception.Message)) -Kind Error
         }
         return
     }
@@ -924,17 +1046,22 @@ function Invoke-SsmOneDriveAdmin {
     if (-not (Show-TypedConfirmModal -Title 'Confirm Admin Change' -Lines $lines.ToArray() -Word $word)) { return }
 
     # BEFORE, then the initial AFTER (all rows NotAttempted/terminal), must
-    # both succeed before the first mutation.
+    # both succeed before the first mutation. Actual saved paths are kept so
+    # the completion report can show real evidence locations, not an assumed
+    # or fabricated one.
+    $beforePath = $null; $afterPath = $null
     try {
-        [void](Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase BEFORE)
+        $beforePath = Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase BEFORE
     } catch {
+        Write-SsmErrorLog -Context 'Invoke-SsmOneDriveAdmin: BEFORE evidence export failed' -ErrorRecord $_
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Could not write BEFORE evidence - no changes were made:', (ConvertTo-SsmSafeDisplay $_.Exception.Message)) -Kind Error
         return
     }
     try {
-        [void](Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER)
+        $afterPath = Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER
     } catch {
+        Write-SsmErrorLog -Context 'Invoke-SsmOneDriveAdmin: initial AFTER evidence export failed' -ErrorRecord $_
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Could not write initial AFTER evidence - no changes were made:', (ConvertTo-SsmSafeDisplay $_.Exception.Message)) -Kind Error
         return
@@ -988,8 +1115,9 @@ function Invoke-SsmOneDriveAdmin {
             }
 
             try {
-                [void](Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER)
+                $afterPath = Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER
             } catch {
+                Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdmin: post-mutation AFTER evidence export failed for target '$($row.TargetUrl)'" -ErrorRecord $_
                 $stopped = $true
                 $stopReason = "evidence write failed: $($_.Exception.Message)"
             }
@@ -1002,16 +1130,34 @@ function Invoke-SsmOneDriveAdmin {
         Stop-LoadSpinner
     }
     # Final flush so Cancelled/stopped reasons on untouched rows are durable.
-    try { [void](Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER) } catch {}
+    # A failure here must be visible in the completion report, not only
+    # logged - the operator needs to know the last AFTER evidence write may
+    # be stale/incomplete, not silently assume it succeeded.
+    $finalFlushError = $null
+    try {
+        $afterPath = Export-SsmAdminCsv -Rows $rows -OperationId $operationId -Phase AFTER
+    } catch {
+        Write-SsmErrorLog -Context 'Invoke-SsmOneDriveAdmin: final AFTER evidence flush failed' -ErrorRecord $_
+        $finalFlushError = $_.Exception.Message
+    }
 
     $summary = New-Object System.Collections.ArrayList
     [void]$summary.Add(("Processed {0} of {1} eligible target(s)." -f $processed, $eligible.Count))
     if ($state.Cancel) { [void]$summary.Add('Cancelled by operator; remaining eligible targets were not processed.') }
     elseif ($stopped) { [void]$summary.Add("Stopped: $(ConvertTo-SsmSafeDisplay $stopReason)") }
+    if ($finalFlushError) {
+        [void]$summary.Add("Evidence flush failed - the last AFTER evidence write may be stale: $(ConvertTo-SsmSafeDisplay $finalFlushError)")
+    }
+    if ($beforePath) { [void]$summary.Add("BEFORE evidence saved: $beforePath") }
+    if ($afterPath) { [void]$summary.Add("AFTER evidence saved: $afterPath") }
     [void]$summary.Add('')
     foreach ($row in $rows) {
         $detail = if ($row.Error) { " - $(ConvertTo-SsmSafeDisplay $row.Error)" } else { '' }
         [void]$summary.Add(('{0}: {1}{2}' -f (ConvertTo-SsmSafeDisplay $row.TargetUrl), $row.Result, $detail))
+        # Outcome classification summary per target (URL/action/result only -
+        # never the entered/resolved UPN or any token/credential).
+        Write-SsmLog -Message ("Manage Secondary Admin: action={0} target={1} result={2}{3}" `
+            -f $action, $row.TargetUrl, $row.Result, $detail)
     }
     Show-ReportModal -Title 'Manage Secondary Admin complete' -Lines $summary.ToArray()
     Update-TabView -Tab $Tab

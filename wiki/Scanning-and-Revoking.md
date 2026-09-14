@@ -29,7 +29,7 @@ A practical sequence:
 
 ## Target discovery
 
-- **Auto-enumerate** via `Get-PnPTenantSite` (press `Enter` on the tab)
+- **Auto-enumerate** from the tenant admin API (press `Enter` on the tab). The progress modal shows a running "Retrieved N so far" count that advances once per server page; on large OneDrive tenants the first page can take a while to arrive. The enumerated list is written to the scan cache immediately, so the next launch restores it instead of re-enumerating.
 - **Manual URL entry** (`U`)
 - **CSV import** (`I`)
 
@@ -83,7 +83,7 @@ Revoked links and grants cannot be restored from within the tool. Review the BEF
 
 ## Scan cache
 
-Scan results are cached per tenant in `SSM-Cache/<tenant-slug>/session.json` and survive a restart; `L` restores the saved session on demand. The cache holds one session per install directory, so two installs on the same machine get independent caches. A restored session may be stale relative to the tenant's current sharing state; rescan before acting on old results. The cache contains directory data, so treat the directory accordingly.
+Enumerated target lists and scan results are cached per tenant in `SSM-Cache/<tenant-slug>/session.json` and survive a restart; `L` restores the saved session on demand. The cache holds one session per install directory, so two installs on the same machine get independent caches. A restored session may be stale relative to the tenant's current sharing state; rescan before acting on old results. The cache contains directory data, so treat the directory accordingly.
 
 ## Sharing-link age (optional)
 

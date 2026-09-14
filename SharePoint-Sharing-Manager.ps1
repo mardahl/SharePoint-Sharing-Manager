@@ -41,7 +41,7 @@
     .\SharePoint-Sharing-Manager.ps1
 
 .NOTES
-    Version : 1.9.0-rc.1
+    Version : 1.9.0-rc.2
     License : MIT
     Author  : Michael Mardahl (Microsoft MVP)
 

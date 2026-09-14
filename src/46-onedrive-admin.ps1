@@ -2,10 +2,13 @@
 #region OneDrive secondary admin
 # ============================================================================
 # ponytail: this region's directory validation, preflight, and mutation
-# logic for secondary-admin management is unverified against a live tenant
-# (see docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md).
-# Do not enable, ship, or invoke it against a production tenant until that
-# live validation passes and the doc above is updated with the result.
+# logic for secondary-admin management has only partial live confirmation
+# (an operator-reported successful Add in app-only auth after the CSOM
+# -Includes fix; Remove, owner-negative cases, bulk targets, and delegated
+# auth remain unverified - see
+# docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md).
+# Do not enable, ship, or invoke it against a production tenant until the
+# remaining cases in that doc pass and it is updated with the result.
 
 function Get-SsmFieldValue {
     # StrictMode-safe field read that works for both a hashtable (used by
@@ -117,6 +120,7 @@ function Resolve-SsmDirectoryUser {
     try {
         $user = Invoke-PnPGraphMethod -Method Get -Url $url -Connection $Connection -ErrorAction Stop
     } catch {
+        Write-SsmErrorLog -Context "Resolve-SsmDirectoryUser: directory lookup failed for '$trimmed'" -ErrorRecord $_
         throw "Resolve-SsmDirectoryUser: directory lookup failed for '$trimmed': $($_.Exception.Message)"
     }
     if (-not $user) { throw "Resolve-SsmDirectoryUser: no directory result for '$trimmed'." }
@@ -150,6 +154,18 @@ function Resolve-SsmDirectoryUser {
         DisplayName = [string]$rawDisplay
         TenantId = $TenantId
     }
+}
+
+function Get-SsmOneDriveAdmins {
+    # Sole call site for the site collection admin membership query, shared
+    # by Get-SsmOneDriveAdminState (mutation preflight) and the read-only
+    # List action, so the -Includes shape (and the CSOM translator fix it
+    # carries - see tests/onedrive-admin-csom.ps1) lives in exactly one
+    # place. No filtering, no directory lookups: returns every principal the
+    # site reports as a site collection admin, resolved or not.
+    param([Parameter(Mandatory)]$Connection)
+    return @(Get-PnPSiteCollectionAdmin -Connection $Connection `
+        -Includes AadObjectId, UserPrincipalName -ErrorAction Stop)
 }
 
 function Get-SsmOneDriveAdminState {
@@ -190,6 +206,7 @@ function Get-SsmOneDriveAdminState {
     try {
         $tenantSite = Get-PnPTenantSite -Identity $norm -Detailed -Connection $adminConn -ErrorAction Stop
     } catch {
+        Write-SsmErrorLog -Context "Get-SsmOneDriveAdminState: tenant site record read failed for '$norm'" -ErrorRecord $_
         throw "Get-SsmOneDriveAdminState: tenant site record read failed for '$norm': $($_.Exception.Message)"
     }
     if (-not $tenantSite) { throw "Get-SsmOneDriveAdminState: no tenant site record for '$norm'." }
@@ -207,6 +224,7 @@ function Get-SsmOneDriveAdminState {
     try {
         $site = Get-PnPSite -Includes Id -Connection $Connection -ErrorAction Stop
     } catch {
+        Write-SsmErrorLog -Context "Get-SsmOneDriveAdminState: site read failed for '$norm'" -ErrorRecord $_
         throw "Get-SsmOneDriveAdminState: site read failed for '$norm': $($_.Exception.Message)"
     }
     $siteId = ConvertTo-SsmGuidOrNull -Value (Get-SsmFieldValue -InputObject $site -Name 'Id')
@@ -216,6 +234,7 @@ function Get-SsmOneDriveAdminState {
     try {
         $web = Get-PnPWeb -Includes Id -Connection $Connection -ErrorAction Stop
     } catch {
+        Write-SsmErrorLog -Context "Get-SsmOneDriveAdminState: web read failed for '$norm'" -ErrorRecord $_
         throw "Get-SsmOneDriveAdminState: web read failed for '$norm': $($_.Exception.Message)"
     }
     $webId = ConvertTo-SsmGuidOrNull -Value (Get-SsmFieldValue -InputObject $web -Name 'Id')
@@ -241,6 +260,7 @@ function Get-SsmOneDriveAdminState {
         try {
             $page = Invoke-PnPGraphMethod -Method Get -Url $next -Connection $Connection -ErrorAction Stop
         } catch {
+            Write-SsmErrorLog -Context "Get-SsmOneDriveAdminState: drive read failed for '$norm'" -ErrorRecord $_
             throw "Get-SsmOneDriveAdminState: drive read failed for '$norm': $($_.Exception.Message)"
         }
         if (-not $page) { break }
@@ -284,12 +304,23 @@ function Get-SsmOneDriveAdminState {
     # email alone. AadObjectId/UserPrincipalName are not in this cmdlet's
     # CSOM default retrieval set (reflected against installed
     # PnP.PowerShell 3.3.0 / pnp/powershell source) and must be requested
-    # explicitly, including the nested AadObjectId.NameId/.NameIdIssuer
-    # scalar paths - the parent AadObjectId include alone does not load them.
+    # explicitly as bare top-level scalars only. AadObjectId is a
+    # ClientValueObject (Microsoft.SharePoint.Client.UserIdInfo); CSOM
+    # returns all of its own fields (NameId/NameIdIssuer/TypeId) as soon as
+    # the parent AadObjectId scalar is included - there is no partial
+    # retrieval of a ClientValueObject's own fields. Requesting a dotted
+    # nested path (AadObjectId.NameId/.NameIdIssuer) instead is accepted by
+    # this cmdlet's -Includes ValidateSet (it is generated by a naive
+    # reflection walk, not by CSOM's actual query grammar) but is rejected
+    # at ClientContext.LoadQuery time with
+    # Microsoft.SharePoint.Client.InvalidQueryExpressionException: "The
+    # query expression is not supported." - reproduced offline (no tenant)
+    # against the installed PnP.PowerShell/CSOM assemblies in
+    # tests/onedrive-admin-csom.ps1.
     try {
-        $admins = @(Get-PnPSiteCollectionAdmin -Connection $Connection `
-            -Includes AadObjectId.NameId, AadObjectId.NameIdIssuer, UserPrincipalName -ErrorAction Stop)
+        $admins = @(Get-SsmOneDriveAdmins -Connection $Connection)
     } catch {
+        Write-SsmErrorLog -Context "Get-SsmOneDriveAdminState: administrator membership read failed for '$norm'" -ErrorRecord $_
         throw "Get-SsmOneDriveAdminState: administrator membership read failed for '$norm': $($_.Exception.Message)"
     }
 
@@ -447,6 +478,7 @@ function Invoke-SsmOneDriveAdminChange {
     try {
         $revalidated = Resolve-SsmDirectoryUser -Upn $Identity.Upn -TenantId $Identity.TenantId -Connection $Connection
     } catch {
+        Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdminChange: identity revalidation failed for target '$($Snapshot.Url)'" -ErrorRecord $_
         return New-SsmOneDriveAdminChangeResult -Result 'Blocked' -StopBatch $true `
             -Detail "requested identity could not be revalidated: $($_.Exception.Message)"
     }
@@ -462,6 +494,7 @@ function Invoke-SsmOneDriveAdminChange {
     try {
         $fresh = Get-SsmOneDriveAdminState -Url $Snapshot.Url -Identity $revalidated -Connection $Connection
     } catch {
+        Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdminChange: pre-write state read failed for target '$($Snapshot.Url)'" -ErrorRecord $_
         return New-SsmOneDriveAdminChangeResult -Result 'Blocked' -StopBatch $false `
             -Detail "pre-write state read failed: $($_.Exception.Message)"
     }
@@ -496,12 +529,14 @@ function Invoke-SsmOneDriveAdminChange {
     } catch {
         $writeThrew = $true
         $writeError = $_.Exception.Message
+        Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdminChange: $Action write raised for target '$($Snapshot.Url)' (ground truth still comes from the post-write read)" -ErrorRecord $_
     }
 
     # Step 6: post-write read is always attempted, write exception or not.
     try {
         $after = Get-SsmOneDriveAdminState -Url $Snapshot.Url -Identity $revalidated -Connection $Connection
     } catch {
+        Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdminChange: post-write verification read failed for target '$($Snapshot.Url)'" -ErrorRecord $_
         $suffix = if ($writeThrew) { " (write also raised: $writeError)" } else { '' }
         return New-SsmOneDriveAdminChangeResult -Result 'Unverified' -StopBatch $false `
             -Detail "post-write verification read failed$suffix" -Before $fresh.AdminPresent

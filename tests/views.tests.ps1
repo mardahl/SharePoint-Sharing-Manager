@@ -757,3 +757,582 @@ Invoke-SsmTest 'Get-TabHints advertises M only for the OneDrive targets tab' {
     Assert-Equal 'False' ([bool]($siteHints | Where-Object { $_[0] -eq 'M' }))
     Assert-Equal 'True'  ([bool]($odHints   | Where-Object { $_[0] -eq 'M' }))
 }
+
+# ---------------------------------------------------------------------------
+# DIAGNOSTICS regressions - a preflight/evidence failure must be logged with
+# the original exception (not silently swallowed), and the zero-eligible/
+# mixed-batch previews must show the operator the actual reason, not a bare
+# classification. Each test loads the real logger (src/05-logging.ps1)
+# instead of the test-runner's no-op stub so it can assert real buffered
+# content, then restores the stub logger and $script:LogFile in a `finally`
+# via Enter-SsmTestLogFile/Exit-SsmTestLogFile (tests/run-tests.ps1) so later
+# tests are unaffected and none of these ever write to a real log file on
+# disk (isolated per-test via a unique temp path, not the ambient
+# $script:LogFile - which an earlier *.tests.ps1 file may have left pointed
+# at a relative path).
+# ---------------------------------------------------------------------------
+
+Invoke-SsmTest 'DIAGNOSTICS: a per-target preflight read failure (zero eligible) logs the original exception, not just a silent Blocked row' {
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    $dir = Use-SsmAdminTestExportDir
+    try {
+            $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+            $tab = New-SsmAdminTestTab -Items @($a)
+            $script:ReportLines = $null
+            function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+            function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+            function Connect-SsmAdmin { return $true }
+            function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+            function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+            function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+            function Connect-SsmSite { param($Url) return $true }
+            function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) throw 'drive read failed: preflight-diagnostics-probe' }
+            function Show-TypedConfirmModal { param($Title, $Lines, $Word) throw 'must not be called: nothing eligible' }
+            function Invoke-SsmOneDriveAdminChange { param($Action, $Identity, $Snapshot, $Connection) throw 'must not be called' }
+            function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+
+            Invoke-SsmOneDriveAdmin -Tab $tab
+
+            $errLines = @($script:LogBuffer | Where-Object { $_.Level -eq 'ERROR' })
+            if (-not ($errLines | Where-Object { $_.Message -like '*preflight-diagnostics-probe*' })) {
+                throw "original preflight exception was not logged; buffer: $(($errLines | ForEach-Object { $_.Message }) -join ' | ')"
+            }
+            $joined = ($script:ReportLines -join "`n")
+            if ($joined -notlike '*preflight read failed*preflight-diagnostics-probe*') {
+                throw "preview did not show the failure reason for the Failed row: $joined"
+            }
+        } finally {
+            if (Test-Path -LiteralPath $dir) { Remove-Item -Recurse -Force $dir }
+            Exit-SsmTestLogFile -Prev $prevLogFile
+        }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: an evidence export failure in the zero-eligible path is logged, not silently swallowed' {
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+        $blocked = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/blocked' -Title 'blocked'
+        $tab = New-SsmAdminTestTab -Items @($blocked)
+        function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+        function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+        function Connect-SsmAdmin { return $true }
+        function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+        function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+        function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+        function Connect-SsmSite { param($Url) return $true }
+        function Get-SsmOneDriveAdminState {
+            param($Url, $Identity, $Connection)
+            $s = New-SsmAdminTestSnapshot -Url $Url -AdminPresent $true
+            $s.OwnerId = $null
+            return $s
+        }
+        function Show-TypedConfirmModal { param($Title, $Lines, $Word) throw 'must not be called: nothing eligible' }
+        function Export-SsmAdminCsv { param($Rows, $OperationId, $Phase) throw 'disk full: zero-eligible-export-probe' }
+        function Invoke-SsmOneDriveAdminChange { param($Action, $Identity, $Snapshot, $Connection) throw 'must not be called' }
+        function Show-ReportModal { param($Title, $Lines) }
+        function Show-MsgModal { param($Title, $Lines, $Kind) }
+
+        Invoke-SsmOneDriveAdmin -Tab $tab
+
+        $errLines = @($script:LogBuffer | Where-Object { $_.Level -eq 'ERROR' })
+        if (-not ($errLines | Where-Object { $_.Message -like '*zero-eligible-export-probe*' })) {
+            throw "zero-eligible evidence export failure was not logged; buffer: $(($errLines | ForEach-Object { $_.Message }) -join ' | ')"
+        }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: a mixed batch preview shows the failed-target reason next to its row, not a bare classification' {
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+        $ok = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/ok' -Title 'ok'
+        $bad = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/bad' -Title 'bad'
+        $tab = New-SsmAdminTestTab -Items @($ok, $bad)
+        $script:ReportedLines = $null
+        function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+        function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+        function Connect-SsmAdmin { return $true }
+        function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+        function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+        function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+        function Connect-SsmSite { param($Url) return $true }
+        function Get-SsmOneDriveAdminState {
+            param($Url, $Identity, $Connection)
+            if ($Url -like '*bad*') { throw 'site connect timed out: mixed-batch-probe' }
+            return New-SsmAdminTestSnapshot -Url $Url -AdminPresent $false
+        }
+        function Show-TypedConfirmModal { param($Title, $Lines, $Word) $script:ReportedLines = $Lines; return $true }
+        function Export-SsmAdminCsv { param($Rows, $OperationId, $Phase) return 'stub-path' }
+        function Invoke-SsmOneDriveAdminChange {
+            param($Action, $Identity, $Snapshot, $Connection)
+            return @{ Result = 'Success'; StopBatch = $false; Detail = '' }
+        }
+        function Show-ReportModal { param($Title, $Lines) }
+        function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+        function Start-LoadSpinner {}
+        function Stop-LoadSpinner {}
+
+        Invoke-SsmOneDriveAdmin -Tab $tab
+
+        $joined = ($script:ReportedLines -join "`n")
+        if ($joined -notlike '*mixed-batch-probe*') {
+            throw "mixed-batch preview did not show the failed target's reason: $joined"
+        }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: a final AFTER-flush failure after a stopped batch is logged, not silently swallowed' {
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+        $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+        $tab = New-SsmAdminTestTab -Items @($a)
+        $script:ExportCalls = 0
+        function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+        function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+        function Connect-SsmAdmin { return $true }
+        function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+        function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+        function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+        function Connect-SsmSite { param($Url) return $true }
+        function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) return New-SsmAdminTestSnapshot -Url $Url -AdminPresent $false }
+        function Show-TypedConfirmModal { param($Title, $Lines, $Word) return $true }
+        function Export-SsmAdminCsv {
+            param($Rows, $OperationId, $Phase)
+            $script:ExportCalls++
+            # Succeed for BEFORE and the initial AFTER (1-2) and the
+            # post-mutation AFTER (3); fail only on the trailing "final
+            # flush" AFTER write (4) that the entry function currently
+            # wraps in a bare `catch {}`.
+            if ($script:ExportCalls -eq 4) { throw 'disk full: final-flush-probe' }
+            return 'stub-path'
+        }
+        function Invoke-SsmOneDriveAdminChange {
+            param($Action, $Identity, $Snapshot, $Connection)
+            return @{ Result = 'Success'; StopBatch = $false; Detail = '' }
+        }
+        function Show-ReportModal { param($Title, $Lines) }
+        function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+        function Start-LoadSpinner {}
+        function Stop-LoadSpinner {}
+
+        Invoke-SsmOneDriveAdmin -Tab $tab
+
+        $errLines = @($script:LogBuffer | Where-Object { $_.Level -eq 'ERROR' })
+        if (-not ($errLines | Where-Object { $_.Message -like '*final-flush-probe*' })) {
+            throw "final AFTER-flush failure was not logged; buffer: $(($errLines | ForEach-Object { $_.Message }) -join ' | ')"
+        }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: the final report logs an outcome summary line per target with action and result, no tokens' {
+    $root = Split-Path $PSScriptRoot -Parent
+    . (Join-Path $root 'src/05-logging.ps1')
+    $script:LogBuffer.Clear()
+    $prevLogFile = Enter-SsmTestLogFile
+    try {
+        $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+        $tab = New-SsmAdminTestTab -Items @($a)
+        function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+        function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+        function Connect-SsmAdmin { return $true }
+        function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+        function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+        function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+        function Connect-SsmSite { param($Url) return $true }
+        function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) return New-SsmAdminTestSnapshot -Url $Url -AdminPresent $false }
+        function Show-TypedConfirmModal { param($Title, $Lines, $Word) return $true }
+        function Export-SsmAdminCsv { param($Rows, $OperationId, $Phase) return 'stub-path' }
+        function Invoke-SsmOneDriveAdminChange {
+            param($Action, $Identity, $Snapshot, $Connection)
+            return @{ Result = 'Success'; StopBatch = $false; Detail = '' }
+        }
+        function Show-ReportModal { param($Title, $Lines) }
+        function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+        function Start-LoadSpinner {}
+        function Stop-LoadSpinner {}
+
+        Invoke-SsmOneDriveAdmin -Tab $tab
+
+        $infoLines = @($script:LogBuffer | Where-Object { $_.Message -like '*Add*' -and $_.Message -like '*Success*' -and $_.Message -like '*personal/a*' })
+        if (@($infoLines).Count -lt 1) {
+            throw "no outcome summary line logged for the target; buffer: $(($script:LogBuffer | ForEach-Object { $_.Message }) -join ' | ')"
+        }
+        foreach ($e in $script:LogBuffer) {
+            if ("$($e.Message)" -match 'ey[A-Za-z0-9_-]{20,}\.') { throw "possible token-shaped value logged: $($e.Message)" }
+        }
+    } finally {
+        Exit-SsmTestLogFile -Prev $prevLogFile
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: the zero-eligible report shows the actual saved evidence paths, not an assumed one' {
+    $blocked = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/blocked' -Title 'blocked'
+    $tab = New-SsmAdminTestTab -Items @($blocked)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+    function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+    function Connect-SsmAdmin { return $true }
+    function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+    function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+    function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-SsmOneDriveAdminState {
+        param($Url, $Identity, $Connection)
+        $s = New-SsmAdminTestSnapshot -Url $Url -AdminPresent $true
+        $s.OwnerId = $null
+        return $s
+    }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) throw 'must not be called: nothing eligible' }
+    function Export-SsmAdminCsv {
+        param($Rows, $OperationId, $Phase)
+        return "/tmp/SSM_ADMIN_${Phase}_$OperationId.csv"
+    }
+    function Invoke-SsmOneDriveAdminChange { param($Action, $Identity, $Snapshot, $Connection) throw 'must not be called' }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -notlike '*BEFORE evidence saved: /tmp/SSM_ADMIN_BEFORE_*') {
+        throw "zero-eligible report did not show the actual saved BEFORE path: $joined"
+    }
+    if ($joined -notlike '*AFTER evidence saved: /tmp/SSM_ADMIN_AFTER_*') {
+        throw "zero-eligible report did not show the actual saved AFTER path: $joined"
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: a zero-eligible BEFORE export failure never claims AFTER was saved' {
+    $blocked = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/blocked' -Title 'blocked'
+    $tab = New-SsmAdminTestTab -Items @($blocked)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+    function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+    function Connect-SsmAdmin { return $true }
+    function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+    function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+    function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-SsmOneDriveAdminState {
+        param($Url, $Identity, $Connection)
+        $s = New-SsmAdminTestSnapshot -Url $Url -AdminPresent $true
+        $s.OwnerId = $null
+        return $s
+    }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) throw 'must not be called: nothing eligible' }
+    function Export-SsmAdminCsv { param($Rows, $OperationId, $Phase) throw 'disk full: before-only-failure-probe' }
+    function Invoke-SsmOneDriveAdminChange { param($Action, $Identity, $Snapshot, $Connection) throw 'must not be called' }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -like '*evidence saved*') {
+        throw "report falsely claimed evidence was saved after an export failure: $joined"
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: the completion report shows real saved evidence paths for a normal batch' {
+    $dir = Use-SsmAdminTestExportDir
+    try {
+        $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+        $tab = New-SsmAdminTestTab -Items @($a)
+        $script:CompletionLines = $null
+        function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+        function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+        function Connect-SsmAdmin { return $true }
+        function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+        function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+        function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+        function Connect-SsmSite { param($Url) return $true }
+        function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) return New-SsmAdminTestSnapshot -Url $Url -AdminPresent $false }
+        function Show-TypedConfirmModal { param($Title, $Lines, $Word) return $true }
+        function Export-SsmAdminCsv {
+            param($Rows, $OperationId, $Phase)
+            return (Join-Path $script:ExportDir "SSM_ADMIN_${Phase}_$OperationId.csv")
+        }
+        function Invoke-SsmOneDriveAdminChange {
+            param($Action, $Identity, $Snapshot, $Connection)
+            return @{ Result = 'Success'; StopBatch = $false; Detail = '' }
+        }
+        function Show-ReportModal { param($Title, $Lines) $script:CompletionLines = $Lines }
+        function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+        function Start-LoadSpinner {}
+        function Stop-LoadSpinner {}
+
+        Invoke-SsmOneDriveAdmin -Tab $tab
+
+        $joined = ($script:CompletionLines -join "`n")
+        if ($joined -notlike "*BEFORE evidence saved: $($script:ExportDir)*") {
+            throw "completion report did not show the real saved BEFORE path: $joined"
+        }
+        if ($joined -notlike "*AFTER evidence saved: $($script:ExportDir)*") {
+            throw "completion report did not show the real saved AFTER path: $joined"
+        }
+    } finally {
+        if (Test-Path -LiteralPath $dir) { Remove-Item -Recurse -Force $dir }
+    }
+}
+
+Invoke-SsmTest 'DIAGNOSTICS: a final AFTER-flush failure is shown visibly in the completion report, not only logged' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $tab = New-SsmAdminTestTab -Items @($a)
+    $script:ExportCalls = 0
+    $script:CompletionLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+    function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+    function Connect-SsmAdmin { return $true }
+    function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+    function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+    function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) return New-SsmAdminTestSnapshot -Url $Url -AdminPresent $false }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) return $true }
+    function Export-SsmAdminCsv {
+        param($Rows, $OperationId, $Phase)
+        $script:ExportCalls++
+        if ($script:ExportCalls -eq 4) { throw 'disk full: visible-final-flush-probe' }
+        return 'stub-path'
+    }
+    function Invoke-SsmOneDriveAdminChange {
+        param($Action, $Identity, $Snapshot, $Connection)
+        return @{ Result = 'Success'; StopBatch = $false; Detail = '' }
+    }
+    function Show-ReportModal { param($Title, $Lines) $script:CompletionLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:CompletionLines -join "`n")
+    if ($joined -notlike '*visible-final-flush-probe*') {
+        throw "final-flush failure was not shown in the completion report: $joined"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Invoke-SsmOneDriveAdmin: List action (screen-only, read-only)
+# ---------------------------------------------------------------------------
+
+Invoke-SsmTest 'List: single target shows all current admins, no UPN/confirm/export/mutation/Graph calls' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $tab = New-SsmAdminTestTab -Items @($a)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) Assert-Equal 'List' $Options[0]; return 'List' }
+    function Show-InputModal { param($Title, $Prompt) throw 'must not be called' }
+    function Connect-SsmAdmin { throw 'must not be called' }
+    function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) throw 'must not be called' }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) throw 'must not be called' }
+    function Export-SsmAdminCsv { param($Rows, $OperationId, $Phase) throw 'must not be called' }
+    function Invoke-SsmOneDriveAdminChange { param($Action, $Identity, $Snapshot, $Connection) throw 'must not be called' }
+    function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) throw 'must not be called' }
+    function Invoke-PnPGraphMethod { param($Method, $Url, $Connection) throw 'must not be called' }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-PnPConnection { return @{ Url = 'https://contoso-my.sharepoint.com/personal/a' } }
+    function Get-SsmOneDriveAdmins {
+        param($Connection)
+        return @(
+            @{ Title = 'Admin One'; UserPrincipalName = 'admin1@contoso.com'; LoginName = 'i:0#.f|membership|admin1@contoso.com'; AadObjectId = @{ NameId = '11111111-1111-1111-1111-111111111111' } }
+        )
+    }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -notlike '*admin1@contoso.com*') { throw "admin not shown: $joined" }
+    if ($joined -notlike '*11111111-1111-1111-1111-111111111111*') { throw "object id not shown: $joined" }
+}
+
+Invoke-SsmTest 'List: bulk selection groups admins by target; hidden-selected included, unselected excluded' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a' -Selected $true
+    $b = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/b' -Title 'b' -Selected $true
+    $c = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/c' -Title 'c' -Selected $false
+    $tab = New-SsmAdminTestTab -Items @($a, $b, $c) -View @($a)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'List' }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-PnPConnection { return @{ Url = $script:CurrentConnUrl } }
+    function Get-SsmOneDriveAdmins {
+        param($Connection)
+        if ($Connection.Url -like '*a') { return @(@{ Title = 'A Admin'; UserPrincipalName = 'a@contoso.com' }) }
+        return @(@{ Title = 'B Admin'; UserPrincipalName = 'b@contoso.com' })
+    }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    # Get-PnPConnection is stubbed globally per-call; bind the returned Url to
+    # whichever site Connect-SsmSite was just told to connect to.
+    function Connect-SsmSite { param($Url) $script:CurrentConnUrl = $Url; return $true }
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -notlike '*a@contoso.com*') { throw "a's admin missing: $joined" }
+    if ($joined -notlike '*b@contoso.com*') { throw "b's (hidden) admin missing: $joined" }
+    if ($joined -like '*personal/c*') { throw "unselected c must never be listed: $joined" }
+}
+
+Invoke-SsmTest 'List: unresolved principal (no UPN/login/object id) still shows as unresolved, not hidden' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $tab = New-SsmAdminTestTab -Items @($a)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'List' }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-PnPConnection { return @{ Url = 'https://contoso-my.sharepoint.com/personal/a' } }
+    function Get-SsmOneDriveAdmins { param($Connection) return @(@{ Title = $null; UserPrincipalName = $null; LoginName = $null; AadObjectId = $null }) }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -notlike '*(unresolved)*') { throw "unresolved principal was not shown: $joined" }
+}
+
+Invoke-SsmTest 'List: zero admins is reported explicitly as none found, not as a failure' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $tab = New-SsmAdminTestTab -Items @($a)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'List' }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-PnPConnection { return @{ Url = 'https://contoso-my.sharepoint.com/personal/a' } }
+    function Get-SsmOneDriveAdmins { param($Connection) return @() }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -notlike '*no administrators found*') { throw "zero-admin target was not reported explicitly: $joined" }
+}
+
+Invoke-SsmTest 'List: a target read failure is logged and the remaining targets are still listed' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $b = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/b' -Title 'b'
+    $tab = New-SsmAdminTestTab -Items @($a, $b)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'List' }
+    function Connect-SsmSite { param($Url) $script:CurrentConnUrl = $Url; return $true }
+    function Get-PnPConnection { return @{ Url = $script:CurrentConnUrl } }
+    function Get-SsmOneDriveAdmins {
+        param($Connection)
+        if ($Connection.Url -like '*a') { throw 'transient read failure' }
+        return @(@{ Title = 'B Admin'; UserPrincipalName = 'b@contoso.com' })
+    }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -notlike '*admin read failed*transient read failure*') { throw "target failure was not reported: $joined" }
+    if ($joined -notlike '*b@contoso.com*') { throw "remaining target after a failure was not listed: $joined" }
+}
+
+Invoke-SsmTest 'List: cancelling mid-batch stops before the next target is connected/read, and reports it as not listed rather than visited' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $b = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/b' -Title 'b'
+    $c = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/c' -Title 'c'
+    $tab = New-SsmAdminTestTab -Items @($a, $b, $c)
+    $script:ReportLines = $null
+    $script:ConnectedUrls = New-Object System.Collections.ArrayList
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'List' }
+    function Connect-SsmSite { param($Url) [void]$script:ConnectedUrls.Add($Url); $script:CurrentConnUrl = $Url; return $true }
+    function Get-PnPConnection { return @{ Url = $script:CurrentConnUrl } }
+    function Get-SsmOneDriveAdmins { param($Connection) return @(@{ Title = 'Admin'; UserPrincipalName = 'admin@contoso.com' }) }
+    function New-SsmProgressCallback {
+        # Cancel is raised from inside the progress callback itself - as the
+        # real Esc-then-confirm flow does - right as target 'b' starts (the
+        # callback fires before that target is connected to/read). Target
+        # 'a' finishes normally (matching Flag-mode semantics: finish the
+        # unit of work in flight, stop before the next one); 'b' and 'c'
+        # must never be connected to or read.
+        param($Title, $State, $CancelMode)
+        $st = $State
+        return { param($Count, $Total, $Label, $Ok, $Failed) if ($Count -ge 2) { $st.Cancel = $true } }.GetNewClosure()
+    }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    if (@($script:ConnectedUrls).Count -ne 1) {
+        throw "expected exactly one target connected before cancel, got: $($script:ConnectedUrls -join ',')"
+    }
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -like '*personal/b*' -or $joined -like '*personal/c*') {
+        throw "cancelled-but-never-visited targets must not get their own header/row: $joined"
+    }
+    if ($joined -notlike '*not listed*') { throw "no trailing not-listed summary shown: $joined" }
+}
+
+Invoke-SsmTest 'List: a malicious control character in the Entra object id is sanitized, not injected raw' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $tab = New-SsmAdminTestTab -Items @($a)
+    $script:ReportLines = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'List' }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-PnPConnection { return @{ Url = 'https://contoso-my.sharepoint.com/personal/a' } }
+    function Get-SsmOneDriveAdmins {
+        param($Connection)
+        return @(@{ Title = 'Admin'; UserPrincipalName = 'admin@contoso.com'; AadObjectId = @{ NameId = "evil`e[31mid" } })
+    }
+    function Show-ReportModal { param($Title, $Lines) $script:ReportLines = $Lines }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+
+    Invoke-SsmOneDriveAdmin -Tab $tab
+
+    $joined = ($script:ReportLines -join "`n")
+    if ($joined -match "`e") { throw "raw escape character reached the report: $($joined | Format-Hex | Out-String)" }
+    if ($joined -notlike '*\u001b*') { throw "object id control character was not sanitized/escaped: $joined" }
+}
+
+Invoke-SsmTest 'List: Esc/cancel from the operation menu makes no connection or read calls at all' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $tab = New-SsmAdminTestTab -Items @($a)
+    function Show-ListModal { param($Title, $Prompt, $Options) return $null }
+    function Connect-SsmSite { param($Url) throw 'must not be called' }
+    function Get-SsmOneDriveAdmins { param($Connection) throw 'must not be called' }
+    Invoke-SsmOneDriveAdmin -Tab $tab
+}
+
+Invoke-SsmTest 'Get-TabHints/menu offers List for the OneDrive targets tab' {
+    $tab = New-SsmAdminTestTab -Items @(New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a')
+    $captured = $null
+    function Show-ListModal { param($Title, $Prompt, $Options) $script:CapturedOptions = $Options; return $null }
+    Invoke-SsmOneDriveAdmin -Tab $tab
+    if ($script:CapturedOptions -notcontains 'List') { throw "List option missing: $($script:CapturedOptions -join ',')" }
+}

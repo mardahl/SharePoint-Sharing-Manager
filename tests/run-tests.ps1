@@ -9,6 +9,31 @@ $script:LogBuffer = New-Object System.Collections.ArrayList
 $script:LogFile = Join-Path ([IO.Path]::GetTempPath()) 'ssm-test.log'
 $script:UI = @{ Dirty = $false }
 function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') }
+function Write-SsmErrorLog { param([string]$Context, $ErrorRecord) }
+
+function Enter-SsmTestLogFile {
+    # Isolates $script:LogFile for a single test that loads the real logger
+    # (src/05-logging.ps1) instead of the no-op stub above. $script:LogFile
+    # is script-scoped to this file regardless of call depth, so a test
+    # that never resets it would otherwise inherit whatever value an
+    # earlier *.tests.ps1 file left behind (e.g. help.tests.ps1 sets
+    # $script:LogFile = 'x.log' with no restore, for its own unrelated
+    # stub-only tests) - and the real Write-SsmLog would then physically
+    # write to that relative path under the repo's working directory.
+    # Returns the previous value; the caller must restore it via
+    # Exit-SsmTestLogFile in a `finally` block.
+    $prev = $script:LogFile
+    $script:LogFile = Join-Path ([IO.Path]::GetTempPath()) ("ssm-test-{0}.log" -f ([guid]::NewGuid()))
+    return $prev
+}
+
+function Exit-SsmTestLogFile {
+    param($Prev)
+    if ($script:LogFile -and (Test-Path -LiteralPath $script:LogFile)) {
+        Remove-Item -LiteralPath $script:LogFile -ErrorAction SilentlyContinue
+    }
+    $script:LogFile = $Prev
+}
 
 # Pure-logic files only - keep in sync as files gain PnP-free helpers
 foreach ($f in @('15-drawing','20-modals','25-config','30-connections','35-scan-engine','40-revoke','45-targets','46-onedrive-admin','50-csv','55-tenant-actions','60-setup-actions','65-views','70-cache','72-update-check','75-key-dispatch')) {

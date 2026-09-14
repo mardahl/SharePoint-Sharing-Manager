@@ -2,6 +2,59 @@
 
 ## [Unreleased]
 
+## [1.9.0-rc.2] - 2026-09-14
+
+- Fix: target enumeration (`Enter` / Scan all on an empty Sites or
+  OneDrives tab) now shows real progress. It drives the same paged CSOM
+  call `Get-PnPTenantSite` uses internally, but updates the modal's
+  "Retrieved N so far" counter after every server page instead of sitting
+  on a static spinner until the whole tenant has been buffered.
+- Fix: the enumerated target list is now saved to the session cache as
+  soon as it is loaded (previously only a scan or revoke wrote the cache),
+  so restarting the tool no longer forces a full re-enumeration of every
+  OneDrive when nothing was scanned yet.
+- Add: Manage Secondary Admin (`M`, OneDrives tab) gains a **List**
+  operation alongside Add/Remove. Screen-only and read-only: shows every
+  current site collection admin (Title/UPN/login and Entra object id when
+  resolvable) grouped by selected target, for single or bulk selection.
+  No UPN prompt, confirmation, export, or directory/Graph lookup;
+  unresolved principals stay visible instead of being hidden, and an
+  empty result is reported as "no administrators found," not a failure.
+  A read failure on one target is logged and the rest of the selection
+  still lists. The membership query is now factored into one shared
+  helper, `Get-SsmOneDriveAdmins`, used by List and the existing
+  Add/Remove preflight/mutation read.
+- Fix: Manage Secondary Admin (`M`, OneDrives tab) membership read -
+  `Get-SsmOneDriveAdminState` requested `AadObjectId.NameId`/
+  `AadObjectId.NameIdIssuer` (dotted paths) from
+  `Get-PnPSiteCollectionAdmin -Includes`. Those dotted names pass
+  PnP.PowerShell's `-Includes` ValidateSet but are rejected client-side by
+  the CSOM query translator (`InvalidQueryExpressionException: The query
+  expression is not supported.`) - never a missing Graph scope, app
+  permission, or tenant-provisioning issue. Fixed by requesting the bare
+  top-level `AadObjectId` scalar, which already returns all of its own
+  fields in one round trip. Confirmed offline against the installed
+  PnP.PowerShell/CSOM assemblies - see `tests/onedrive-admin-csom.ps1`.
+- Fix: Manage Secondary Admin (`M`, OneDrives tab) diagnostics - every
+  preflight/identity/evidence failure path now logs the original
+  exception via `Write-SsmErrorLog`/`Write-SsmLog` instead of being
+  swallowed. Preview and mixed-batch reports show the actual
+  Blocked/Failed reason under each target instead of a bare
+  classification word, and a per-target outcome line (action/target/
+  result, no tokens or credentials) is logged for every run. The
+  zero-eligible and batch-completion reports show the actual saved
+  `SSM_ADMIN_<BEFORE|AFTER>` evidence paths, never claiming a path was
+  saved when its export failed, and a final-evidence-flush failure after
+  a completed/stopped batch is shown in the completion report, not only
+  logged. No provisioning/API behavior changed: diagnostics-only.
+- Note: Add/Remove remain prerelease. An operator reported a successful
+  Add via app-only auth after the CSOM fix above (evidence: the app
+  registration's own service principal recorded as actor) - Remove,
+  owner-negative cases, bulk targets, and delegated auth are still
+  unverified against a live tenant. See
+  `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md`
+  for the full matrix.
+
 ## [1.9.0-rc.1] - 2026-09-07
 
 - Add: OneDrive secondary-admin management (`M`, OneDrives tab only) - add
@@ -20,7 +73,7 @@
   page.
 - Change: `.github/workflows/release.yml` now tags a release as a GitHub
   prerelease (`--prerelease --latest=false`) when the pushed tag has a
-  `-suffix` (e.g. `v1.9.0-rc.1`), so it never displaces the "Latest" stable
+  `-suffix` (e.g. `v1.9.0-rc.2`), so it never displaces the "Latest" stable
   release; it also uses `gh release edit`/`gh release view` to decide
   create-vs-upload instead of relying on upload failure to imply "doesn't
   exist yet".

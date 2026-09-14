@@ -2,12 +2,16 @@
 
 Date: 2026-09-07
 
-**Current status (v1.9.0-rc.1, authoritative):** shipped as a GitHub
-prerelease, available for an authorized test tenant to run the live-fixture
-checks deferred below. That live validation is still outstanding - the
-feature must not ship in a stable release, be enabled by default, or be
-exercised against a production tenant until it passes and this document is
-updated with the result.
+**Current status (v1.9.0-rc.2, authoritative):** shipped as a GitHub
+prerelease. An operator has reported a successful **Add** against a live
+tenant using app-only auth, after the CSOM `-Includes` fix in this release
+(see the CHANGELOG). That is one confirmed case, not the full validation
+matrix below - **Remove**, owner-negative cases (owner/primary-admin
+blocks), bulk-target batches, and delegated auth are all still
+outstanding. The feature must not ship in a stable release, be enabled by
+default, or be exercised against a production tenant for the still-
+outstanding cases until they pass and this document is updated with the
+result.
 
 > **Historical status (as authored, 2026-09-07):** Local/documentation stage
 > COMPLETE. Live-fixture stage DEFERRED (not passing) by explicit user

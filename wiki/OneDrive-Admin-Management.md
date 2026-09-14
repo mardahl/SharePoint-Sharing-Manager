@@ -1,41 +1,76 @@
 # OneDrive secondary admin management
 
-> **Prerelease (v1.9.0-rc.1), pending live-tenant validation.** This
-> feature is implemented and tested entirely against mocked PnP/Graph
-> calls, by explicit, deliberate deferral - not a failed live test. It
-> ships as a prerelease so an authorized test tenant can run that
-> deferred live validation; the stable release line (currently v1.8.0)
-> does not include this feature and does not move until validation
-> passes. Do not rely on it for production access changes until then.
+> **`List` is read-only.** It requires no typed confirmation, makes no
+> directory/Graph lookup, and does not write CSV evidence or change any
+> permission - but it ships as part of the same prerelease build as
+> `Add`/`Remove` below, not as a separately-validated stable feature.
+
+> **Prerelease (v1.9.0-rc.2), limited live validation.** `Add` and
+> `Remove` were implemented and tested against mocked PnP/Graph calls; an
+> operator has since reported a successful **Add** against a live tenant
+> using app-only auth, after the CSOM `-Includes` fix in this release.
+> **Remove**, owner-negative cases, bulk targets, and delegated auth
+> remain unverified. They ship as prerelease until the remaining cases
+> are validated; the stable release line (currently v1.8.0)
+> does not include `Add`/`Remove` and does not move until then.
+> Do not rely on them for production access changes until then.
 > See `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md`
-> in the repo for the full gate and what is still unproven.
+> in the repo for the full validation matrix.
 
 ## What it does
 
-On the **OneDrives** tab only, press `M` to add or remove the tenant's
-*secondary site collection administrator* role on one or more selected
-OneDrives:
+On the **OneDrives** tab only, press `M` to list, add, or remove the
+tenant's *secondary site collection administrator* role on one or more
+selected OneDrives:
 
 ```text
-Select one or more OneDrives, press M, choose Add or Remove, and enter one UPN.
-The tool resolves the account in the tenant directory and previews every selected
-target before requiring ADDADMIN or REMOVEADMIN. Removal changes only the named
+Select one or more OneDrives, press M, choose List, Add, or Remove.
+List shows every current site collection admin per selected target and
+requires nothing further. Add/Remove ask for one UPN, resolve it in the
+tenant directory, and preview every selected target before requiring
+ADDADMIN or REMOVEADMIN. Removal changes only the named
 secondary administrator role; other access grants remain in place.
 ```
 
-1. Select one or more rows on the OneDrives tab (`Space`), then press `M`.
-2. Choose **Add** or **Remove**.
-3. Enter one UPN. The tool resolves it against the tenant directory to its
+## List (read-only)
+
+1. Select one or more rows on the OneDrives tab (`Space`), press `M`,
+   choose **List**.
+2. For each selected target, the tool connects to that site and reads its
+   current site collection admin membership, then shows a report grouped
+   by target: title, UPN, login, and Entra object ID for each admin found -
+   whichever of those fields the site actually returns. A principal the
+   tool cannot resolve any of those fields for is still shown, marked
+   `(unresolved)`, rather than being hidden or guessed at.
+3. A target with zero site collection admins is reported explicitly as
+   "no administrators found" - never as a failure.
+4. A read failure on one target (site connection or membership read) is
+   logged and shown under that target; the rest of the selection is still
+   listed.
+5. Nothing is prompted, confirmed, or permission-changing: no UPN entry,
+   no typed confirmation, no CSV/snapshot export of the membership shown,
+   and no directory or Graph lookup beyond the site's own membership
+   query - normal connection and error-path logging (`O` on the Log tab)
+   still happens, same as any other read. `List` does not require the
+   `User.Read.All` (or equivalent) consent described below - it is the
+   same scope any other target action on this tool already needs.
+
+## Add/Remove
+
+1. Select one or more rows on the OneDrives tab (`Space`), press `M`,
+   choose **Add** or **Remove**.
+2. Enter one UPN. The tool resolves it against the tenant directory to its
    canonical `userPrincipalName` - an alias-only match is rejected, and
    mixed case/whitespace is normalized, not silently substituted for a
    different account.
-4. A read-only preflight runs against every selected target and shows a
+3. A read-only preflight runs against every selected target and shows a
    preview: display name, resolved UPN, object ID, tenant, a full-access
    warning, every target URL, and a Selected/Eligible/No-op/Blocked count.
-5. If at least one target is eligible, a typed confirmation
+4. If at least one target is eligible, a typed confirmation
    (`ADDADMIN`/`REMOVEADMIN`) is required before anything is written.
-6. Eligible targets are processed **one at a time**; the operation can be
+5. Eligible targets are processed **one at a time**; the operation can be
    cancelled mid-batch, and each target gets its own final result.
+
 
 ## What the role actually grants
 
@@ -110,6 +145,31 @@ specific permission error; it never falls back to a partial-match lookup,
 and existing scans/revokes are unaffected. See
 [[FAQ-and-Troubleshooting]] and [[Authentication]] for recovery steps.
 
-Neither auth mode's directory-lookup or mutation behavior has been proven
-against a real tenant - see the prerelease notice at the top of this
-page.
+App-only Add has one operator-reported live success (see the prerelease
+notice at the top of this page); Remove and delegated auth remain
+unproven against a real tenant.
+
+## Diagnostics and logging
+
+Every failure path in this feature - tenant identity lookup, account
+validation, per-target preflight read, evidence export (zero-eligible,
+BEFORE, AFTER, and the trailing evidence flush after the batch completes),
+and each internal re-check `M` performs immediately before a write - writes
+the original error to the app log (`O` on the Log tab opens the log file),
+not just a one-line summary in the on-screen modal. A `[Failed]`/`[Blocked]`
+row in the preflight preview and the mixed-batch confirmation/report always
+shows its reason directly under the target, instead of just the
+classification word. The final report also logs one outcome line per
+target (action, target, result) so a completed run's outcome is
+recoverable from the log even after the on-screen report is dismissed - no
+account UPNs, object IDs, or tokens are included in that summary line.
+The directory-lookup and per-target state read also log the full
+underlying API error (including any Graph error body) at the point it
+occurs, even though the on-screen message stays a short summary.
+
+Both the zero-eligible report and the batch-completion report show the
+actual `SSM-Exports/SSM_ADMIN_<BEFORE|AFTER>_<operation-id>.csv` path once
+that export call has actually returned it - never a path for an export
+that failed. If the trailing evidence flush after a completed or stopped
+batch fails, that is shown directly in the completion report (not only
+logged), since it means the last AFTER evidence write may be stale.
