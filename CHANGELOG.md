@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.10.0-rc.3] - 2026-09-15
+
 - Fix: OneDrive pre-provisioning (`P`) failed in app-only mode with a
   localized "access denied ... profile" error because
   `Request-PnPPersonalSite` needs the SharePoint application permission
