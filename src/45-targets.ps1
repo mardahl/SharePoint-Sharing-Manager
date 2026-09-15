@@ -44,23 +44,16 @@ function Add-TargetsToTab {
     if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
 }
 
-function Get-TenantTargets {
-    # Enumerate site collections via the tenant admin connection.
-    # OneDrive tab: personal sites (SPSPERS template); Sites tab: everything else.
-    # -Progress: scriptblock invoked after each server page with the running
-    # site count, so the caller can show real progress instead of a spinner.
-    param([bool]$OneDrive, [scriptblock]$Progress)
-    if (-not (Connect-SsmAdmin)) { return @() }
-    # Same paged CSOM loop Get-PnPTenantSite runs internally, unrolled so we can
-    # report per page (the cmdlet buffers every page and returns once at the end).
-    # IncludeDetail is required for LockState to be populated reliably; without it
-    # the property comes back uninitialized. LockState 'Unlock' = accessible;
-    # anything else (NoAccess/ReadOnly/NoAdditions) is a locked or deprovisioned
-    # site that would only 403 on scan, so filter it out here.
+function Get-SsmTenantSiteProperties {
+    # Paged CSOM enumeration of tenant site properties - the same loop
+    # Get-PnPTenantSite runs internally, unrolled so callers can report per
+    # page. IncludeDetail is required for LockState/Owner to be populated.
+    # Caller must already hold the admin connection (Connect-SsmAdmin).
+    param([bool]$IncludePersonal, [scriptblock]$Progress)
     $ctx = Get-PnPContext
     $tenant = New-Object Microsoft.Online.SharePoint.TenantAdministration.Tenant($ctx)
     $filter = New-Object Microsoft.Online.SharePoint.TenantAdministration.SPOSitePropertiesEnumerableFilter
-    $filter.IncludePersonalSite = $OneDrive ? [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::Include : [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::UseServerDefault
+    $filter.IncludePersonalSite = $IncludePersonal ? [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::Include : [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::UseServerDefault
     $filter.IncludeDetail = $true
     $sites = [System.Collections.ArrayList]::new()
     do {
@@ -71,6 +64,20 @@ function Get-TenantTargets {
         $filter.StartIndex = $page.NextStartIndexFromSharePoint
         if ($Progress) { & $Progress $sites.Count }
     } while (-not [string]::IsNullOrWhiteSpace($page.NextStartIndexFromSharePoint))
+    return $sites
+}
+
+function Get-TenantTargets {
+    # Enumerate site collections via the tenant admin connection.
+    # OneDrive tab: personal sites (SPSPERS template); Sites tab: everything else.
+    # -Progress: scriptblock invoked after each server page with the running
+    # site count, so the caller can show real progress instead of a spinner.
+    param([bool]$OneDrive, [scriptblock]$Progress)
+    if (-not (Connect-SsmAdmin)) { return @() }
+    # LockState 'Unlock' = accessible; anything else (NoAccess/ReadOnly/NoAdditions)
+    # is a locked or deprovisioned site that would only 403 on scan, so filter it
+    # out here.
+    $sites = Get-SsmTenantSiteProperties -IncludePersonal $OneDrive -Progress $Progress
     $out = @()
     $locked = 0
     foreach ($s in $sites) {

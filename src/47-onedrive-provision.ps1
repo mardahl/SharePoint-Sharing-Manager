@@ -57,4 +57,23 @@ function Split-SsmBatch {
     return $out
 }
 
+function Get-SsmProvisionedOwnerSet {
+    # Every existing personal site, keyed by lowercased Owner UPN and by URL
+    # slug (/personal/<slug>). Slug covers sites whose Owner is empty or
+    # SID-shaped. Returns $null if the admin connection cannot be made.
+    param([scriptblock]$Progress)
+    if (-not (Connect-SsmAdmin)) { return $null }
+    $set = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $sites = Get-SsmTenantSiteProperties -IncludePersonal $true -Progress $Progress
+    foreach ($s in $sites) {
+        if ($s.Template -notlike 'SPSPERS*') { continue }
+        $owner = [string]$s.Owner
+        if ($owner) { [void]$set.Add($owner.ToLowerInvariant()) }
+        $slug = ([string]$s.Url).TrimEnd('/') -split '/personal/' | Select-Object -Last 1
+        if ($slug) { [void]$set.Add($slug.ToLowerInvariant()) }
+    }
+    Write-SsmLog -Message ("Pre-provision: {0} personal sites enumerated." -f $set.Count)
+    return $set
+}
+
 #endregion
