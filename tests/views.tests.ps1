@@ -1392,6 +1392,7 @@ Invoke-SsmTest 'Invoke-SsmOneDriveProvision provisions only selected Unprovision
     function Get-SsmLicensedUsers { param($Progress) throw 'must not reload' }
     function Show-TypedConfirmModal { param($Title, $Lines, $Word) Assert-Equal 'PROVISION' $Word; $true }
     function Connect-SsmProvisioningSession { [pscustomobject]@{ Url = 'https://contoso-admin.sharepoint.com' } }
+    function Write-Screen { }
     function Invoke-SsmPersonalSiteRequest { param($Upns, $Connection, $Progress) $script:RequestedUpns = @($Upns)
         @($Upns | ForEach-Object { [pscustomobject]@{ Upn=$_; Batch=1; Status='Requested'; Error='' } }) }
     $rows = @(

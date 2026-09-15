@@ -1257,6 +1257,9 @@ function Invoke-SsmOneDriveProvision {
 
     try {
         $provConn = Connect-SsmProvisioningSession
+        # Back from the main buffer: the alternate screen was cleared on
+        # re-entry, so repaint before drawing progress on top of it.
+        Write-Screen
     } catch {
         Write-SsmErrorLog -Context 'Pre-provision: interactive SPO Management Shell sign-in failed' -ErrorRecord $_
         Show-MsgModal -Title $title -Kind Error -Lines @('Sign-in for provisioning failed or was cancelled:', $_.Exception.Message, '', 'Nothing was submitted.')

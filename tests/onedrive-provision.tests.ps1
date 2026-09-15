@@ -96,6 +96,8 @@ Invoke-SsmTest 'Connect-SsmProvisioningSession uses the SPO Management Shell cli
     $script:Auth = @{ AdminUrl = 'https://contoso-admin.sharepoint.com'; Tenant = 'contoso.onmicrosoft.com' }
     $script:Calls = 0
     function Invoke-OnMainBuffer { param([scriptblock]$Action) & $Action }
+    function Write-Host { }
+    function Start-Sleep { }
     function Connect-PnPOnline { param($Url, $Interactive, $ClientId, $ReturnConnection, $Tenant, $ErrorAction)
         $script:Calls++; [pscustomobject]@{ Url = $Url; ClientId = $ClientId } }
     try {

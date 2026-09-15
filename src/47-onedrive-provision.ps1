@@ -117,7 +117,15 @@ function Connect-SsmProvisioningSession {
     if (-not $script:Auth.AdminUrl) { throw 'Tenant admin URL is not known yet - connect once (Enter on the OneDrives tab) first.' }
     $splat = @{ Url = $script:Auth.AdminUrl; Interactive = $true; ClientId = $script:SpoShellClientId; ReturnConnection = $true; ErrorAction = 'Stop' }
     if ($script:Auth.Tenant) { $splat.Tenant = $script:Auth.Tenant }
-    Invoke-OnMainBuffer { $script:ProvConn = Connect-PnPOnline @splat }
+    Invoke-OnMainBuffer {
+        Write-Host ''
+        Write-Host ("OneDrive provisioning: browser sign-in to {0}" -f $splat.Url) -ForegroundColor Yellow
+        Write-Host 'Sign in as a SharePoint Administrator (SharePoint Online Management Shell client).' -ForegroundColor Yellow
+        Write-Host 'Waiting for the browser...' -ForegroundColor DarkGray
+        $script:ProvConn = Connect-PnPOnline @splat
+        Write-Host 'Signed in. Submitting provisioning requests - returning to the app.' -ForegroundColor Green
+        Start-Sleep -Milliseconds 800
+    }
     Write-SsmLog -Message ("Pre-provision: interactive SPO Management Shell session opened on {0}." -f $script:Auth.AdminUrl)
     return $script:ProvConn
 }

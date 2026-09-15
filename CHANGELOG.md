@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fix: after the browser sign-in for OneDrive provisioning the terminal
+  stayed black until the summary appeared. The main buffer now shows what
+  is happening during the sign-in, and the screen is repainted before the
+  batch progress is drawn.
+
 ## [1.10.0-rc.5] - 2026-09-15
 
 - Fix: OneDrive pre-provisioning (`P`) now works. Root cause of the
