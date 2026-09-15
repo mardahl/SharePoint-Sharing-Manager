@@ -184,6 +184,7 @@ Full key reference, auth trade-offs, and per-setting docs live in the [wiki](htt
 | App-only mode | No per-target admin role needed once the app is consented |
 | OneDrive secondary-admin **List** (`M`, read-only) | Same as any other target action - no extra directory scope needed. |
 | OneDrive secondary-admin **Add/Remove** (`M`, limited validation, see [Caveats](#caveats)) | App-only mode's registration additionally requests Graph `User.Read.All` (application) for exact UPN resolution - added to new registrations by this version; existing app-only registrations need manual re-consent (guided in-app). Delegated mode's existing default consent set already covers this (`User.ReadWrite.All`); no change needed there. An operator has reported a successful Add via app-only auth; delegated auth and Remove are still unverified against a live tenant. |
+| OneDrive pre-provisioning (`P`) | SharePoint Administrator. App-only mode additionally needs the SharePoint application permission `User.ReadWrite.All` (User Profile Service, used by `Request-PnPPersonalSite`) - requested by new registrations from v1.10.0; existing app-only registrations must add it manually and grant admin consent (the failure summary in the tool spells out the steps). Delegated mode's default consent set already includes it. |
 
 Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication) in the wiki.
 

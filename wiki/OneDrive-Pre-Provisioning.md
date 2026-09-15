@@ -62,7 +62,20 @@ the list; `P` reloads them.
 | Auth mode | Needs |
 |---|---|
 | Delegated | SharePoint Administrator role; `User.Read.All` (included in the default delegated scopes) |
-| App-only | `Sites.FullControl.All` and `User.Read.All` application permissions (both granted by the setup wizard) |
+| App-only | `Sites.FullControl.All` (SharePoint + Graph), **`User.ReadWrite.All` (SharePoint)** and `User.Read.All` (Graph) application permissions. Registrations created by the setup wizard from v1.10.0 include all of them. |
+
+`Request-PnPPersonalSite` goes through the User Profile Service, which
+rejects app-only tokens that lack SharePoint `User.ReadWrite.All` with an
+"access denied ... profile" message (localized to the tenant language).
+Rows in that batch stay `Unprovisioned` and the summary modal shows the
+first error plus the fix.
+
+**Existing app-only registrations are not changed automatically.** To add
+the permission once: Entra portal > App registrations >
+`SharePoint-Sharing-Manager` > API permissions > Add a permission >
+SharePoint > Application permissions > `User.ReadWrite.All` > Grant admin
+consent (Global Administrator or Privileged Role Administrator). Then run
+`P` again.
 
 ## Limitations
 

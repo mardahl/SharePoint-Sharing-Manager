@@ -1258,11 +1258,16 @@ function Invoke-SsmOneDriveProvision {
     if ($Tab.ContainsKey('View')) { Update-TabView -Tab $Tab }
     $reqCsv = Export-SsmProvisionCsv -Rows $rows -Phase REQUESTED
     $failed = $rows.Count - $ok.Count
-    Show-MsgModal -Title $title -Kind ($failed -gt 0 ? 'Warn' : 'Info') -Lines @(
+    $lines = @(
         ("Requested {0} user(s); {1} failed." -f $ok.Count, $failed),
         "CSV: $reqCsv", '',
         'SharePoint provisions personal sites asynchronously.',
         'Rows now show Requested. C then P reloads the list to verify later.')
+    if ($failed -gt 0) {
+        $firstErr = [string](@($rows | Where-Object { $_.Status -eq 'Failed' })[0].Error)
+        $lines += @('', "First error: $firstErr", '') + (Get-SsmProvisionFailureHint)
+    }
+    Show-MsgModal -Title $title -Kind ($failed -gt 0 ? 'Warn' : 'Info') -Lines $lines
 }
 
 function Get-TabHints {

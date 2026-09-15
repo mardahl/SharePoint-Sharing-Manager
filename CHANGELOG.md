@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fix: OneDrive pre-provisioning (`P`) failed in app-only mode with a
+  localized "access denied ... profile" error because
+  `Request-PnPPersonalSite` needs the SharePoint application permission
+  `User.ReadWrite.All`. New app-only registrations now request it; the
+  failure summary shows the first error and the manual steps to add the
+  permission to an existing registration. Wiki Authentication, Requirements
+  and OneDrive-Pre-Provisioning pages updated.
+
 ## [1.10.0-rc.2] - 2026-09-15
 
 - Change: OneDrive pre-provisioning is now selective. `P` on the OneDrives

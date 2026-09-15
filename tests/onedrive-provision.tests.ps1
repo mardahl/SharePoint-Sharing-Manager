@@ -66,3 +66,9 @@ Invoke-SsmTest 'Get-StatusBadge renders Unprovisioned and Requested badges' {
     } finally { $script:T = $prevT; $script:G = $prevG }
 }
 
+
+Invoke-SsmTest 'Get-SsmProvisionFailureHint names the missing SharePoint permission' {
+    $h = @(Get-SsmProvisionFailureHint) -join ' '
+    if ($h -notmatch 'User\.ReadWrite\.All') { throw "hint missing permission: $h" }
+    if ($h -notmatch 'Grant admin consent') { throw "hint missing consent step: $h" }
+}

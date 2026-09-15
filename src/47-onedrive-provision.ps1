@@ -143,4 +143,19 @@ function New-SsmPlaceholderTarget {
     return $t
 }
 
+function Get-SsmProvisionFailureHint {
+    # Request-PnPPersonalSite talks to the User Profile Service, which needs
+    # the SharePoint permission User.ReadWrite.All on top of
+    # Sites.FullControl.All. App-only registrations created before v1.10.0
+    # lack it and fail with a localized "access denied ... profile" message.
+    return @(
+        'Most common cause: the app registration lacks the SharePoint',
+        'APPLICATION permission User.ReadWrite.All (needed by the User',
+        'Profile Service). New app-only registrations from v1.10.0 include it.',
+        'To fix an existing app: Entra portal > App registrations >',
+        'SharePoint-Sharing-Manager > API permissions > Add a permission >',
+        'SharePoint > Application permissions > User.ReadWrite.All >',
+        'Grant admin consent. Delegated sign-in already has this scope.')
+}
+
 #endregion
