@@ -53,7 +53,15 @@ function Get-SsmTenantSiteProperties {
     $ctx = Get-PnPContext
     $tenant = New-Object Microsoft.Online.SharePoint.TenantAdministration.Tenant($ctx)
     $filter = New-Object Microsoft.Online.SharePoint.TenantAdministration.SPOSitePropertiesEnumerableFilter
-    $filter.IncludePersonalSite = $IncludePersonal ? [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::Include : [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::UseServerDefault
+    # Include = personal sites IN ADDITION to regular sites, so also pin Template
+    # to SPSPERS server-side; otherwise every tenant site is paged and the
+    # progress count reflects all sites, not OneDrives.
+    if ($IncludePersonal) {
+        $filter.IncludePersonalSite = [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::Include
+        $filter.Template = 'SPSPERS'
+    } else {
+        $filter.IncludePersonalSite = [Microsoft.Online.SharePoint.TenantAdministration.PersonalSiteFilter]::Exclude
+    }
     $filter.IncludeDetail = $true
     $sites = [System.Collections.ArrayList]::new()
     do {

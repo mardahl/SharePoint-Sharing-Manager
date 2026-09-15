@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.10.1-rc.1] - 2026-09-15
+
+- Fix: loading the OneDrives tab and the unprovisioned pre-check paged
+  through every site collection in the tenant (the CSOM `Include` personal
+  site filter adds OneDrives on top of regular sites), so the progress
+  counter showed the total site count and the load was far slower than
+  needed. Personal sites are now requested server-side by template
+  (`SPSPERS`), and the Sites tab explicitly excludes them.
+
 ## [1.10.0] - 2026-09-15
 
 - Add: OneDrive pre-provisioning (`P`, OneDrives tab). Loads every enabled
