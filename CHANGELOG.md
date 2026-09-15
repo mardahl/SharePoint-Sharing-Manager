@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.10.0-rc.5] - 2026-09-15
+
 - Fix: OneDrive pre-provisioning (`P`) now works. Root cause of the
   "Attempted to perform an unauthorized operation" failures: the server
   only authorizes personal-site provisioning for tokens carrying the
