@@ -64,4 +64,21 @@ function Export-ViewCsv {
     Show-MsgModal -Title 'Exported' -Lines @('View exported to:', $path)
 }
 
+function Export-SsmProvisionCsv {
+    # OneDrive pre-provisioning evidence. UNPROVISIONED = the preview list
+    # shown before confirmation; REQUESTED = per-user outcome of the
+    # Request-PnPPersonalSite batches.
+    param(
+        [object[]]$Rows,
+        [Parameter(Mandatory)][ValidateSet('UNPROVISIONED','REQUESTED')][string]$Phase
+    )
+    if (-not (Test-Path -LiteralPath $script:ExportDir)) { New-Item -ItemType Directory -Path $script:ExportDir -Force | Out-Null }
+    $columns = if ($Phase -eq 'UNPROVISIONED') { @('Upn','DisplayName') } else { @('Upn','Batch','Status','Error') }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $path = Join-Path $script:ExportDir ("SSM_ONEDRIVE_{0}_{1}.csv" -f $Phase, $stamp)
+    @($Rows) | Select-Object $columns | Export-Csv -LiteralPath $path -NoTypeInformation -Encoding UTF8BOM
+    Write-SsmLog -Message ("Pre-provision {0} evidence: {1}" -f $Phase, $path)
+    return $path
+}
+
 #endregion
