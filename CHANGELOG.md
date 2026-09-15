@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-14
+
 - Add: the Sites/OneDrives status line shows `from cache (saved <date>,
   C reloads)` whenever the list on screen was restored from
   `session.json`, so a stale list is never mistaken for a fresh one.
@@ -9,9 +11,6 @@
   drops it from the session cache, and re-enumerates the tenant.
 - Fix: the footer key bar always shows `? help` and `Q quit`; on narrow
   terminals the middle hints are trimmed instead.
-
-## [1.9.0-rc.2] - 2026-09-14
-
 - Fix: target enumeration (`Enter` / Scan all on an empty Sites or
   OneDrives tab) now shows real progress. It drives the same paged CSOM
   call `Get-PnPTenantSite` uses internally, but updates the modal's
@@ -55,7 +54,7 @@
   saved when its export failed, and a final-evidence-flush failure after
   a completed/stopped batch is shown in the completion report, not only
   logged. No provisioning/API behavior changed: diagnostics-only.
-- Note: Add/Remove remain prerelease. An operator reported a successful
+- Note: Add/Remove ship with limited live validation. An operator reported a successful
   Add via app-only auth after the CSOM fix above (evidence: the app
   registration's own service principal recorded as actor) - Remove,
   owner-negative cases, bulk targets, and delegated auth are still

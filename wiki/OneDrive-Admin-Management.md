@@ -2,18 +2,15 @@
 
 > **`List` is read-only.** It requires no typed confirmation, makes no
 > directory/Graph lookup, and does not write CSV evidence or change any
-> permission - but it ships as part of the same prerelease build as
-> `Add`/`Remove` below, not as a separately-validated stable feature.
+> permission.
 
-> **Prerelease (v1.9.0-rc.2), limited live validation.** `Add` and
-> `Remove` were implemented and tested against mocked PnP/Graph calls; an
-> operator has since reported a successful **Add** against a live tenant
-> using app-only auth, after the CSOM `-Includes` fix in this release.
-> **Remove**, owner-negative cases, bulk targets, and delegated auth
-> remain unverified. They ship as prerelease until the remaining cases
-> are validated; the stable release line (currently v1.8.0)
-> does not include `Add`/`Remove` and does not move until then.
-> Do not rely on them for production access changes until then.
+> **Limited live validation.** `Add` and `Remove` were implemented and
+> tested against mocked PnP/Graph calls; an operator has since reported a
+> successful **Add** against a live tenant using app-only auth, after the CSOM
+> `-Includes` fix in v1.9.0. **Remove**, owner-negative cases, bulk targets,
+> and delegated auth remain unverified against a live tenant. Treat Add/Remove
+> with care, review BEFORE/AFTER CSV evidence, and do not rely on them for
+> production access changes until the remaining cases are validated.
 > See `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md`
 > in the repo for the full validation matrix.
 
@@ -145,7 +142,7 @@ specific permission error; it never falls back to a partial-match lookup,
 and existing scans/revokes are unaffected. See
 [[FAQ-and-Troubleshooting]] and [[Authentication]] for recovery steps.
 
-App-only Add has one operator-reported live success (see the prerelease
+App-only Add has one operator-reported live success (see the validation
 notice at the top of this page); Remove and delegated auth remain
 unproven against a real tenant.
 

@@ -16,7 +16,7 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 | [[Requirements]] | PowerShell, modules, Entra roles per task |
 | [[Authentication]] | Delegated vs app-only certificate mode |
 | [[Scanning-and-Revoking]] | Findings categories, keys, evidence CSVs |
-| [[OneDrive-Admin-Management]] | List, add, or remove secondary administrators on selected OneDrives - whole feature ships as **prerelease v1.9.0-rc.2**; List is read-only, Add has an operator-reported app-only success, Remove and delegated auth are pending validation |
+| [[OneDrive-Admin-Management]] | List, add, or remove secondary administrators on selected OneDrives - released in v1.9.0 with limited live validation; List is read-only, Add has an operator-reported app-only success, Remove and delegated auth are pending validation |
 | [[Tenant-Hardening]] | Sharing tab settings and the CIS baseline |
 | [[Multi-Tenant-Support]] | Managing several tenants from one install |
 | [[FAQ-and-Troubleshooting]] | Caveats, known limitations, common issues |
@@ -29,6 +29,6 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 - **No telemetry**: the only network calls are to SharePoint Online and Microsoft Graph, triggered explicitly by the operator
 - Destructive operations sit behind typed confirmations (`REVOKE` / `APPLY` / `CIS`), and every scan and revoke run writes BEFORE/REVOKED CSV evidence
 - License: MIT. Provided as-is. Test in a non-production tenant first.
-- **Latest stable release: v1.8.0.** OneDrive secondary-admin management (`M`) ships as prerelease v1.9.0-rc.2 (List, Add, and Remove all part of this same prerelease build); `List` is read-only, and Add has an operator-reported app-only success, but Remove and delegated auth are still pending validation - see [[OneDrive-Admin-Management]].
+- **Latest stable release: v1.9.0.** OneDrive secondary-admin management (`M`) released in v1.9.0 with limited live validation; `List` is read-only, and Add has an operator-reported app-only success, but Remove and delegated auth are still pending validation - see [[OneDrive-Admin-Management]].
 
 Source, releases, and issue tracker: [github.com/mardahl/SharePoint-Sharing-Manager](https://github.com/mardahl/SharePoint-Sharing-Manager)

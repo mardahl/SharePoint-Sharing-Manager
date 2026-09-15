@@ -9,7 +9,7 @@
 - Cleanup does not prevent new sharing. Use the Sharing tab's hardening toggles for that (see [[Tenant-Hardening]]).
 - The SharePoint admin site URL is derived as `https://<tenant>-admin.sharepoint.com`; tenants that do not follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 - Restored scan-cache sessions may be stale relative to the tenant's current sharing state; rescan before acting on old results. Scan-all (`X`) scans one target at a time.
-- OneDrive secondary-admin management (`M`) ships in prerelease v1.9.0-rc.2. An operator has reported a successful Add via app-only auth; Remove and delegated auth are still pending live-tenant validation. `List` is read-only (no permission-change confirmation, no directory/Graph lookup, no CSV evidence) but ships as part of this same prerelease build, not as a separately validated stable feature. See [[OneDrive-Admin-Management]].
+- OneDrive secondary-admin management (`M`) released in v1.9.0 with limited live validation. `List` is read-only (no permission-change confirmation, no directory/Graph lookup, no CSV evidence). Add has an operator-reported successful Add via app-only auth; Remove, owner-negative cases, bulk targets, and delegated auth are still pending live-tenant validation. Treat Add/Remove with care and review BEFORE/AFTER CSV evidence. See [[OneDrive-Admin-Management]].
 
 ## Common issues
 
@@ -45,7 +45,7 @@ eligible. See [[OneDrive-Admin-Management#diagnostics-and-logging]].
 **`M` logs "The query expression is not supported." for a target's membership read.**
 This was a bug in how the tool requested PnP's `AadObjectId` field (a
 dotted nested path CSOM's query translator rejects), fixed in
-v1.9.0-rc.2 - it was never a missing Graph scope, app permission, or
+v1.9.0 - it was never a missing Graph scope, app permission, or
 tenant provisioning problem. If you still see this exact message, you are
 on a build older than the fix; update SharePoint Sharing Manager. It fails closed
 (Blocked, no write) rather than guessing membership, so no mutation could
@@ -56,7 +56,7 @@ have happened while this was present.
 | Location | Content |
 |---|---|
 | `SharePoint-Sharing-Manager_<timestamp>.log` | Session log (also viewable on the Log tab) |
-| `SSM-Exports/` | BEFORE/REVOKED evidence, view exports, and OneDrive secondary-admin BEFORE/AFTER evidence (**prerelease**, see [[OneDrive-Admin-Management]]) |
+| `SSM-Exports/` | BEFORE/REVOKED evidence, view exports, and OneDrive secondary-admin BEFORE/AFTER evidence (see [[OneDrive-Admin-Management]]) |
 | `~/.sharepoint-sharing-manager.json` | Sign-in configuration, one entry per tenant |
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode |
 | `SSM-Cache/<tenant-slug>/session.json` | Cached scan results per tenant; contains directory data |
