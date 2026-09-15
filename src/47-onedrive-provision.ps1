@@ -76,4 +76,49 @@ function Get-SsmProvisionedOwnerSet {
     return $set
 }
 
+function Get-SsmLicensedUsers {
+    # Page through enabled member users, filter client-side to those with an
+    # Enabled SharePoint plan. One request per 999 users; no per-user calls.
+    # Throws on Graph failure - the view maps 403 to a permissions message.
+    param([scriptblock]$Progress)
+    $url = "users?`$filter=accountEnabled eq true and userType eq 'Member'&`$select=id,userPrincipalName,displayName,assignedPlans&`$top=999"
+    $raw = [System.Collections.ArrayList]::new()
+    do {
+        $resp = Invoke-PnPGraphMethod -Method Get -Url $url -ErrorAction Stop
+        $items = @()
+        if ($resp.PSObject.Properties['value']) { $items = @($resp.value) }
+        foreach ($i in $items) { [void]$raw.Add($i) }
+        $url = if ($resp.PSObject.Properties['@odata.nextLink']) { [string]$resp.'@odata.nextLink' } else { $null }
+        if ($Progress) { & $Progress $raw.Count }
+    } while ($url)
+    $licensed = @(Select-SsmSharePointLicensed -Users $raw.ToArray())
+    Write-SsmLog -Message ("Pre-provision: {0} enabled members, {1} with SharePoint plan." -f $raw.Count, $licensed.Count)
+    return $licensed
+}
+
+function Invoke-SsmPersonalSiteRequest {
+    # Request-PnPPersonalSite accepts up to 200 UPNs per call and queues the
+    # work server-side; SharePoint provisions asynchronously afterwards.
+    # A failed batch marks every UPN in it Failed and the run continues.
+    # ponytail: no retry/backoff; add if 429 throttling shows up in the log.
+    param([string[]]$Upns, [scriptblock]$Progress)
+    $rows = @()
+    $batches = @(Split-SsmBatch -Items $Upns -Size 200)
+    $n = 0
+    foreach ($b in $batches) {
+        $n++
+        $status = 'Requested'; $err = ''
+        try {
+            Request-PnPPersonalSite -UserEmails @($b) -ErrorAction Stop
+            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested ({2} users)." -f $n, $batches.Count, @($b).Count) -Level OK
+        } catch {
+            $status = 'Failed'; $err = $_.Exception.Message
+            Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed" -f $n, $batches.Count) -ErrorRecord $_
+        }
+        foreach ($u in @($b)) { $rows += [pscustomobject]@{ Upn=$u; Batch=$n; Status=$status; Error=$err } }
+        if ($Progress) { & $Progress $n $batches.Count }
+    }
+    return $rows
+}
+
 #endregion
