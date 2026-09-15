@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.10.0-rc.2] - 2026-09-15
+
 - Change: OneDrive pre-provisioning is now selective. `P` on the OneDrives
   tab loads users without a personal site as rows under a new
   `Unprovisioned` filter (`F` cycle, OneDrives tab only; the rows never
