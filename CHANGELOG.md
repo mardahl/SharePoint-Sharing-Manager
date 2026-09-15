@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.10.0-rc.4] - 2026-09-15
+
 - Fix: OneDrive pre-provisioning in app-only mode failed with "Attempted to
   perform an unauthorized operation" - PnP.PowerShell issue #4329:
   `Request-PnPPersonalSite` (CSOM `Tenant.RequestPersonalSites`) rejects
