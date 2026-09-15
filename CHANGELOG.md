@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.10.0-rc.1] - 2026-09-15
+
 - Add: OneDrive pre-provisioning (`P`, OneDrives tab). Lists every enabled
   member user with an Enabled SharePoint service plan whose personal site
   does not exist yet (diff of Graph `/users` against the tenant's personal
