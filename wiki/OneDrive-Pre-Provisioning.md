@@ -1,7 +1,7 @@
 # OneDrive Pre-Provisioning
 
 Find users who are licensed for OneDrive but have never had a personal
-site created, and request provisioning for all of them in one pass. Useful
+site created, and request provisioning for the ones you select. Useful
 before migrations or before assigning secondary admins, both of which need
 the OneDrive to exist first.
 

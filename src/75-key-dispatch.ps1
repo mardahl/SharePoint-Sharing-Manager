@@ -121,7 +121,7 @@ function Invoke-TargetsKey {
         'E' { Export-ViewCsv -Tab $Tab; return }
         'G' { Enter-AggregateMode -Tab $Tab; return }
         'R' {
-            $selTargets = @($Tab['Items'] | Where-Object { $_.Selected })
+            $selTargets = @($Tab['Items'] | Where-Object { $_.Selected -and -not (Test-SsmPlaceholderTarget -Target $_) })
             if ($selTargets.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('No targets selected. Space selects a drive.'); return }
             $findings = @()
             foreach ($tt in $selTargets) { if (@($tt.Findings).Count -gt 0) { $findings += @($tt.Findings) } }

@@ -108,13 +108,13 @@ function Add-TabBar {
 
 function Get-TargetsLayout {
     param([int]$W)
-    # ' ' sel(3) ' ' Title(flex 35%) '  ' Url(flex 65%) '  ' Findings(8) '  ' Status(13)
-    $fixed = 1 + 3 + 1 + 2 + 2 + 8 + 2 + 13
+    # ' ' sel(3) ' ' Title(flex 35%) '  ' Url(flex 65%) '  ' Findings(8) '  ' Status(15)
+    $fixed = 1 + 3 + 1 + 2 + 2 + 8 + 2 + 15
     $flex = $W - $fixed - 1
     if ($flex -lt 20) { $flex = 20 }
     $titleW = [int]($flex * 0.35)
     $urlW = $flex - $titleW
-    return @{ Title = $titleW; Url = $urlW; Findings = 8; Status = 13 }
+    return @{ Title = $titleW; Url = $urlW; Findings = 8; Status = 15 }
 }
 
 function Add-TargetsView {
