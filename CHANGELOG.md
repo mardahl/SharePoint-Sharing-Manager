@@ -5,8 +5,9 @@
 - Add: OneDrive pre-provisioning (`P`, OneDrives tab). Lists every enabled
   member user with an Enabled SharePoint service plan whose personal site
   does not exist yet (diff of Graph `/users` against the tenant's personal
-  sites), writes `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv`, and after typed
-  `PROVISION` submits `Request-PnPPersonalSite` in batches of 200 with a
+  sites), writes `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv` (only when at
+  least one user is found), and after typed `PROVISION` submits
+  `Request-PnPPersonalSite` in batches of 200 with a
   `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` outcome file. Needs `User.Read.All`
   (already in both auth modes) and SharePoint Administrator.
 

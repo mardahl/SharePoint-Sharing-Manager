@@ -47,7 +47,7 @@ function Get-SsmUnprovisionedUsers {
 }
 
 function Split-SsmBatch {
-    param([string[]]$Items, [Parameter(Mandatory)][int]$Size)
+    param([string[]]$Items, [Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int]$Size)
     $out = @()
     $all = @($Items)
     for ($i = 0; $i -lt $all.Count; $i += $Size) {
@@ -69,6 +69,7 @@ function Get-SsmProvisionedOwnerSet {
         if ($s.Template -notlike 'SPSPERS*') { continue }
         $owner = [string]$s.Owner
         if ($owner) { [void]$set.Add($owner.ToLowerInvariant()) }
+        # Only SPSPERS* sites reach here, so the URL always contains /personal/.
         $slug = ([string]$s.Url).TrimEnd('/') -split '/personal/' | Select-Object -Last 1
         if ($slug) { [void]$set.Add($slug.ToLowerInvariant()) }
     }

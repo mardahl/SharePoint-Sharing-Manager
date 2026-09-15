@@ -28,8 +28,9 @@ reported as unprovisioned. No per-user Graph or drive calls are made.
 1. Press `P`. Progress shows the Graph user paging, then the personal-site
    enumeration.
 2. A report lists `N licensed | M personal sites | K unprovisioned` and
-   every unprovisioned UPN. `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv` is
-   written to `SSM-Exports/<tenant>/` at this point.
+   every unprovisioned UPN. When at least one unprovisioned user is found,
+   `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv` is written to
+   `SSM-Exports/<tenant>/` (no file on a zero result).
 3. If `K > 0`, type `PROVISION` to submit. UPNs are sent to
    `Request-PnPPersonalSite` in batches of 200.
 4. `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Error`
