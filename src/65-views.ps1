@@ -1196,6 +1196,10 @@ function Invoke-SsmOneDriveProvision {
 
     $placeholders = @($Tab['Items'] | Where-Object { Test-SsmPlaceholderTarget -Target $_ })
     if ($placeholders.Count -eq 0) {
+        # Connect first: a list restored from the session cache has not opened
+        # any PnP connection yet, and the Graph call below uses the current one.
+        # Connect-SsmAdmin reports its own failure.
+        if (-not (Connect-SsmAdmin)) { return }
         Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
         try {
             $licensed = @(Get-SsmLicensedUsers -Progress { param($n)

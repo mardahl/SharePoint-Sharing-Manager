@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fix: `P` (OneDrive pre-provisioning) failed with "no connection" when the
+  OneDrives list had been restored from the session cache, because the
+  Graph query ran before any PnP connection existed. `P` now connects to
+  the tenant admin site first, so it works straight after a cached start
+  without pressing `C`.
+
 ## [1.10.0-rc.3] - 2026-09-15
 
 - Fix: OneDrive pre-provisioning (`P`) failed in app-only mode with a

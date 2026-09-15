@@ -1483,3 +1483,28 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminSelectedTargets ignores placeholder rows' {
     Assert-Equal 1 $r.Count
     Assert-Equal 'https://x/a' $r[0].Url
 }
+
+Invoke-SsmTest 'Invoke-SsmOneDriveProvision connects to the admin site before querying Graph (cached-list start)' {
+    $script:Auth = @{ AdminUrl = 'https://contoso-admin.sharepoint.com' }
+    $script:UI = @{ Dirty = $false }
+    $script:Order = @()
+    function Write-ProgressModal { }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+    function Export-SsmProvisionCsv { param($Rows, $Phase) 'x.csv' }
+    function Connect-SsmAdmin { $script:Order += 'connect'; $true }
+    function Get-SsmLicensedUsers { param($Progress) $script:Order += 'graph'; @() }
+    function Get-SsmProvisionedOwnerSet { param($Progress) $script:Order += 'owners'; return ,([System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)) }
+    $tab = @{ OneDrive = $true; Items = @(@{ Url='https://x/a'; Title='a'; Status='NotScanned'; FindingCount=0; Findings=@(); Selected=$false }); View = @(); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0 }
+    Invoke-SsmOneDriveProvision -Tab $tab
+    Assert-Equal 'connect' $script:Order[0]
+    Assert-Equal 'graph' $script:Order[1]
+}
+
+Invoke-SsmTest 'Invoke-SsmOneDriveProvision aborts quietly when the admin connection fails' {
+    $script:Graphed = $false
+    function Write-ProgressModal { }
+    function Connect-SsmAdmin { $false }
+    function Get-SsmLicensedUsers { param($Progress) $script:Graphed = $true; @() }
+    Invoke-SsmOneDriveProvision -Tab @{ OneDrive = $true; Items = @() }
+    Assert-Equal $false $script:Graphed
+}
