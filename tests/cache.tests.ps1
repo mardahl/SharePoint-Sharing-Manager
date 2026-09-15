@@ -59,3 +59,13 @@ Invoke-SsmTest 'Save then restore via disk round-trips' {
 
     Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+Invoke-SsmTest 'ConvertTo-SsmCacheObject omits placeholder rows' {
+    $script:Version = 'test'
+    $tabs = @(@{ Kind = 'Targets'; Name = 'OneDrives'; Categories = @(); Items = @(
+        @{ Url = 'https://x/a'; Title = 'a'; Template = ''; Status = 'Clean'; FindingCount = 0; Findings = @() },
+        @{ Url = 'https://x/p'; Title = 'p'; Template = ''; Status = 'Unprovisioned'; FindingCount = 0; Findings = @(); Upn = 'p@x.com' }) })
+    $o = ConvertTo-SsmCacheObject -Tabs $tabs
+    Assert-Equal 1 @($o.Tabs[0].Items).Count
+    Assert-Equal 'https://x/a' $o.Tabs[0].Items[0].Url
+}

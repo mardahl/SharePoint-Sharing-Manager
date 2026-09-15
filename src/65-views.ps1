@@ -3,14 +3,21 @@
 # ============================================================================
 
 function Update-TabView {
-    # Filter + sort targets. Filter: All | NotScanned | Clean | Findings | Failed.
+    # Filter + sort targets. Filter: All | NotScanned | Clean | Findings | Failed | Unprovisioned.
     param($Tab)
     $items = @($Tab['Items'])
-    switch ($Tab['Filter']) {
-        'NotScanned' { $items = @($items | Where-Object { $_.Status -eq 'NotScanned' }) }
-        'Clean'      { $items = @($items | Where-Object { $_.Status -eq 'Clean' }) }
-        'Findings'   { $items = @($items | Where-Object { $_.Status -eq 'Findings' -or $_.Status -eq 'Revoked' }) }
-        'Failed'     { $items = @($items | Where-Object { $_.Status -like '*Failed' }) }
+    # Placeholder rows (users without a personal site) only surface under the
+    # dedicated Unprovisioned filter; every other filter hides them.
+    if ($Tab['Filter'] -eq 'Unprovisioned') {
+        $items = @($items | Where-Object { Test-SsmPlaceholderTarget -Target $_ })
+    } else {
+        $items = @($items | Where-Object { -not (Test-SsmPlaceholderTarget -Target $_) })
+        switch ($Tab['Filter']) {
+            'NotScanned' { $items = @($items | Where-Object { $_.Status -eq 'NotScanned' }) }
+            'Clean'      { $items = @($items | Where-Object { $_.Status -eq 'Clean' }) }
+            'Findings'   { $items = @($items | Where-Object { $_.Status -eq 'Findings' -or $_.Status -eq 'Revoked' }) }
+            'Failed'     { $items = @($items | Where-Object { $_.Status -like '*Failed' }) }
+        }
     }
     if (-not [string]::IsNullOrEmpty($Tab['Search'])) {
         $n = $Tab['Search']
@@ -148,6 +155,8 @@ function Add-TargetsView {
         $totalFindings = ($done | Measure-Object FindingCount -Sum).Sum
         $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f $done.Count, @($done | Where-Object { $_.FindingCount -eq 0 }).Count, @($done | Where-Object { $_.FindingCount -gt 0 }).Count, $totalFindings)
     }
+    $unprov = @($Tab['Items'] | Where-Object { $_.Status -eq 'Unprovisioned' }).Count
+    if ($unprov -gt 0) { $ctx += ('   unprovisioned:{0} (F to view)' -f $unprov) }
     if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + $Tab['Search'] + '"') }
     if ($Tab['CachedAt']) {
         $saved = $Tab['CachedAt']
@@ -289,8 +298,13 @@ function Invoke-TabScan {
     # Scan all selected targets sequentially. Per-target failure isolation:
     # a failed connect/scan marks the target and the loop continues.
     param($Tab)
-    $sel = @($Tab['Items'] | Where-Object { $_.Selected })
-    if ($sel.Count -eq 0) { Show-MsgModal -Title 'Scan' -Lines @('Nothing selected. Space selects targets.') ; return }
+    $sel = @($Tab['Items'] | Where-Object { $_.Selected -and -not (Test-SsmPlaceholderTarget -Target $_) })
+    $skipped = @($Tab['Items'] | Where-Object { $_.Selected -and (Test-SsmPlaceholderTarget -Target $_) }).Count
+    if ($skipped -gt 0) { Write-SsmLog -Message ("Scan: skipped {0} unprovisioned placeholder row(s) - nothing to connect to yet." -f $skipped) -Level WARN }
+    if ($sel.Count -eq 0) {
+        $msg = if ($skipped -gt 0) { 'Only unprovisioned rows are selected - there is nothing to scan yet.' } else { 'Nothing selected. Space selects targets.' }
+        Show-MsgModal -Title 'Scan' -Lines @($msg); return
+    }
     $cats = @($Tab['Categories'])
     if ($cats.Count -eq 0) { Show-MsgModal -Title 'Scan' -Lines @('No rule categories enabled. Press T to enable some.') -Kind Warn; return }
     $i = 0
@@ -743,7 +757,7 @@ function Get-SsmOneDriveAdminSelectedTargets {
     $seen = @{}
     $out = New-Object System.Collections.ArrayList
     foreach ($it in @($Tab['Items'])) {
-        if (-not $it.Selected) { continue }
+        if (-not $it.Selected -or (Test-SsmPlaceholderTarget -Target $it)) { continue }
         $norm = ([string]$it.Url).TrimEnd('/')
         $key = $norm.ToLowerInvariant()
         if ($seen.ContainsKey($key)) { continue }

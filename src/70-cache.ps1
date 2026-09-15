@@ -10,6 +10,7 @@ function ConvertTo-SsmCacheObject {
         if ($tab['Kind'] -ne 'Targets') { continue }
         $items = @()
         foreach ($it in @($tab['Items'])) {
+            if (Test-SsmPlaceholderTarget -Target $it) { continue }
             $items += [ordered]@{
                 Url = $it.Url; Title = $it.Title; Template = $it.Template
                 Status = $it.Status; FindingCount = $it.FindingCount

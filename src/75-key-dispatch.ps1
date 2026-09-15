@@ -89,6 +89,7 @@ function Invoke-TargetsKey {
         '/' { $script:UI.SearchMode = $true; return }
         'F' {
             $order = @('All','NotScanned','Clean','Findings','Failed')
+            if ($Tab['OneDrive']) { $order += 'Unprovisioned' }
             $idx = [Array]::IndexOf($order, $Tab['Filter'])
             $Tab['Filter'] = $order[(($idx + 1) % $order.Count)]
             $Tab['Cursor'] = 0

@@ -1383,3 +1383,59 @@ Invoke-SsmTest 'Invoke-SsmOneDriveProvision requests after PROVISION confirm' {
     Assert-Equal 1 $script:RequestedUpns.Count
     Assert-Equal 'new@x.com' $script:RequestedUpns[0]
 }
+
+Invoke-SsmTest 'Update-TabView hides placeholder rows under All and shows only them under Unprovisioned' {
+    $tab = @{
+        Items = @(
+            @{ Url = 'https://x/a'; Title = 'a'; Status = 'Clean'; FindingCount = 0 },
+            @{ Url = 'https://x/p'; Title = 'p'; Status = 'Unprovisioned'; FindingCount = 0; Upn = 'p@x.com' },
+            @{ Url = 'https://x/q'; Title = 'q'; Status = 'ProvisionRequested'; FindingCount = 0; Upn = 'q@x.com' }
+        )
+        Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @()
+    }
+    Update-TabView -Tab $tab
+    Assert-Equal 1 @($tab['View']).Count
+    Assert-Equal 'https://x/a' $tab['View'][0].Url
+    $tab['Filter'] = 'NotScanned'; Update-TabView -Tab $tab
+    Assert-Equal 0 @($tab['View']).Count
+    $tab['Filter'] = 'Unprovisioned'; Update-TabView -Tab $tab
+    Assert-Equal 2 @($tab['View']).Count
+}
+
+Invoke-SsmTest 'F cycles into Unprovisioned only on the OneDrives tab' {
+    $mk = { param($od) @{ OneDrive = $od; Items = @(); View = @(); Filter = 'Failed'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0 } }
+    $script:UI = @{ Dirty = $false; SearchMode = $false; H = 24 }
+    $k = [System.ConsoleKeyInfo]::new('f', [System.ConsoleKey]::F, $false, $false, $false)
+    $od = & $mk $true;  Invoke-TargetsKey -Tab $od -K $k;  Assert-Equal 'Unprovisioned' $od['Filter']
+    Invoke-TargetsKey -Tab $od -K $k;  Assert-Equal 'All' $od['Filter']
+    $st = & $mk $false; Invoke-TargetsKey -Tab $st -K $k;  Assert-Equal 'All' $st['Filter']
+}
+
+Invoke-SsmTest 'Invoke-TabScan skips placeholder rows' {
+    $script:Connected = $false
+    function Connect-SsmSite { param($Url) $script:Connected = $true; $false }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+    function Write-Screen { }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Write-ProgressModal { }
+    function New-SsmProgressCallback { param($Title, $State, $CancelMode) { } }
+    function Save-SsmCache { }
+    function Update-TabTargetStatuses { param($Tab) }
+    $tab = @{
+        Items = @(@{ Url = 'https://x/p'; Title = 'p'; Status = 'Unprovisioned'; FindingCount = 0; Findings = @(); Selected = $true; Upn = 'p@x.com' })
+        Categories = @('Links'); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @()
+    }
+    Invoke-TabScan -Tab $tab
+    Assert-Equal $false $script:Connected
+    Assert-Equal 'Unprovisioned' $tab['Items'][0].Status
+}
+
+Invoke-SsmTest 'Get-SsmOneDriveAdminSelectedTargets ignores placeholder rows' {
+    $tab = @{ Items = @(
+        @{ Url = 'https://x/a'; Title = 'a'; Status = 'Clean'; Selected = $true },
+        @{ Url = 'https://x/p'; Title = 'p'; Status = 'Unprovisioned'; Selected = $true; Upn = 'p@x.com' }) }
+    $r = @(Get-SsmOneDriveAdminSelectedTargets -Tab $tab)
+    Assert-Equal 1 $r.Count
+    Assert-Equal 'https://x/a' $r[0].Url
+}
