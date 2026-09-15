@@ -1247,12 +1247,24 @@ function Invoke-SsmOneDriveProvision {
     }
 
     $confirm = @(("Request OneDrive provisioning for {0} user(s)?" -f $chosen.Count), '',
-        'SharePoint queues the work and provisions asynchronously (minutes to hours).', '') +
+        'SharePoint queues the work and provisions asynchronously (minutes to hours).', '',
+        'After confirming, a browser sign-in opens: sign in as a SharePoint',
+        'Administrator. Provisioning must go through Microsoft''s SharePoint Online',
+        'Management Shell client - app-only and custom-app tokens are rejected by',
+        'the service (pnp/powershell#4329). The tool''s own connection is unchanged.', '') +
         @($chosen | ForEach-Object { "  $($_.Upn)" })
     if (-not (Show-TypedConfirmModal -Title $title -Lines $confirm -Word 'PROVISION')) { return }
 
+    try {
+        $provConn = Connect-SsmProvisioningSession
+    } catch {
+        Write-SsmErrorLog -Context 'Pre-provision: interactive SPO Management Shell sign-in failed' -ErrorRecord $_
+        Show-MsgModal -Title $title -Kind Error -Lines @('Sign-in for provisioning failed or was cancelled:', $_.Exception.Message, '', 'Nothing was submitted.')
+        return
+    }
+
     $upns = @($chosen | ForEach-Object { $_.Upn })
-    $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Progress { param($b, $t)
+    $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Connection $provConn -Progress { param($b, $t)
         Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 })
     $ok = @{}
     foreach ($r in $rows) { if ($r.Status -eq 'Requested') { $ok[$r.Upn] = $true } }

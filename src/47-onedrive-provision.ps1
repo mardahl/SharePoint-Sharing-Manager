@@ -97,42 +97,51 @@ function Get-SsmLicensedUsers {
     return $licensed
 }
 
+# Personal-site provisioning (CSOM Tenant.RequestPersonalSites) is only
+# authorized for tokens carrying the SharePoint scope AllProfiles.Manage.
+# No tenant can grant that scope to its own app registration - it is
+# pre-authorized solely on Microsoft's first-party "SharePoint Online
+# Management Shell" application. App-only tokens and delegated tokens from a
+# custom app are both rejected with "Attempted to perform an unauthorized
+# operation" (pnp/powershell#4329). Provisioning therefore always uses a
+# separate interactive sign-in through that first-party client id, whatever
+# auth mode the rest of the tool runs in.
+$script:ProvConn = $null
+$script:SpoShellClientId = '9bc3ab49-b65d-410a-85ad-de819febfddc'
+
+function Connect-SsmProvisioningSession {
+    # Interactive SharePoint Administrator sign-in on the tenant admin site via
+    # the SPO Management Shell client. Returned as a separate PnP connection so
+    # the tool's main connection is left untouched. Cached for the session.
+    if ($script:ProvConn) { return $script:ProvConn }
+    if (-not $script:Auth.AdminUrl) { throw 'Tenant admin URL is not known yet - connect once (Enter on the OneDrives tab) first.' }
+    $splat = @{ Url = $script:Auth.AdminUrl; Interactive = $true; ClientId = $script:SpoShellClientId; ReturnConnection = $true; ErrorAction = 'Stop' }
+    if ($script:Auth.Tenant) { $splat.Tenant = $script:Auth.Tenant }
+    Invoke-OnMainBuffer { $script:ProvConn = Connect-PnPOnline @splat }
+    Write-SsmLog -Message ("Pre-provision: interactive SPO Management Shell session opened on {0}." -f $script:Auth.AdminUrl)
+    return $script:ProvConn
+}
+
 function Invoke-SsmPersonalSiteRequest {
     # Up to 200 UPNs per call; SharePoint queues the work and provisions
-    # asynchronously. Two server APIs exist for the same request:
-    #   Request-PnPPersonalSite -> CSOM Tenant.RequestPersonalSites. Fails with
-    #     "Attempted to perform an unauthorized operation" under app-only auth
-    #     (PnP.PowerShell issue #4329, open since 2024).
-    #   New-PnPPersonalSite -> User Profile Service CreatePersonalSiteEnqueueBulk.
-    #     Needs SharePoint User.ReadWrite.All; works app-only.
-    # Try the first, fall back to the second per batch. A batch that fails
-    # both marks every UPN in it Failed and the run continues.
+    # asynchronously. A failed batch marks every UPN in it Failed and the run
+    # continues.
     # ponytail: no retry/backoff; add if 429 throttling shows up in the log.
-    param([string[]]$Upns, [scriptblock]$Progress)
+    param([string[]]$Upns, [Parameter(Mandatory)]$Connection, [scriptblock]$Progress)
     $rows = @()
     $batches = @(Split-SsmBatch -Items $Upns -Size 200)
     $n = 0
     foreach ($b in $batches) {
         $n++
-        $status = 'Requested'; $err = ''; $method = 'Request-PnPPersonalSite'
+        $status = 'Requested'; $err = ''
         try {
-            Request-PnPPersonalSite -UserEmails @($b) -ErrorAction Stop
+            Request-PnPPersonalSite -UserEmails @($b) -Connection $Connection -ErrorAction Stop
+            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested ({2} users)." -f $n, $batches.Count, @($b).Count) -Level OK
         } catch {
-            $first = $_.Exception.Message
-            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} Request-PnPPersonalSite failed ({2}); trying New-PnPPersonalSite." -f $n, $batches.Count, $first) -Level WARN
-            $method = 'New-PnPPersonalSite'
-            try {
-                New-PnPPersonalSite -Email @($b) -ErrorAction Stop
-            } catch {
-                $status = 'Failed'
-                $err = "Request-PnPPersonalSite: $first | New-PnPPersonalSite: $($_.Exception.Message)"
-                Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed on both APIs" -f $n, $batches.Count) -ErrorRecord $_
-            }
+            $status = 'Failed'; $err = $_.Exception.Message
+            Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed" -f $n, $batches.Count) -ErrorRecord $_
         }
-        if ($status -eq 'Requested') {
-            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested via {2} ({3} users)." -f $n, $batches.Count, $method, @($b).Count) -Level OK
-        }
-        foreach ($u in @($b)) { $rows += [pscustomobject]@{ Upn=$u; Batch=$n; Status=$status; Method=$method; Error=$err } }
+        foreach ($u in @($b)) { $rows += [pscustomobject]@{ Upn=$u; Batch=$n; Status=$status; Error=$err } }
         if ($Progress) { & $Progress $n $batches.Count }
     }
     return $rows
@@ -160,21 +169,15 @@ function New-SsmPlaceholderTarget {
 }
 
 function Get-SsmProvisionFailureHint {
-    # Request-PnPPersonalSite talks to the User Profile Service, which needs
-    # the SharePoint permission User.ReadWrite.All on top of
-    # Sites.FullControl.All. App-only registrations created before v1.10.0
-    # lack it and fail with a localized "access denied ... profile" message.
+    # Shown under the first error when a batch fails.
     return @(
-        'Both provisioning APIs were tried (Request-PnPPersonalSite, then',
-        'New-PnPPersonalSite). Common causes in app-only mode:',
-        '1) The app registration lacks the SharePoint APPLICATION permission',
-        '   User.ReadWrite.All. Entra portal > App registrations >',
-        '   SharePoint-Sharing-Manager > API permissions > Add a permission >',
-        '   SharePoint > Application permissions > User.ReadWrite.All >',
-        '   Grant admin consent. New registrations from v1.10.0 include it.',
-        '2) PnP.PowerShell issue #4329: Request-PnPPersonalSite rejects',
-        '   app-only tokens. If New-PnPPersonalSite also failed, switch to',
-        '   delegated sign-in (Setup tab) for this operation.')
+        'Provisioning runs through a separate interactive sign-in with the',
+        'SharePoint Online Management Shell client, because only that client',
+        'holds the AllProfiles.Manage scope the server demands',
+        '(pnp/powershell#4329). Check that the account you signed in with',
+        'holds the SharePoint Administrator role and a SharePoint license,',
+        'and that the target users are licensed and allowed to sign in.',
+        'Users who already have a OneDrive are silently ignored.')
 }
 
 #endregion

@@ -67,35 +67,43 @@ Invoke-SsmTest 'Get-StatusBadge renders Unprovisioned and Requested badges' {
 }
 
 
-Invoke-SsmTest 'Get-SsmProvisionFailureHint names the missing SharePoint permission' {
+Invoke-SsmTest 'Get-SsmProvisionFailureHint explains the SPO Management Shell sign-in requirement' {
     $h = @(Get-SsmProvisionFailureHint) -join ' '
-    if ($h -notmatch 'User\.ReadWrite\.All') { throw "hint missing permission: $h" }
-    if ($h -notmatch 'Grant admin consent') { throw "hint missing consent step: $h" }
+    if ($h -notmatch 'SharePoint Administrator') { throw "hint missing role: $h" }
+    if ($h -notmatch '4329') { throw "hint missing issue ref: $h" }
 }
 
-Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest falls back to New-PnPPersonalSite when Request-PnPPersonalSite fails' {
-    $script:NewCalled = @()
-    function Request-PnPPersonalSite { param($UserEmails) throw 'Attempted to perform an unauthorized operation.' }
-    function New-PnPPersonalSite { param($Email) $script:NewCalled = @($Email) }
-    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com', 'b@x.com'))
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest passes the provisioning connection to Request-PnPPersonalSite' {
+    $script:SeenConn = $null; $script:SeenEmails = @()
+    function Request-PnPPersonalSite { param($UserEmails, $Connection) $script:SeenConn = $Connection; $script:SeenEmails = @($UserEmails) }
+    $conn = [pscustomobject]@{ Url = 'https://contoso-admin.sharepoint.com' }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com', 'b@x.com') -Connection $conn)
     Assert-Equal 2 $r.Count
     Assert-Equal 'Requested' $r[0].Status
-    Assert-Equal 'New-PnPPersonalSite' $r[0].Method
-    Assert-Equal 2 $script:NewCalled.Count
+    Assert-Equal 'https://contoso-admin.sharepoint.com' $script:SeenConn.Url
+    Assert-Equal 2 $script:SeenEmails.Count
 }
 
-Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest reports Failed with both errors when both cmdlets fail' {
-    function Request-PnPPersonalSite { param($UserEmails) throw 'first' }
-    function New-PnPPersonalSite { param($Email) throw 'second' }
-    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com'))
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest marks the whole batch Failed on error and continues' {
+    function Request-PnPPersonalSite { param($UserEmails, $Connection) throw 'Attempted to perform an unauthorized operation.' }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com') -Connection ([pscustomobject]@{}))
     Assert-Equal 'Failed' $r[0].Status
-    if ($r[0].Error -notmatch 'first' -or $r[0].Error -notmatch 'second') { throw "error missing detail: $($r[0].Error)" }
+    if ($r[0].Error -notmatch 'unauthorized') { throw "error not captured: $($r[0].Error)" }
 }
 
-Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest uses Request-PnPPersonalSite when it succeeds' {
-    function Request-PnPPersonalSite { param($UserEmails) }
-    function New-PnPPersonalSite { param($Email) throw 'must not fall back' }
-    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com'))
-    Assert-Equal 'Requested' $r[0].Status
-    Assert-Equal 'Request-PnPPersonalSite' $r[0].Method
+Invoke-SsmTest 'Connect-SsmProvisioningSession uses the SPO Management Shell client id and caches the connection' {
+    $script:ProvConn = $null
+    $script:Auth = @{ AdminUrl = 'https://contoso-admin.sharepoint.com'; Tenant = 'contoso.onmicrosoft.com' }
+    $script:Calls = 0
+    function Invoke-OnMainBuffer { param([scriptblock]$Action) & $Action }
+    function Connect-PnPOnline { param($Url, $Interactive, $ClientId, $ReturnConnection, $Tenant, $ErrorAction)
+        $script:Calls++; [pscustomobject]@{ Url = $Url; ClientId = $ClientId } }
+    try {
+        $c1 = Connect-SsmProvisioningSession
+        $c2 = Connect-SsmProvisioningSession
+        Assert-Equal '9bc3ab49-b65d-410a-85ad-de819febfddc' $c1.ClientId
+        Assert-Equal 'https://contoso-admin.sharepoint.com' $c1.Url
+        Assert-Equal 1 $script:Calls
+        Assert-Equal $c1.Url $c2.Url
+    } finally { $script:ProvConn = $null }
 }

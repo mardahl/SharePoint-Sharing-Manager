@@ -25,7 +25,6 @@
 App-only mode requests **application** permissions:
 
 - `Sites.FullControl.All` (SharePoint)
-- `User.ReadWrite.All` (SharePoint) - for OneDrive pre-provisioning (`P`); new registrations only, see [[Authentication]]
 - `Sites.FullControl.All` (Graph)
 - `User.Read.All` (Graph) - for the OneDrive secondary-admin **Add/Remove** operations' exact UPN lookup (not needed for `List`); new registrations only, see [[Authentication]]
 

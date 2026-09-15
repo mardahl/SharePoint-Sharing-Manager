@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- Fix: OneDrive pre-provisioning (`P`) now works. Root cause of the
+  "Attempted to perform an unauthorized operation" failures: the server
+  only authorizes personal-site provisioning for tokens carrying the
+  SharePoint scope `AllProfiles.Manage`, which no tenant can grant to its
+  own app registration - it exists solely on Microsoft's first-party
+  SharePoint Online Management Shell app (pnp/powershell#4329). App-only
+  certificate tokens and delegated tokens from the tool's own app are both
+  rejected. After typing `PROVISION`, the tool now opens a separate
+  interactive SharePoint Administrator sign-in via that client id
+  (`9bc3ab49-b65d-410a-85ad-de819febfddc`) on the tenant admin site, kept
+  for the session, and submits `Request-PnPPersonalSite` on it. The tool's
+  own connection is unchanged.
+- Change: the rc.3/rc.4 additions are reverted as ineffective: the app-only
+  registration no longer requests SharePoint `User.ReadWrite.All`, the
+  `New-PnPPersonalSite` fallback is removed, and the REQUESTED CSV drops the
+  `Method` column.
+
 ## [1.10.0-rc.4] - 2026-09-15
 
 - Fix: OneDrive pre-provisioning in app-only mode failed with "Attempted to

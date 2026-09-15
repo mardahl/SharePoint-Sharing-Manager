@@ -54,42 +54,48 @@ the list; `P` reloads them.
 3. Press `P`, type `PROVISION`. The selected UPNs are sent to
    `Request-PnPPersonalSite` in batches of 200.
 4. Successfully submitted rows change to `Requested`;
-   `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Method, Error`.
+   `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Error`.
    Rows in a failed batch stay `Unprovisioned` so they can be retried.
 
-## Permissions
+## Permissions and the provisioning sign-in
 
-| Auth mode | Needs |
+Loading the list (Graph users + tenant personal sites) uses the tool's
+normal connection:
+
+| Auth mode | Needs for loading |
 |---|---|
-| Delegated | SharePoint Administrator role; `User.Read.All` (included in the default delegated scopes) |
-| App-only | `Sites.FullControl.All` (SharePoint + Graph), **`User.ReadWrite.All` (SharePoint)** and `User.Read.All` (Graph) application permissions. Registrations created by the setup wizard from v1.10.0 include all of them. |
+| Delegated | SharePoint Administrator role; `User.Read.All` (in the default delegated scopes) |
+| App-only | `Sites.FullControl.All` (SharePoint + Graph) and `User.Read.All` (Graph) - the setup wizard's standard set |
 
-`Request-PnPPersonalSite` goes through the User Profile Service, which
-rejects app-only tokens that lack SharePoint `User.ReadWrite.All` with an
-"access denied ... profile" message (localized to the tenant language).
-Rows in that batch stay `Unprovisioned` and the summary modal shows the
-first error plus the fix.
+**Submitting the provisioning request is different.** The server-side API
+(`Tenant.RequestPersonalSites`, what `Request-PnPPersonalSite` and
+`Request-SPOPersonalSite` both call) only accepts tokens that carry the
+SharePoint scope `AllProfiles.Manage`. That scope cannot be granted to any
+tenant-created app registration; Microsoft pre-authorizes it only on its
+first-party **SharePoint Online Management Shell** application. As a result:
 
-**Existing app-only registrations are not changed automatically.** To add
-the permission once: Entra portal > App registrations >
-`SharePoint-Sharing-Manager` > API permissions > Add a permission >
-SharePoint > Application permissions > `User.ReadWrite.All` > Grant admin
-consent (Global Administrator or Privileged Role Administrator). Then run
-`P` again.
+- app-only certificate tokens are rejected with "Attempted to perform an
+  unauthorized operation" whatever permissions the app holds (including
+  `User.ReadWrite.All` and the undocumented `OneDrive.Provision.All`);
+- delegated tokens from a custom app registration are rejected the same way.
 
-## App-only mode and PnP issue #4329
+See [pnp/powershell#4329](https://github.com/pnp/powershell/issues/4329)
+for the traffic captures that established this.
 
-`Request-PnPPersonalSite` (CSOM `Tenant.RequestPersonalSites`) fails under
-app-only certificate authentication with "Attempted to perform an
-unauthorized operation" no matter which permissions are granted
-([pnp/powershell#4329](https://github.com/pnp/powershell/issues/4329),
-open since 2024). The tool therefore retries every failed batch with
-`New-PnPPersonalSite` (User Profile Service
-`CreatePersonalSiteEnqueueBulk`), which requires the SharePoint application
-permission `User.ReadWrite.All` and works app-only. The
-`SSM_ONEDRIVE_REQUESTED_<stamp>.csv` file records which API succeeded in
-its `Method` column. If both fail, use delegated sign-in (Setup tab) for
-this operation; delegated mode is not affected by the bug.
+The tool therefore opens a **separate interactive sign-in** for the
+provisioning step, using the SharePoint Online Management Shell client id
+(`9bc3ab49-b65d-410a-85ad-de819febfddc`) against the tenant admin site.
+After typing `PROVISION`, a browser window opens: sign in with an account
+that holds the **SharePoint Administrator** role and a SharePoint license.
+The connection is kept for the rest of the session, so later batches do
+not prompt again. The tool's own app-only or delegated connection is not
+touched. No extra app permission is required for this, and the app-only
+registration does not need `User.ReadWrite.All`.
+
+If a batch still fails, the summary modal shows the first error. Typical
+causes: the signed-in account lacks the SharePoint Administrator role or a
+SharePoint license, or the target user is unlicensed or blocked from
+signing in.
 
 ## Limitations
 

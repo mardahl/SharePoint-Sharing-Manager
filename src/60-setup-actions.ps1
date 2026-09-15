@@ -79,10 +79,10 @@ function Register-SsmDelegatedApp {
 
 function Register-SsmAppOnlyApp {
     # App-only certificate app via Register-PnPAzureADApp -ValidYears 1 with
-    # application permissions Sites.FullControl.All (SharePoint + Graph),
-    # SharePoint User.ReadWrite.All (User Profile Service, needed by
-    # Request-PnPPersonalSite for OneDrive pre-provisioning) plus Graph
-    # User.Read.All. Creating the app needs Application Administrator;
+    # application permissions Sites.FullControl.All (SharePoint + Graph) plus
+    # Graph User.Read.All. (OneDrive pre-provisioning deliberately does NOT
+    # add SharePoint User.ReadWrite.All: the service rejects app-only
+    # provisioning regardless - see 47-onedrive-provision.ps1.) Creating the app needs Application Administrator;
     # ADMIN CONSENT for the application permissions needs Global Admin /
     # Privileged Role Admin - the cmdlet opens the consent URL, which can be
     # forwarded.
@@ -98,11 +98,9 @@ function Register-SsmAppOnlyApp {
     $tenant = Get-SsmTenantInput; if (-not $tenant) { return }
     $ok = Show-ConfirmModal -Title 'Register app-only certificate app' -Lines @(
         "Creates app 'SharePoint-Sharing-Manager' in $tenant with APPLICATION",
-        'permissions Sites.FullControl.All (SharePoint + Graph), SharePoint',
-        'User.ReadWrite.All, Graph User.Read.All, and a self-signed',
-        'certificate valid for 1 YEAR, uploaded to the app.', '',
-        'SharePoint User.ReadWrite.All lets OneDrive pre-provisioning (P)',
-        'call the User Profile Service (Request-PnPPersonalSite).', '',
+        'permissions Sites.FullControl.All (SharePoint + Graph), Graph',
+        'User.Read.All, and a self-signed certificate valid for 1 YEAR,',
+        'uploaded to the app.', '',
         'User.Read.All is new: it lets the (release-blocked) OneDrive',
         'secondary-admin feature look up an entered UPN as an exact,',
         'unambiguous directory user instead of a partial-match guess.', '',
@@ -118,7 +116,7 @@ function Register-SsmAppOnlyApp {
                 ApplicationName                  = 'SharePoint-Sharing-Manager'
                 Tenant                            = $tenant
                 ValidYears                        = 1
-                SharePointApplicationPermissions  = @('Sites.FullControl.All', 'User.ReadWrite.All')
+                SharePointApplicationPermissions  = 'Sites.FullControl.All'
                 GraphApplicationPermissions       = @('Sites.FullControl.All', 'User.Read.All')
                 OutPath                           = $outDir
             }

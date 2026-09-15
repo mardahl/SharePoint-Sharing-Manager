@@ -38,8 +38,7 @@ Invoke-SsmTest 'Register-SsmAppOnlyApp requests Sites.FullControl.All plus Graph
         [pscustomobject]@{ 'AzureAppId/ClientId' = 'app-1'; 'Certificate Thumbprint' = 'THUMB' }
     }
     Register-SsmAppOnlyApp
-    Assert-Equal 'True' ($script:LastRegisterSplat.SharePointApplicationPermissions -contains 'Sites.FullControl.All')
-    Assert-Equal 'True' ($script:LastRegisterSplat.SharePointApplicationPermissions -contains 'User.ReadWrite.All')
+    Assert-Equal 'Sites.FullControl.All' $script:LastRegisterSplat.SharePointApplicationPermissions
     Assert-Equal 'True' ($script:LastRegisterSplat.GraphApplicationPermissions -contains 'Sites.FullControl.All')
     Assert-Equal 'True' ($script:LastRegisterSplat.GraphApplicationPermissions -contains 'User.Read.All')
     Assert-Equal 'AppOnly' $script:Auth.AuthMode
