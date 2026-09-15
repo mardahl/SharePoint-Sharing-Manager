@@ -98,9 +98,15 @@ function Get-SsmLicensedUsers {
 }
 
 function Invoke-SsmPersonalSiteRequest {
-    # Request-PnPPersonalSite accepts up to 200 UPNs per call and queues the
-    # work server-side; SharePoint provisions asynchronously afterwards.
-    # A failed batch marks every UPN in it Failed and the run continues.
+    # Up to 200 UPNs per call; SharePoint queues the work and provisions
+    # asynchronously. Two server APIs exist for the same request:
+    #   Request-PnPPersonalSite -> CSOM Tenant.RequestPersonalSites. Fails with
+    #     "Attempted to perform an unauthorized operation" under app-only auth
+    #     (PnP.PowerShell issue #4329, open since 2024).
+    #   New-PnPPersonalSite -> User Profile Service CreatePersonalSiteEnqueueBulk.
+    #     Needs SharePoint User.ReadWrite.All; works app-only.
+    # Try the first, fall back to the second per batch. A batch that fails
+    # both marks every UPN in it Failed and the run continues.
     # ponytail: no retry/backoff; add if 429 throttling shows up in the log.
     param([string[]]$Upns, [scriptblock]$Progress)
     $rows = @()
@@ -108,15 +114,25 @@ function Invoke-SsmPersonalSiteRequest {
     $n = 0
     foreach ($b in $batches) {
         $n++
-        $status = 'Requested'; $err = ''
+        $status = 'Requested'; $err = ''; $method = 'Request-PnPPersonalSite'
         try {
             Request-PnPPersonalSite -UserEmails @($b) -ErrorAction Stop
-            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested ({2} users)." -f $n, $batches.Count, @($b).Count) -Level OK
         } catch {
-            $status = 'Failed'; $err = $_.Exception.Message
-            Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed" -f $n, $batches.Count) -ErrorRecord $_
+            $first = $_.Exception.Message
+            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} Request-PnPPersonalSite failed ({2}); trying New-PnPPersonalSite." -f $n, $batches.Count, $first) -Level WARN
+            $method = 'New-PnPPersonalSite'
+            try {
+                New-PnPPersonalSite -Email @($b) -ErrorAction Stop
+            } catch {
+                $status = 'Failed'
+                $err = "Request-PnPPersonalSite: $first | New-PnPPersonalSite: $($_.Exception.Message)"
+                Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed on both APIs" -f $n, $batches.Count) -ErrorRecord $_
+            }
         }
-        foreach ($u in @($b)) { $rows += [pscustomobject]@{ Upn=$u; Batch=$n; Status=$status; Error=$err } }
+        if ($status -eq 'Requested') {
+            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested via {2} ({3} users)." -f $n, $batches.Count, $method, @($b).Count) -Level OK
+        }
+        foreach ($u in @($b)) { $rows += [pscustomobject]@{ Upn=$u; Batch=$n; Status=$status; Method=$method; Error=$err } }
         if ($Progress) { & $Progress $n $batches.Count }
     }
     return $rows
@@ -149,13 +165,16 @@ function Get-SsmProvisionFailureHint {
     # Sites.FullControl.All. App-only registrations created before v1.10.0
     # lack it and fail with a localized "access denied ... profile" message.
     return @(
-        'Most common cause: the app registration lacks the SharePoint',
-        'APPLICATION permission User.ReadWrite.All (needed by the User',
-        'Profile Service). New app-only registrations from v1.10.0 include it.',
-        'To fix an existing app: Entra portal > App registrations >',
-        'SharePoint-Sharing-Manager > API permissions > Add a permission >',
-        'SharePoint > Application permissions > User.ReadWrite.All >',
-        'Grant admin consent. Delegated sign-in already has this scope.')
+        'Both provisioning APIs were tried (Request-PnPPersonalSite, then',
+        'New-PnPPersonalSite). Common causes in app-only mode:',
+        '1) The app registration lacks the SharePoint APPLICATION permission',
+        '   User.ReadWrite.All. Entra portal > App registrations >',
+        '   SharePoint-Sharing-Manager > API permissions > Add a permission >',
+        '   SharePoint > Application permissions > User.ReadWrite.All >',
+        '   Grant admin consent. New registrations from v1.10.0 include it.',
+        '2) PnP.PowerShell issue #4329: Request-PnPPersonalSite rejects',
+        '   app-only tokens. If New-PnPPersonalSite also failed, switch to',
+        '   delegated sign-in (Setup tab) for this operation.')
 }
 
 #endregion

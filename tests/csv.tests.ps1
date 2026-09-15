@@ -85,9 +85,9 @@ Invoke-SsmTest 'Export-SsmProvisionCsv writes phase-specific columns' {
         $p1 = Export-SsmProvisionCsv -Rows @([pscustomobject]@{ Upn='a@x.com'; DisplayName='A' }) -Phase UNPROVISIONED
         $h1 = (Get-Content -LiteralPath $p1)[0]
         Assert-Equal '"Upn","DisplayName"' $h1
-        $p2 = Export-SsmProvisionCsv -Rows @([pscustomobject]@{ Upn='a@x.com'; Batch=1; Status='Requested'; Error='' }) -Phase REQUESTED
+        $p2 = Export-SsmProvisionCsv -Rows @([pscustomobject]@{ Upn='a@x.com'; Batch=1; Status='Requested'; Method='Request-PnPPersonalSite'; Error='' }) -Phase REQUESTED
         $h2 = (Get-Content -LiteralPath $p2)[0]
-        Assert-Equal '"Upn","Batch","Status","Error"' $h2
+        Assert-Equal '"Upn","Batch","Status","Method","Error"' $h2
         if ((Split-Path $p1 -Leaf) -notlike 'SSM_ONEDRIVE_UNPROVISIONED_*.csv') { throw "bad name $p1" }
     } finally {
         if (Test-Path -LiteralPath $script:ExportDir) { Remove-Item -LiteralPath $script:ExportDir -Recurse -Force }

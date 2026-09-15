@@ -54,7 +54,7 @@ the list; `P` reloads them.
 3. Press `P`, type `PROVISION`. The selected UPNs are sent to
    `Request-PnPPersonalSite` in batches of 200.
 4. Successfully submitted rows change to `Requested`;
-   `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Error`.
+   `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Method, Error`.
    Rows in a failed batch stay `Unprovisioned` so they can be retried.
 
 ## Permissions
@@ -76,6 +76,20 @@ the permission once: Entra portal > App registrations >
 SharePoint > Application permissions > `User.ReadWrite.All` > Grant admin
 consent (Global Administrator or Privileged Role Administrator). Then run
 `P` again.
+
+## App-only mode and PnP issue #4329
+
+`Request-PnPPersonalSite` (CSOM `Tenant.RequestPersonalSites`) fails under
+app-only certificate authentication with "Attempted to perform an
+unauthorized operation" no matter which permissions are granted
+([pnp/powershell#4329](https://github.com/pnp/powershell/issues/4329),
+open since 2024). The tool therefore retries every failed batch with
+`New-PnPPersonalSite` (User Profile Service
+`CreatePersonalSiteEnqueueBulk`), which requires the SharePoint application
+permission `User.ReadWrite.All` and works app-only. The
+`SSM_ONEDRIVE_REQUESTED_<stamp>.csv` file records which API succeeded in
+its `Method` column. If both fail, use delegated sign-in (Setup tab) for
+this operation; delegated mode is not affected by the bug.
 
 ## Limitations
 

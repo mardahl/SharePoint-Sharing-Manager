@@ -72,3 +72,30 @@ Invoke-SsmTest 'Get-SsmProvisionFailureHint names the missing SharePoint permiss
     if ($h -notmatch 'User\.ReadWrite\.All') { throw "hint missing permission: $h" }
     if ($h -notmatch 'Grant admin consent') { throw "hint missing consent step: $h" }
 }
+
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest falls back to New-PnPPersonalSite when Request-PnPPersonalSite fails' {
+    $script:NewCalled = @()
+    function Request-PnPPersonalSite { param($UserEmails) throw 'Attempted to perform an unauthorized operation.' }
+    function New-PnPPersonalSite { param($Email) $script:NewCalled = @($Email) }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com', 'b@x.com'))
+    Assert-Equal 2 $r.Count
+    Assert-Equal 'Requested' $r[0].Status
+    Assert-Equal 'New-PnPPersonalSite' $r[0].Method
+    Assert-Equal 2 $script:NewCalled.Count
+}
+
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest reports Failed with both errors when both cmdlets fail' {
+    function Request-PnPPersonalSite { param($UserEmails) throw 'first' }
+    function New-PnPPersonalSite { param($Email) throw 'second' }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com'))
+    Assert-Equal 'Failed' $r[0].Status
+    if ($r[0].Error -notmatch 'first' -or $r[0].Error -notmatch 'second') { throw "error missing detail: $($r[0].Error)" }
+}
+
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest uses Request-PnPPersonalSite when it succeeds' {
+    function Request-PnPPersonalSite { param($UserEmails) }
+    function New-PnPPersonalSite { param($Email) throw 'must not fall back' }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @('a@x.com'))
+    Assert-Equal 'Requested' $r[0].Status
+    Assert-Equal 'Request-PnPPersonalSite' $r[0].Method
+}

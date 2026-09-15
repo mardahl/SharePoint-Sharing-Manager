@@ -73,7 +73,7 @@ function Export-SsmProvisionCsv {
         [Parameter(Mandatory)][ValidateSet('UNPROVISIONED','REQUESTED')][string]$Phase
     )
     if (-not (Test-Path -LiteralPath $script:ExportDir)) { New-Item -ItemType Directory -Path $script:ExportDir -Force | Out-Null }
-    $columns = if ($Phase -eq 'UNPROVISIONED') { @('Upn','DisplayName') } else { @('Upn','Batch','Status','Error') }
+    $columns = if ($Phase -eq 'UNPROVISIONED') { @('Upn','DisplayName') } else { @('Upn','Batch','Status','Method','Error') }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $path = Join-Path $script:ExportDir ("SSM_ONEDRIVE_{0}_{1}.csv" -f $Phase, $stamp)
     @($Rows) | Select-Object $columns | Export-Csv -LiteralPath $path -NoTypeInformation -Encoding UTF8BOM

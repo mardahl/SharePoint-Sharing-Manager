@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Fix: OneDrive pre-provisioning in app-only mode failed with "Attempted to
+  perform an unauthorized operation" - PnP.PowerShell issue #4329:
+  `Request-PnPPersonalSite` (CSOM `Tenant.RequestPersonalSites`) rejects
+  app-only tokens regardless of permissions. Each batch now falls back to
+  `New-PnPPersonalSite` (User Profile Service, needs SharePoint
+  `User.ReadWrite.All`), which works app-only. The REQUESTED CSV gains a
+  `Method` column; the failure summary explains both causes and suggests
+  delegated sign-in as the last resort.
+
 - Fix: `P` (OneDrive pre-provisioning) failed with "no connection" when the
   OneDrives list had been restored from the session cache, because the
   Graph query ran before any PnP connection existed. `P` now connects to
