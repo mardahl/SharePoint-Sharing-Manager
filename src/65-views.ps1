@@ -1183,8 +1183,10 @@ function Invoke-SsmOneDriveAdmin {
 }
 
 function Invoke-SsmOneDriveProvision {
-    # P on the OneDrives tab: list licensed users with no personal site,
-    # export the list, then (typed PROVISION) bulk-request provisioning.
+    # P on the OneDrives tab. Context-aware:
+    #   no placeholder rows loaded      -> query Graph + tenant, add rows, switch to Unprovisioned filter
+    #   selected Unprovisioned rows     -> typed PROVISION, request only those
+    #   rows loaded, nothing selected   -> hint
     param($Tab)
     $title = 'Pre-provision OneDrives'
     if (-not $Tab['OneDrive']) {
@@ -1192,54 +1194,75 @@ function Invoke-SsmOneDriveProvision {
         return
     }
 
-    Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
-    try {
-        $licensed = @(Get-SsmLicensedUsers -Progress { param($n)
-            Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0 })
-    } catch {
-        Write-SsmErrorLog -Context 'Pre-provision: Graph user query failed' -ErrorRecord $_
-        $msg = $_.Exception.Message
-        $lines = if ($msg -match '403|Forbidden|Authorization_RequestDenied') {
-            @('Graph returned 403.', '', 'Delegated sign-in needs User.Read.All;',
-              'app-only registrations need the User.Read.All application permission.')
-        } else { @('Graph user query failed:', $msg) }
-        Show-MsgModal -Title $title -Lines $lines -Kind Error
+    $placeholders = @($Tab['Items'] | Where-Object { Test-SsmPlaceholderTarget -Target $_ })
+    if ($placeholders.Count -eq 0) {
+        Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
+        try {
+            $licensed = @(Get-SsmLicensedUsers -Progress { param($n)
+                Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0 })
+        } catch {
+            Write-SsmErrorLog -Context 'Pre-provision: Graph user query failed' -ErrorRecord $_
+            $msg = $_.Exception.Message
+            $lines = if ($msg -match '403|Forbidden|Authorization_RequestDenied') {
+                @('Graph returned 403.', '', 'Delegated sign-in needs User.Read.All;',
+                  'app-only registrations need the User.Read.All application permission.')
+            } else { @('Graph user query failed:', $msg) }
+            Show-MsgModal -Title $title -Lines $lines -Kind Error
+            return
+        }
+        Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0
+        $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
+            Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
+        if ($null -eq $ownerSet) { return }   # Connect-SsmAdmin already reported the failure
+
+        $missing = @(Get-SsmUnprovisionedUsers -Licensed $licensed -OwnerSet $ownerSet)
+        Write-SsmLog -Message ("Pre-provision: {0} licensed, {1} personal sites, {2} unprovisioned." -f $licensed.Count, $ownerSet.Count, $missing.Count)
+        if ($missing.Count -eq 0) {
+            Show-MsgModal -Title $title -Lines @('No unprovisioned licensed users found.')
+            return
+        }
+        $csv = Export-SsmProvisionCsv -Rows $missing -Phase UNPROVISIONED
+        Add-TargetsToTab -Tab $Tab -Targets @($missing | ForEach-Object { New-SsmPlaceholderTarget -User $_ })
+        $Tab['Filter'] = 'Unprovisioned'
+        $Tab['Cursor'] = 0
+        Update-TabView -Tab $Tab
+        Show-MsgModal -Title $title -Lines @(
+            ("{0} unprovisioned user(s) loaded under the Unprovisioned filter." -f $missing.Count),
+            "CSV: $csv", '',
+            'Space/A selects rows, P provisions the selection.')
         return
     }
 
-    Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0
-    $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
-        Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
-    if ($null -eq $ownerSet) { return }   # Connect-SsmAdmin already reported the failure
+    $chosen = @($placeholders | Where-Object { $_.Selected -and $_.Status -eq 'Unprovisioned' })
+    if ($chosen.Count -eq 0) {
+        Show-MsgModal -Title $title -Kind Warn -Lines @(
+            'Nothing selected.', '',
+            'F to the Unprovisioned filter, Space/A to select, then P.',
+            'C clears the list so P can reload it.')
+        return
+    }
 
-    $missing = @(Get-SsmUnprovisionedUsers -Licensed $licensed -OwnerSet $ownerSet)
-    $csv = if ($missing.Count -gt 0) { Export-SsmProvisionCsv -Rows $missing -Phase UNPROVISIONED } else { '(none - nothing to export)' }
-
-    $lines = [System.Collections.ArrayList]::new()
-    [void]$lines.Add(("{0} licensed  |  {1} personal sites  |  {2} unprovisioned" -f $licensed.Count, $ownerSet.Count, $missing.Count))
-    [void]$lines.Add("CSV: $csv")
-    [void]$lines.Add('')
-    foreach ($u in $missing) { [void]$lines.Add(("  {0}  {1}" -f $u.Upn, $u.DisplayName)) }
-    Show-ReportModal -Title $title -Lines $lines.ToArray()
-    if ($missing.Count -eq 0) { return }
-
-    $confirm = @(("Request OneDrive provisioning for {0} user(s)?" -f $missing.Count), '',
-        'SharePoint queues the work and provisions asynchronously (minutes to hours).',
-        'Users who already have a personal site are ignored by the service.', '') +
-        @($missing | ForEach-Object { "  $($_.Upn)" })
+    $confirm = @(("Request OneDrive provisioning for {0} user(s)?" -f $chosen.Count), '',
+        'SharePoint queues the work and provisions asynchronously (minutes to hours).', '') +
+        @($chosen | ForEach-Object { "  $($_.Upn)" })
     if (-not (Show-TypedConfirmModal -Title $title -Lines $confirm -Word 'PROVISION')) { return }
 
-    $upns = @($missing | ForEach-Object { $_.Upn })
+    $upns = @($chosen | ForEach-Object { $_.Upn })
     $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Progress { param($b, $t)
         Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 })
+    $ok = @{}
+    foreach ($r in $rows) { if ($r.Status -eq 'Requested') { $ok[$r.Upn] = $true } }
+    foreach ($c in $chosen) {
+        if ($ok.ContainsKey($c.Upn)) { $c.Status = 'ProvisionRequested'; $c.Selected = $false }
+    }
+    if ($Tab.ContainsKey('View')) { Update-TabView -Tab $Tab }
     $reqCsv = Export-SsmProvisionCsv -Rows $rows -Phase REQUESTED
-    $failed = @($rows | Where-Object { $_.Status -eq 'Failed' }).Count
-    $batches = if ($rows.Count -gt 0) { ($rows | Measure-Object -Property Batch -Maximum).Maximum } else { 0 }
+    $failed = $rows.Count - $ok.Count
     Show-MsgModal -Title $title -Kind ($failed -gt 0 ? 'Warn' : 'Info') -Lines @(
-        ("Requested {0} user(s) in {1} batch(es); {2} failed." -f ($rows.Count - $failed), $batches, $failed),
+        ("Requested {0} user(s); {1} failed." -f $ok.Count, $failed),
         "CSV: $reqCsv", '',
         'SharePoint provisions personal sites asynchronously.',
-        'Press P again later to verify the unprovisioned count shrinks.')
+        'Rows now show Requested. C then P reloads the list to verify later.')
 }
 
 function Get-TabHints {

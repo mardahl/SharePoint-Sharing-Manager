@@ -129,4 +129,18 @@ function Test-SsmPlaceholderTarget {
     return ([string]$Target.Status -in @('Unprovisioned', 'ProvisionRequested'))
 }
 
+function New-SsmPlaceholderTarget {
+    # A list row for a licensed user with no personal site yet. The URL is
+    # the address SharePoint will normally assign; it is a display/dedup
+    # value only - nothing connects to it until provisioning completes.
+    param([Parameter(Mandatory)]$User)
+    $prefix = ([string]$script:Auth.AdminUrl) -replace '^https://', '' -replace '-admin\.sharepoint\.com/?$', ''
+    $url = 'https://{0}-my.sharepoint.com/personal/{1}' -f $prefix, (ConvertTo-SsmPersonalSlug -Upn $User.Upn)
+    $title = if ($User.DisplayName) { [string]$User.DisplayName } else { [string]$User.Upn }
+    $t = New-Target -Url $url -Title $title -Template 'SPSPERS#10'
+    $t['Upn'] = [string]$User.Upn
+    $t['Status'] = 'Unprovisioned'
+    return $t
+}
+
 #endregion

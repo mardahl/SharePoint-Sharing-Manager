@@ -71,8 +71,9 @@ function Invoke-TargetsKey {
         }
         'Enter' {
             if ($view.Count -eq 0) {
-                # Empty list: Enter enumerates targets from the tenant.
-                Invoke-TabEnumerate -Tab $Tab
+                # Empty list: Enter loads it - placeholders under the Unprovisioned
+                # filter, otherwise the tenant's sites/OneDrives.
+                if ($Tab['Filter'] -eq 'Unprovisioned') { Invoke-SsmOneDriveProvision -Tab $Tab } else { Invoke-TabEnumerate -Tab $Tab }
                 return
             }
             if ($Tab['Cursor'] -lt $view.Count) {
