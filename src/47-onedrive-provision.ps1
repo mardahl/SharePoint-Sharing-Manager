@@ -122,4 +122,11 @@ function Invoke-SsmPersonalSiteRequest {
     return $rows
 }
 
+function Test-SsmPlaceholderTarget {
+    # Rows that represent a user without a personal site yet (or one just
+    # requested). They have no reachable URL: never scan, connect, or cache them.
+    param([Parameter(Mandatory)]$Target)
+    return ([string]$Target.Status -in @('Unprovisioned', 'ProvisionRequested'))
+}
+
 #endregion

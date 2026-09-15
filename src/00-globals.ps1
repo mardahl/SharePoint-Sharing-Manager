@@ -111,6 +111,7 @@ if ($Ascii) {
         Up='^'; Down='v'; Ell='..'
         ChkOn='[x]'; ChkOff='[ ]'
         Arrow='->'
+        Bang='!'
         AuditOk='OK'; AuditWarn='!'; AuditError='X'
     }
 } else {
@@ -121,6 +122,7 @@ if ($Ascii) {
         Up=([char]0x2191); Down=([char]0x2193); Ell=([char]0x2026)
         ChkOn=('[' + [char]0x25A0 + ']'); ChkOff='[ ]'
         Arrow=([char]0x2192)
+        Bang='!'
         AuditOk=([char]0x2713); AuditWarn=([char]0x25B2); AuditError=([char]0x2716)
     }
 }
@@ -152,6 +154,7 @@ $script:T = @{
     Good       = "$e[38;5;42m"
     Warn       = "$e[38;5;220m"
     Danger     = "$e[1;38;5;196m"
+    Attention  = "$e[1;38;5;208m"
     Muted      = "$e[38;5;245m"
     FootBg     = "$e[48;5;236m"
     FootKey    = "$e[1;38;5;45;48;5;236m"

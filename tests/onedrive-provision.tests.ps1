@@ -45,3 +45,24 @@ Invoke-SsmTest 'Split-SsmBatch chunks into fixed sizes with remainder' {
     Assert-Equal 1 (@($b[2])).Count
     Assert-Equal 'u5' (@($b[2]))[0]
 }
+
+Invoke-SsmTest 'Test-SsmPlaceholderTarget is true only for provisioning statuses' {
+    Assert-Equal $true  (Test-SsmPlaceholderTarget -Target @{ Status = 'Unprovisioned' })
+    Assert-Equal $true  (Test-SsmPlaceholderTarget -Target @{ Status = 'ProvisionRequested' })
+    Assert-Equal $false (Test-SsmPlaceholderTarget -Target @{ Status = 'NotScanned' })
+    Assert-Equal $false (Test-SsmPlaceholderTarget -Target @{ Status = 'Clean' })
+}
+
+Invoke-SsmTest 'Get-StatusBadge renders Unprovisioned and Requested badges' {
+    $prevT = Get-Variable -Name T -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    $prevG = Get-Variable -Name G -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    $script:T = @{ Attention = '<A>'; Cloud = '<C>'; Muted = ''; Row = '' }
+    $script:G = @{ Bang = '!'; Half = '~'; Ring = 'o'; Dot = '*' }
+    try {
+        $u = Get-StatusBadge -Status 'Unprovisioned' -Width 16
+        if ($u -notlike '<A>! Unprovisioned*') { throw "unexpected: $u" }
+        $r = Get-StatusBadge -Status 'ProvisionRequested' -Width 16
+        if ($r -notlike '<C>~ Requested*') { throw "unexpected: $r" }
+    } finally { $script:T = $prevT; $script:G = $prevG }
+}
+

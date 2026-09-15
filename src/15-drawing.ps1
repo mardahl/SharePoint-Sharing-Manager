@@ -38,6 +38,8 @@ function Get-StatusBadge {
         'ScanFailed'    { $style = $t.Danger;  $glyph = [string]$g.Dot;  $text = 'Scan fail'  }
         'Skipped'       { $style = $t.Muted;   $glyph = [string]$g.Ring; $text = 'Skipped'    }
         'Revoked'       { $style = $t.Cloud;   $glyph = [string]$g.Dot;  $text = 'Revoked'    }
+        'Unprovisioned'      { $style = $t.Attention; $glyph = [string]$g.Bang; $text = 'Unprovisioned' }
+        'ProvisionRequested' { $style = $t.Cloud;     $glyph = [string]$g.Half; $text = 'Requested'     }
     }
     return $style + (Get-PadCell ($glyph + ' ' + $text) $Width) + $script:T.Row
 }
