@@ -2,80 +2,39 @@
 
 ## [Unreleased]
 
-## [1.10.0-rc.6] - 2026-09-15
+## [1.10.0] - 2026-09-15
 
-- Fix: after the browser sign-in for OneDrive provisioning the terminal
-  stayed black until the summary appeared. The main buffer now shows what
-  is happening during the sign-in, and the screen is repainted before the
-  batch progress is drawn.
-
-## [1.10.0-rc.5] - 2026-09-15
-
-- Fix: OneDrive pre-provisioning (`P`) now works. Root cause of the
-  "Attempted to perform an unauthorized operation" failures: the server
-  only authorizes personal-site provisioning for tokens carrying the
-  SharePoint scope `AllProfiles.Manage`, which no tenant can grant to its
-  own app registration - it exists solely on Microsoft's first-party
-  SharePoint Online Management Shell app (pnp/powershell#4329). App-only
-  certificate tokens and delegated tokens from the tool's own app are both
-  rejected. After typing `PROVISION`, the tool now opens a separate
-  interactive SharePoint Administrator sign-in via that client id
-  (`9bc3ab49-b65d-410a-85ad-de819febfddc`) on the tenant admin site, kept
-  for the session, and submits `Request-PnPPersonalSite` on it. The tool's
-  own connection is unchanged.
-- Change: the rc.3/rc.4 additions are reverted as ineffective: the app-only
-  registration no longer requests SharePoint `User.ReadWrite.All`, the
-  `New-PnPPersonalSite` fallback is removed, and the REQUESTED CSV drops the
-  `Method` column.
-
-## [1.10.0-rc.4] - 2026-09-15
-
-- Fix: OneDrive pre-provisioning in app-only mode failed with "Attempted to
-  perform an unauthorized operation" - PnP.PowerShell issue #4329:
-  `Request-PnPPersonalSite` (CSOM `Tenant.RequestPersonalSites`) rejects
-  app-only tokens regardless of permissions. Each batch now falls back to
-  `New-PnPPersonalSite` (User Profile Service, needs SharePoint
-  `User.ReadWrite.All`), which works app-only. The REQUESTED CSV gains a
-  `Method` column; the failure summary explains both causes and suggests
-  delegated sign-in as the last resort.
-
-- Fix: `P` (OneDrive pre-provisioning) failed with "no connection" when the
-  OneDrives list had been restored from the session cache, because the
-  Graph query ran before any PnP connection existed. `P` now connects to
-  the tenant admin site first, so it works straight after a cached start
-  without pressing `C`.
-
-## [1.10.0-rc.3] - 2026-09-15
-
-- Fix: OneDrive pre-provisioning (`P`) failed in app-only mode with a
-  localized "access denied ... profile" error because
-  `Request-PnPPersonalSite` needs the SharePoint application permission
-  `User.ReadWrite.All`. New app-only registrations now request it; the
-  failure summary shows the first error and the manual steps to add the
-  permission to an existing registration. Wiki Authentication, Requirements
-  and OneDrive-Pre-Provisioning pages updated.
-
-## [1.10.0-rc.2] - 2026-09-15
-
-- Change: OneDrive pre-provisioning is now selective. `P` on the OneDrives
-  tab loads users without a personal site as rows under a new
-  `Unprovisioned` filter (`F` cycle, OneDrives tab only; the rows never
-  appear under `All`) with an orange `!` badge. Select rows with
-  Space/`A`, press `P` again, type `PROVISION`, and only the selection is
-  submitted; those rows switch to `Requested`. Placeholder rows are skipped
-  by scans and admin actions and are not saved to the session cache.
-  `Enter` on an empty Unprovisioned view loads them too.
-
-## [1.10.0-rc.1] - 2026-09-15
-
-- Add: OneDrive pre-provisioning (`P`, OneDrives tab). Lists every enabled
+- Add: OneDrive pre-provisioning (`P`, OneDrives tab). Loads every enabled
   member user with an Enabled SharePoint service plan whose personal site
   does not exist yet (diff of Graph `/users` against the tenant's personal
-  sites), writes `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv` (only when at
-  least one user is found), and after typed `PROVISION` submits
-  `Request-PnPPersonalSite` in batches of 200 with a
-  `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` outcome file. Needs `User.Read.All`
-  (already in both auth modes) and SharePoint Administrator.
+  sites, by owner UPN and `/personal/<slug>`) as rows under a new
+  `Unprovisioned` filter (`F` cycle, OneDrives tab only; the rows never
+  appear under `All`) with an orange `!` badge. Select rows with Space/`A`,
+  press `P`, type `PROVISION`, and only the selection is submitted via
+  `Request-PnPPersonalSite` in batches of 200; those rows switch to
+  `Requested`. Placeholder rows are skipped by scans, revoke and admin
+  actions and are not saved to the session cache. `Enter` on an empty
+  Unprovisioned view loads them too. Evidence:
+  `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv` (when at least one user is
+  found) and `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` (`Upn, Batch, Status,
+  Error`).
+- Note: the provisioning request itself runs on a separate interactive
+  sign-in. The service authorizes personal-site provisioning only for
+  tokens carrying the SharePoint scope `AllProfiles.Manage`, which exists
+  solely on Microsoft's first-party SharePoint Online Management Shell app;
+  app-only certificate tokens and delegated tokens from a custom app are
+  rejected with "Attempted to perform an unauthorized operation"
+  (pnp/powershell#4329). After `PROVISION` a browser sign-in opens via that
+  client id (`9bc3ab49-b65d-410a-85ad-de819febfddc`) on the tenant admin
+  site; sign in as a SharePoint Administrator. The connection is kept for
+  the session; the tool's own connection is unchanged. No extra app
+  permission is needed. Live-validated by an operator against an app-only
+  tenant.
+- Change: `Get-TenantTargets` paging loop factored into
+  `Get-SsmTenantSiteProperties` (shared with the personal-site owner set);
+  no behaviour change.
+- Docs: new wiki page OneDrive-Pre-Provisioning; Authentication,
+  Requirements, README and help updated.
 
 ## [1.9.0] - 2026-09-14
 
