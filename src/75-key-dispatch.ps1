@@ -154,6 +154,10 @@ function Invoke-TargetsKey {
             if ($Tab['OneDrive']) { Invoke-SsmOneDriveAdmin -Tab $Tab }
             return
         }
+        'P' {
+            if ($Tab['OneDrive']) { Invoke-SsmOneDriveProvision -Tab $Tab }
+            return
+        }
     }
 }
 

@@ -73,7 +73,7 @@ function Get-SsmProvisionedOwnerSet {
         if ($slug) { [void]$set.Add($slug.ToLowerInvariant()) }
     }
     Write-SsmLog -Message ("Pre-provision: {0} personal sites enumerated." -f $set.Count)
-    return $set
+    return ,$set   # unary comma: HashSet is IEnumerable, bare return would flatten it into the pipeline
 }
 
 function Get-SsmLicensedUsers {

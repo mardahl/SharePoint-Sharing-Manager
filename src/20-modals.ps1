@@ -602,6 +602,7 @@ function Show-HelpModal {
         @($t.Row, '  L                    restore the saved scan session'),
         @($t.Row, '  E                    export current view to CSV'),
         @($t.Row, '  M                    manage secondary admin (OneDrives only): List is read-only'),
+        @($t.Row, '  P                    pre-provision OneDrives (OneDrives only): list licensed users without a OneDrive, then request'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Findings (inside a target)'),
         @($t.Row, '  Space / A / N        select findings                /  find     F  filter'),

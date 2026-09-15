@@ -1346,3 +1346,40 @@ Invoke-SsmTest 'Get-TabHints/menu offers List for the OneDrive targets tab' {
     Invoke-SsmOneDriveAdmin -Tab $tab
     if ($script:CapturedOptions -notcontains 'List') { throw "List option missing: $($script:CapturedOptions -join ',')" }
 }
+
+Invoke-SsmTest 'Invoke-SsmOneDriveProvision refuses non-OneDrive tab' {
+    $script:CapturedTitle = $null
+    function Show-MsgModal { param($Title, $Lines, $Kind) $script:CapturedTitle = $Title }
+    Invoke-SsmOneDriveProvision -Tab @{ OneDrive = $false }
+    Assert-Equal 'Pre-provision OneDrives' $script:CapturedTitle
+}
+
+Invoke-SsmTest 'Invoke-SsmOneDriveProvision stops without confirm when nothing is unprovisioned' {
+    $script:Requested = $false
+    function Write-ProgressModal { }
+    function Get-SsmLicensedUsers { param($Progress) @([pscustomobject]@{ Id='1'; Upn='a@x.com'; DisplayName='A' }) }
+    function Get-SsmProvisionedOwnerSet { param($Progress)
+        $s = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase); [void]$s.Add('a@x.com'); return ,$s }
+    function Export-SsmProvisionCsv { param($Rows, $Phase) 'x.csv' }
+    function Show-ReportModal { param($Title, $Lines, $Hint) }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) throw 'must not confirm' }
+    function Invoke-SsmPersonalSiteRequest { param($Upns, $Progress) $script:Requested = $true }
+    Invoke-SsmOneDriveProvision -Tab @{ OneDrive = $true }
+    Assert-Equal $false $script:Requested
+}
+
+Invoke-SsmTest 'Invoke-SsmOneDriveProvision requests after PROVISION confirm' {
+    $script:RequestedUpns = @()
+    function Write-ProgressModal { }
+    function Get-SsmLicensedUsers { param($Progress) @([pscustomobject]@{ Id='1'; Upn='new@x.com'; DisplayName='N' }) }
+    function Get-SsmProvisionedOwnerSet { param($Progress) return ,([System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)) }
+    function Export-SsmProvisionCsv { param($Rows, $Phase) 'x.csv' }
+    function Show-ReportModal { param($Title, $Lines, $Hint) }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) Assert-Equal 'PROVISION' $Word; $true }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+    function Invoke-SsmPersonalSiteRequest { param($Upns, $Progress) $script:RequestedUpns = @($Upns)
+        @([pscustomobject]@{ Upn='new@x.com'; Batch=1; Status='Requested'; Error='' }) }
+    Invoke-SsmOneDriveProvision -Tab @{ OneDrive = $true }
+    Assert-Equal 1 $script:RequestedUpns.Count
+    Assert-Equal 'new@x.com' $script:RequestedUpns[0]
+}

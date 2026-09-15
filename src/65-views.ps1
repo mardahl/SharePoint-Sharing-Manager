@@ -1168,6 +1168,66 @@ function Invoke-SsmOneDriveAdmin {
     Update-TabView -Tab $Tab
 }
 
+function Invoke-SsmOneDriveProvision {
+    # P on the OneDrives tab: list licensed users with no personal site,
+    # export the list, then (typed PROVISION) bulk-request provisioning.
+    param($Tab)
+    $title = 'Pre-provision OneDrives'
+    if (-not $Tab['OneDrive']) {
+        Show-MsgModal -Title $title -Lines @('This action is only available on the OneDrives tab.') -Kind Warn
+        return
+    }
+
+    Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
+    try {
+        $licensed = @(Get-SsmLicensedUsers -Progress { param($n)
+            Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0 })
+    } catch {
+        Write-SsmErrorLog -Context 'Pre-provision: Graph user query failed' -ErrorRecord $_
+        $msg = $_.Exception.Message
+        $lines = if ($msg -match '403|Forbidden|Authorization_RequestDenied') {
+            @('Graph returned 403.', '', 'Delegated sign-in needs User.Read.All;',
+              'app-only registrations need the User.Read.All application permission.')
+        } else { @('Graph user query failed:', $msg) }
+        Show-MsgModal -Title $title -Lines $lines -Kind Error
+        return
+    }
+
+    Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0
+    $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
+        Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
+    if ($null -eq $ownerSet) { return }   # Connect-SsmAdmin already reported the failure
+
+    $missing = @(Get-SsmUnprovisionedUsers -Licensed $licensed -OwnerSet $ownerSet)
+    $csv = if ($missing.Count -gt 0) { Export-SsmProvisionCsv -Rows $missing -Phase UNPROVISIONED } else { '(none - nothing to export)' }
+
+    $lines = [System.Collections.ArrayList]::new()
+    [void]$lines.Add(("{0} licensed  |  {1} personal sites  |  {2} unprovisioned" -f $licensed.Count, $ownerSet.Count, $missing.Count))
+    [void]$lines.Add("CSV: $csv")
+    [void]$lines.Add('')
+    foreach ($u in $missing) { [void]$lines.Add(("  {0}  {1}" -f $u.Upn, $u.DisplayName)) }
+    Show-ReportModal -Title $title -Lines $lines.ToArray()
+    if ($missing.Count -eq 0) { return }
+
+    $confirm = @(("Request OneDrive provisioning for {0} user(s)?" -f $missing.Count), '',
+        'SharePoint queues the work and provisions asynchronously (minutes to hours).',
+        'Users who already have a personal site are ignored by the service.', '') +
+        @($missing | ForEach-Object { "  $($_.Upn)" })
+    if (-not (Show-TypedConfirmModal -Title $title -Lines $confirm -Word 'PROVISION')) { return }
+
+    $upns = @($missing | ForEach-Object { $_.Upn })
+    $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Progress { param($b, $t)
+        Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 })
+    $reqCsv = Export-SsmProvisionCsv -Rows $rows -Phase REQUESTED
+    $failed = @($rows | Where-Object { $_.Status -eq 'Failed' }).Count
+    $batches = if ($rows.Count -gt 0) { ($rows | Measure-Object -Property Batch -Maximum).Maximum } else { 0 }
+    Show-MsgModal -Title $title -Kind ($failed -gt 0 ? 'Warn' : 'Info') -Lines @(
+        ("Requested {0} user(s) in {1} batch(es); {2} failed." -f ($rows.Count - $failed), $batches, $failed),
+        "CSV: $reqCsv", '',
+        'SharePoint provisions personal sites asynchronously.',
+        'Press P again later to verify the unprovisioned count shrinks.')
+}
+
 function Get-TabHints {
     param($Tab)
     if ($script:UI.SearchMode) { return @() }
@@ -1182,7 +1242,7 @@ function Get-TabHints {
                      @('S','scan'),@('X','scan all'),@('T','rules'),@('G','all findings'),
                      @('R','revoke selected'),@('U','add url'),@('I','import csv'),
                      @('Enter','open/load'),@('C','reload'),@('L','restore'),@('E','export'))
-            if ($Tab['OneDrive']) { $base += ,@('M','manage admins') }
+            if ($Tab['OneDrive']) { $base += @(,@('M','manage admins'),@('P','pre-provision')) }
             return $base + @(@('?','help'),@('Q','quit'))
         }
         'Tenant' { return @(@('Up/Dn','move'),@('Enter','load/change'),@('R','refresh'),@('C','apply CIS'),@('Z','undo CIS'),@('T','switch'),@('1-6/←/→','tab'),@('?','help'),@('Q','quit')) }
