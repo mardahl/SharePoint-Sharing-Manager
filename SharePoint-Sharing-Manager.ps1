@@ -41,7 +41,7 @@
     .\SharePoint-Sharing-Manager.ps1
 
 .NOTES
-    Version : 1.10.0-rc.5
+    Version : 1.10.0-rc.6
     License : MIT
     Author  : Michael Mardahl (Microsoft MVP)
 
