@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Change: OneDrive pre-provisioning is now selective. `P` on the OneDrives
+  tab loads users without a personal site as rows under a new
+  `Unprovisioned` filter (`F` cycle, OneDrives tab only; the rows never
+  appear under `All`) with an orange `!` badge. Select rows with
+  Space/`A`, press `P` again, type `PROVISION`, and only the selection is
+  submitted; those rows switch to `Requested`. Placeholder rows are skipped
+  by scans and admin actions and are not saved to the session cache.
+  `Enter` on an empty Unprovisioned view loads them too.
+
 ## [1.10.0-rc.1] - 2026-09-15
 
 - Add: OneDrive pre-provisioning (`P`, OneDrives tab). Lists every enabled

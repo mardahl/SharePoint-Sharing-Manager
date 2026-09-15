@@ -17,7 +17,7 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 | [[Authentication]] | Delegated vs app-only certificate mode |
 | [[Scanning-and-Revoking]] | Findings categories, keys, evidence CSVs |
 | [[OneDrive-Admin-Management]] | List, add, or remove secondary administrators on selected OneDrives - released in v1.9.0 with limited live validation; List is read-only, Add has an operator-reported app-only success, Remove and delegated auth are pending validation |
-| [[OneDrive-Pre-Provisioning]] | Find OneDrive-licensed users with no personal site yet and bulk-request provisioning (`P`, OneDrives tab) |
+| [[OneDrive-Pre-Provisioning]] | Load OneDrive-licensed users with no personal site under an Unprovisioned filter and provision the selected ones (P, OneDrives tab) |
 | [[Tenant-Hardening]] | Sharing tab settings and the CIS baseline |
 | [[Multi-Tenant-Support]] | Managing several tenants from one install |
 | [[FAQ-and-Troubleshooting]] | Caveats, known limitations, common issues |

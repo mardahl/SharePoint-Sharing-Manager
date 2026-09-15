@@ -7,8 +7,16 @@ the OneDrive to exist first.
 
 ## Key
 
-`P` on the **OneDrives** tab. No selection needed; the tool works on the
-whole tenant.
+`P` on the **OneDrives** tab. `P` is context-aware:
+
+| State | What `P` does |
+|---|---|
+| No unprovisioned rows loaded | Queries the tenant and loads them under the `Unprovisioned` filter |
+| Unprovisioned rows selected | Asks for `PROVISION` and submits only the selected users |
+| Rows loaded, nothing selected | Shows a hint |
+
+`Enter` on an empty list while the `Unprovisioned` filter is active also
+loads the rows.
 
 ## What counts as licensed
 
@@ -23,19 +31,31 @@ tenant admin connection and builds a set of each site's owner UPN and its
 `/personal/<slug>` URL segment. A licensed user missing from both is
 reported as unprovisioned. No per-user Graph or drive calls are made.
 
+## The Unprovisioned filter
+
+`F` cycles `All → Not scanned → Clean → Findings → Failed → Unprovisioned`
+on the OneDrives tab. Unprovisioned rows show only under that filter, never
+under `All`, so the normal OneDrive list is unaffected. Each row shows the
+user's display name, the personal-site URL SharePoint will normally assign,
+and an orange `! Unprovisioned` badge. The status line shows
+`unprovisioned:N (F to view)` while any are loaded.
+
+These rows are placeholders: scans (`S`), admin actions (`M`) skip them, and
+they are not saved to the session cache. `C` clears them with the rest of
+the list; `P` reloads them.
+
 ## Flow
 
 1. Press `P`. Progress shows the Graph user paging, then the personal-site
-   enumeration.
-2. A report lists `N licensed | M personal sites | K unprovisioned` and
-   every unprovisioned UPN. When at least one unprovisioned user is found,
+   enumeration. Rows are added and the filter switches to `Unprovisioned`.
    `SSM_ONEDRIVE_UNPROVISIONED_<stamp>.csv` is written to
-   `SSM-Exports/<tenant>/` (no file on a zero result).
-3. If `K > 0`, type `PROVISION` to submit. UPNs are sent to
+   `SSM-Exports/<tenant>/` when at least one user is found.
+2. Select the users to provision with Space or `A`.
+3. Press `P`, type `PROVISION`. The selected UPNs are sent to
    `Request-PnPPersonalSite` in batches of 200.
-4. `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Error`
-   for every user. A failed batch marks all of its users `Failed`; the run
-   continues with the next batch.
+4. Successfully submitted rows change to `Requested`;
+   `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Error`.
+   Rows in a failed batch stay `Unprovisioned` so they can be retried.
 
 ## Permissions
 
@@ -54,3 +74,6 @@ reported as unprovisioned. No per-user Graph or drive calls are made.
   ignores requests for users who already have a site.
 - No automatic retry on throttling. Failed batches are listed in the
   REQUESTED CSV; re-run `P` to retry them.
+- The URL shown on an unprovisioned row is predicted from the UPN; the
+  actual site can get a different suffix if SharePoint has to disambiguate.
+- Unprovisioned rows are not cached; after a restart press `P` to reload.
