@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.10.1-rc.2] - 2026-09-19
+
 - Fix: pre-provision (`P`) showed no progress modal after the browser
   sign-in - the modal was only painted when a 200-user batch finished, so
   a single-batch run looked frozen. The modal and spinner now appear
