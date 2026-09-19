@@ -1200,11 +1200,13 @@ function Invoke-SsmOneDriveProvision {
         # any PnP connection yet, and the Graph call below uses the current one.
         # Connect-SsmAdmin reports its own failure.
         if (-not (Connect-SsmAdmin)) { return }
+        Start-LoadSpinner
         Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
         try {
             $licensed = @(Get-SsmLicensedUsers -Progress { param($n)
                 Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0 })
         } catch {
+            Stop-LoadSpinner
             Write-SsmErrorLog -Context 'Pre-provision: Graph user query failed' -ErrorRecord $_
             $msg = $_.Exception.Message
             $lines = if ($msg -match '403|Forbidden|Authorization_RequestDenied') {
@@ -1215,8 +1217,10 @@ function Invoke-SsmOneDriveProvision {
             return
         }
         Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0
-        $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
-            Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
+        try {
+            $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
+                Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
+        } finally { Stop-LoadSpinner }
         if ($null -eq $ownerSet) { return }   # Connect-SsmAdmin already reported the failure
 
         $missing = @(Get-SsmUnprovisionedUsers -Licensed $licensed -OwnerSet $ownerSet)
@@ -1267,8 +1271,16 @@ function Invoke-SsmOneDriveProvision {
     }
 
     $upns = @($chosen | ForEach-Object { $_.Upn })
-    $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Connection $provConn -Progress { param($b, $t)
-        Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 })
+    # Each batch is one blocking Request-PnPPersonalSite call and the callback
+    # only fires when a batch finishes, so paint the modal (with a background
+    # spinner) before the first call or a single-batch run shows nothing.
+    $batchTotal = [Math]::Ceiling($upns.Count / 200)
+    Start-LoadSpinner
+    Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label 'Submitting provisioning batches' -Ok 0 -Failed 0
+    try {
+        $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Connection $provConn -Progress { param($b, $t)
+            Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 })
+    } finally { Stop-LoadSpinner }
     $ok = @{}
     foreach ($r in $rows) { if ($r.Status -eq 'Requested') { $ok[$r.Upn] = $true } }
     foreach ($c in $chosen) {
