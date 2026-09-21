@@ -29,7 +29,7 @@ The setup wizard walks through app registration and certificate issuance (1-year
 2. **Sites** tab: press `Enter` to enumerate targets (auto-discovery via `Get-PnPTenantSite`), or add URLs manually (`U`) or import a CSV (`I`).
 3. Select targets (`Space`, `A` all) and scan (`S`), or scan everything not yet scanned (`X`).
 4. Review the findings list. `/` live-searches, `F` cycles the category filter.
-5. `E` exports the BEFORE CSV. Review it before acting.
+5. `E` exports the BEFORE CSV (`C` for CSV, `X` for an Excel report). Review it before acting.
 6. Select findings, press `R`, type `REVOKE` to confirm. A REVOKED CSV records what was removed.
 7. **Sharing** tab: review the tenant posture and apply hardening so sharing does not creep back. See [[Tenant-Hardening]].
 

@@ -12,8 +12,7 @@ file per region under `src/` - please keep that shape.
    loop. All other runtime code lives in `src/`, one file per `#region`,
    numbered so the file-name sort order is the load order. No companion
    modules on the load path other than these dot-sourced files, no DLLs, no
-   embedded binaries, no external module dependencies beyond
-   `PnP.PowerShell`. Portability is still the core feature - the launcher
+   embedded binaries, no external module dependencies beyond `PnP.PowerShell` and the optional `ImportExcel` (installed on demand, used only by `src/52-xlsx.ps1` for the Excel report; every other feature must work without it). Portability is still the core feature - the launcher
    `.bat` unblocks the whole folder recursively.
 2. **PowerShell 7.4+ only.** `PnP.PowerShell` v3 requires it; there is no
    Windows PowerShell 5.1 compatibility target.

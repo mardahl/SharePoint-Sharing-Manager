@@ -56,12 +56,16 @@ have happened while this was present.
 | Location | Content |
 |---|---|
 | `SharePoint-Sharing-Manager_<timestamp>.log` | Session log (also viewable on the Log tab) |
-| `SSM-Exports/` | BEFORE/REVOKED evidence, view exports, and OneDrive secondary-admin BEFORE/AFTER evidence (see [[OneDrive-Admin-Management]]) |
+| `SSM-Exports/` | BEFORE/REVOKED evidence, view exports, and OneDrive secondary-admin BEFORE/AFTER evidence (see [[OneDrive-Admin-Management]]), Excel reports (`SSM_REPORT_*.xlsx`) |
 | `~/.sharepoint-sharing-manager.json` | Sign-in configuration, one entry per tenant |
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode |
 | `SSM-Cache/<tenant-slug>/session.json` | Cached scan results per tenant; contains directory data |
 
 Logs, exports, and the scan cache contain directory data. Treat them accordingly. There is no telemetry, and nothing leaves the machine except operator-triggered calls to SharePoint Online and Microsoft Graph.
+
+## Excel export asks to install ImportExcel - is that required?
+
+No. `ImportExcel` is only used for the Excel report (`E` → `X`) and is installed for the current user on demand. Choose N to keep using CSV export. Offline machines can install it beforehand with `Install-Module ImportExcel -Scope CurrentUser`.
 
 ## The tool says a newer version is available - how do I update?
 

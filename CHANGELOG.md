@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+- New: Excel report export. `E` on the Sites/OneDrives tab and in the findings
+  view now opens an export menu: `C` writes the CSV as before, `X` writes
+  `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx`
+  with a Summary sheet (KPIs, counts by category/access/status, top sites),
+  a Findings sheet (site title, full path, sharing type, reach, ids) and,
+  for whole-tab exports, a Sites sheet.
+- New: Copilot Exposure Indicator (heuristic) on the Summary and Sites sheets:
+  weighted overshared items relative to items scanned, 0-100 with
+  Low/Medium/High/Critical bands. Scans now record items scanned per target
+  and reach per finding; results restored from an older cache show `n/a`
+  until rescanned.
+- New optional dependency: `ImportExcel` (PowerShell Gallery), installed on
+  demand (CurrentUser) the first time Excel export is chosen. Declining keeps
+  CSV export available.
+
 ## [1.10.2] - 2026-09-21
 
 - Fix: typed confirmations (`REVOKE`, `APPLY`, `ADDADMIN`, ...) no longer

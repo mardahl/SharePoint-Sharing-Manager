@@ -66,7 +66,7 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **Delegated (interactive) and app-only certificate authentication**, with a guided in-app setup wizard including 1-year certificate issuance and renewal
 - **Sharing tab**: current sharing posture (`Get-PnPTenant`) plus hardening setters (`Set-PnPTenant`) behind typed confirmation
 - **Search** (`/` live filter), category filter, multi-select, sorting
-- **CSV export** of any view; CSV import of target URLs
+- **CSV export** of any view, **Excel report** (`E` → `X`) with summary, detailed findings and a heuristic Copilot exposure score; CSV import of target URLs
 - **Timestamped log file** plus an in-app log viewer
 - **Per-site failure isolation** - a site that will not connect or scan is logged and the run continues
 - **Persistent scan cache with manual restore** - scan results survive a restart and can be reloaded on demand
@@ -171,7 +171,8 @@ Full key reference, auth trade-offs, and per-setting docs live in the [wiki](htt
 
 ### Modules (installed on demand, CurrentUser scope)
 
-- [`PnP.PowerShell`](https://www.powershellgallery.com/packages/PnP.PowerShell) v3 - the only dependency
+- [`PnP.PowerShell`](https://www.powershellgallery.com/packages/PnP.PowerShell) v3 - required
+- [`ImportExcel`](https://www.powershellgallery.com/packages/ImportExcel) - optional, only for the Excel report export; prompted on first use
 
 ### Roles & permissions
 

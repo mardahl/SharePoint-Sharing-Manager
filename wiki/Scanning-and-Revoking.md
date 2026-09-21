@@ -54,7 +54,7 @@ Once anything is scanned, the status line above the target list always shows a r
 | `Enter` | Open/load |
 | `C` | Clear the list and reload it from the tenant (Y/N confirm; discards scan results for the tab) |
 | `L` | Restore the saved scan session |
-| `E` | Export |
+| `E` | Export menu: `C` CSV, `X` Excel report |
 
 ## Keys: findings list
 
@@ -64,7 +64,7 @@ Once anything is scanned, the status line above the target list always shows a r
 | `/` | Live search |
 | `F` | Cycle category filter |
 | `R` | Revoke selected (typed `REVOKE` confirmation) |
-| `E` | Export |
+| `E` | Export menu: `C` CSV, `X` Excel report |
 | `Esc` | Back to target list |
 
 ## Revocation behavior
@@ -81,6 +81,24 @@ Every scan and revoke run writes CSV evidence to `SSM-Exports/`:
 - `<tab>_targets_<timestamp>.csv` / `<tab>_findings_<timestamp>.csv`: view exports
 
 Revoked links and grants cannot be restored from within the tool. Review the BEFORE CSV before typing `REVOKE`.
+
+### Excel report (`E` → `X`)
+
+Writes `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx`. Needs the `ImportExcel` module; you are asked to install it (CurrentUser) the first time. Scope follows the view: from the target list it covers every scanned target in the tab; from a findings view it covers the rows currently shown (filter and search applied).
+
+| Sheet | Content |
+|---|---|
+| Summary | Tool version, tenant, scope, generated time, operator; totals (findings, sites affected, items scanned, links vs direct grants, anonymous links, removed/failed/not attempted); Copilot Exposure Indicator; counts by category, access and revoke status; top 10 sites |
+| Findings | One row per finding: Site Title, Site URL, Location, Category, Sharing Type, Item Name, Full Path, Access, Shared With, Link Created, Reach (items), Revoke Status, Link Id, List Id, Item Id |
+| Sites | Whole-tab exports only: Title, URL, Status, Findings, Items Scanned, Exposure Score, Band |
+
+#### Copilot Exposure Indicator
+
+A heuristic, not a Microsoft metric. Each finding is weighted by how wide its audience is (Anonymous link 5, EEEU 5, Everyone 5, Organization link 3, Guest link 2, Guest grant 2, other 1) and multiplied by its *reach*: 1 for a file or folder, the library item count for a library-level grant, the site item count for a web-level grant.
+
+`Score = min(100, round(sum(weight × reach) / items scanned × 1000))`, banded Low (0-10), Medium (11-40), High (41-70), Critical (71-100). The raw "items overshared %" is shown next to it.
+
+Limits: hidden/excluded libraries are not in the denominator; folder sharing counts as one item; inherited exposure is estimated via reach, not verified per item. Results restored from a cache written before this feature show `n/a` until the target is rescanned.
 
 ## Scan cache
 
