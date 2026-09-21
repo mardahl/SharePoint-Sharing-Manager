@@ -82,7 +82,7 @@ function Get-SharingLinkInfo {
 
 function Add-GrantsRest {
     # Read a roleassignments collection via REST and add bad direct grants to $Bag.
-    param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag)
+    param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag, [int]$Reach = 1)
     try { $resp = Invoke-PnPSPRestMethod -Url $RaUrl -Method Get } catch { return }
     foreach ($ra in @($resp.value)) {
         $key = Get-PrincipalCategory -Login $ra.Member.LoginName -Title $ra.Member.Title
@@ -102,15 +102,26 @@ function Add-GrantsRest {
             Access = $roles; Principal = $principal; Path = $Path; RemovalKind = 'DirectGrant'
             LinkId = $null; ListId = $ListId; ItemId = $ItemId; PrincipalId = $ra.PrincipalId
             LinkCreated = ''
+            Reach = $Reach
             RevokeStatus = 'NotAttempted'; Selected = $false
         })
     }
+}
+
+function Complete-SiteScan {
+    # Record totals on the target and give web-level findings the full site reach.
+    param($Target, $Bag, [int]$TotalItems, [int]$LibCount)
+    $Target.ItemsScanned = $TotalItems
+    $Target.LibrariesScanned = $LibCount
+    foreach ($f in $Bag) { if ($f.Location -eq 'Web') { $f.Reach = $TotalItems } }
+    return $Bag.ToArray()
 }
 
 function Invoke-SiteScan {
     # Scan the currently-connected site/OneDrive; return an array of findings.
     param($Target, [string[]]$Categories, [scriptblock]$Progress)
     $bag = New-Object System.Collections.Generic.List[object]
+    $totalItems = 0; $libCount = 0
     $site = $Target.Url
     $grantKeys = @('GuestGrant', 'EEEU', 'Everyone')
     $linkKeys = @('AnonymousLink', 'OrgLink', 'GuestLink')
@@ -124,10 +135,10 @@ function Invoke-SiteScan {
 
     # Web-root direct grants
     if ($scanGrants -and (Get-RestUnique "$base/_api/web?`$select=HasUniqueRoleAssignments")) {
-        Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag
+        Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
     }
 
-    if (-not ($scanGrants -or $scanLinks)) { return $bag.ToArray() }
+    if (-not ($scanGrants -or $scanLinks)) { return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount }
 
     $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
@@ -140,7 +151,7 @@ function Invoke-SiteScan {
 
         # Library-root direct grants
         if ($scanGrants -and (Get-RestUnique "$base/_api/web/lists(guid'$listId')?`$select=HasUniqueRoleAssignments")) {
-            Add-GrantsRest "$base/_api/web/lists(guid'$listId')/roleassignments?$raSelect" $site 'Library' $lib.Title $rootUrl $listId $null $Categories $bag
+            Add-GrantsRest "$base/_api/web/lists(guid'$listId')/roleassignments?$raSelect" $site 'Library' $lib.Title $rootUrl $listId $null $Categories $bag $total
         }
 
         # Enumerate items by indexed Id range, collecting only unique-permission items
@@ -160,6 +171,7 @@ function Invoke-SiteScan {
             if ($Progress) { & $Progress -Count $scanned -Label ("Enumerating '{0}': {1} / ~{2} scanned" -f $lib.Title, $scanned, $total) }
         } while ($rows.Count -eq 5000)
         Write-SsmLog -Message ("{0} scanned, {1} with unique permissions in '{2}'" -f $scanned, $unique.Count, $lib.Title)
+        $totalItems += $scanned; $libCount++
 
         # Check each unique-permission item: sharing links + direct grants
         $idx = 0
@@ -200,6 +212,7 @@ function Invoke-SiteScan {
                         Access = $l.Link.Type; Principal = $cat.Principal; Path = $fileRef; RemovalKind = 'Link'
                         LinkId = $l.Id; ListId = $listId; ItemId = $it.Id; PrincipalId = $null
                         LinkCreated = $created
+                        Reach = 1
                         RevokeStatus = 'NotAttempted'; Selected = $false
                     })
                 }
@@ -214,7 +227,7 @@ function Invoke-SiteScan {
             }
         }
     }
-    return $bag.ToArray()
+    return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount
 }
 
 #endregion

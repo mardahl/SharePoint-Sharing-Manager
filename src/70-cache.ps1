@@ -14,9 +14,12 @@ function ConvertTo-SsmCacheObject {
         foreach ($it in @($tab['Items'])) {
             $s = [string]$it.Status
             if ($s -eq 'Unprovisioned' -or $s -eq 'ProvisionRequested') { continue }   # Test-SsmPlaceholderTarget, inlined
+            $itemsScanned = 0; if ($it.Contains('ItemsScanned')) { $itemsScanned = [int]$it['ItemsScanned'] }
+            $libsScanned  = 0; if ($it.Contains('LibrariesScanned')) { $libsScanned = [int]$it['LibrariesScanned'] }
             $items.Add([ordered]@{
                 Url = $it.Url; Title = $it.Title; Template = $it.Template
                 Status = $it.Status; FindingCount = $it.FindingCount
+                ItemsScanned = $itemsScanned; LibrariesScanned = $libsScanned
                 Findings = @($it.Findings)
             })
         }
@@ -43,12 +46,17 @@ function ConvertFrom-SsmCacheObject {
             $findings = [System.Collections.Generic.List[object]]::new()
             foreach ($f in @($ci.Findings)) {
                 if (-not $f) { continue }
+                if (-not $f.PSObject.Properties['Reach']) { $f | Add-Member -NotePropertyName Reach -NotePropertyValue 1 -Force }
                 $f | Add-Member -NotePropertyName Selected -NotePropertyValue $false -Force
                 $findings.Add($f)
             }
+            $scannedItems = 0; $scannedLibs = 0
+            if ($ci.PSObject.Properties['ItemsScanned']) { $scannedItems = [int]$ci.ItemsScanned }
+            if ($ci.PSObject.Properties['LibrariesScanned']) { $scannedLibs = [int]$ci.LibrariesScanned }
             $items.Add(@{
                 Url = $ci.Url; Title = $ci.Title; Template = $ci.Template
                 Status = $ci.Status; FindingCount = $ci.FindingCount
+                ItemsScanned = $scannedItems; LibrariesScanned = $scannedLibs
                 Findings = $findings.ToArray(); Selected = $false
             })
         }

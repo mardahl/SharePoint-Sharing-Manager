@@ -9,6 +9,7 @@ function New-Target {
         Url = $Url.Trim(); Title = $Title; Template = $Template
         Status = 'NotScanned'; FindingCount = 0
         Findings = @(); Selected = $false
+        ItemsScanned = 0; LibrariesScanned = 0
     }
 }
 
