@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.10.2-rc.1] - 2026-09-21
+
+- Perf: large lists (15k+ sites/OneDrives, thousands of findings) were near
+  unresponsive - every redraw ran six `Where-Object` passes over all targets
+  for the row-3 counts (~1.2 s per arrow key at 15k), and every search
+  keystroke re-filtered through chained pipelines (~0.5 s). Counts and
+  filters now run as single `foreach` passes (~20 ms / ~65 ms); tenant
+  enumeration and aggregate findings no longer build arrays with `+=`.
+
 ## [1.10.1] - 2026-09-21
 
 - Fix: secondary-admin Add/Remove (`M`) sat on a blank screen after the UPN

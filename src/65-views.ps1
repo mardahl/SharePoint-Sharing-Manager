@@ -5,24 +5,31 @@
 function Update-TabView {
     # Filter + sort targets. Filter: All | NotScanned | Clean | Findings | Failed | Unprovisioned.
     param($Tab)
-    $items = @($Tab['Items'])
-    # Placeholder rows (users without a personal site) only surface under the
-    # dedicated Unprovisioned filter; every other filter hides them.
-    if ($Tab['Filter'] -eq 'Unprovisioned') {
-        $items = @($items | Where-Object { Test-SsmPlaceholderTarget -Target $_ })
-    } else {
-        $items = @($items | Where-Object { -not (Test-SsmPlaceholderTarget -Target $_) })
-        switch ($Tab['Filter']) {
-            'NotScanned' { $items = @($items | Where-Object { $_.Status -eq 'NotScanned' }) }
-            'Clean'      { $items = @($items | Where-Object { $_.Status -eq 'Clean' }) }
-            'Findings'   { $items = @($items | Where-Object { $_.Status -eq 'Findings' -or $_.Status -eq 'Revoked' }) }
-            'Failed'     { $items = @($items | Where-Object { $_.Status -like '*Failed' }) }
+    # Single foreach pass instead of chained Where-Object pipelines: with
+    # ~15k targets the pipeline version cost ~0.5 s per search keystroke.
+    $filter = [string]$Tab['Filter']
+    $n = [string]$Tab['Search']
+    $list = [System.Collections.Generic.List[object]]::new()
+    foreach ($it in @($Tab['Items'])) {
+        $s = [string]$it.Status
+        # Placeholder rows (users without a personal site) only surface under
+        # the dedicated Unprovisioned filter; every other filter hides them.
+        # Mirrors Test-SsmPlaceholderTarget, inlined: a function call per row
+        # is the dominant cost at 15k rows.
+        $placeholder = ($s -eq 'Unprovisioned' -or $s -eq 'ProvisionRequested')
+        $keep = switch ($filter) {
+            'Unprovisioned' { $placeholder }
+            'NotScanned'    { -not $placeholder -and $s -eq 'NotScanned' }
+            'Clean'         { -not $placeholder -and $s -eq 'Clean' }
+            'Findings'      { -not $placeholder -and ($s -eq 'Findings' -or $s -eq 'Revoked') }
+            'Failed'        { -not $placeholder -and $s -like '*Failed' }
+            default         { -not $placeholder }
         }
+        if (-not $keep) { continue }
+        if ($n -and -not (($it.Url -like "*$n*") -or ($it.Title -like "*$n*"))) { continue }
+        $list.Add($it)
     }
-    if (-not [string]::IsNullOrEmpty($Tab['Search'])) {
-        $n = $Tab['Search']
-        $items = @($items | Where-Object { ($_.Url -like "*$n*") -or ($_.Title -like "*$n*") })
-    }
+    $items = $list.ToArray()
     $prop = $Tab['SortCol']   # Url | Title | Status | Findings
     $expr = switch ($prop) { 'Findings' { { $_.FindingCount } } default { { $_.$prop } } }
     # @() must wrap the whole if/else, not each branch: an if-expression that
@@ -39,13 +46,15 @@ function Update-FindingsView {
     # Filter + sort the findings sub-view. Filter cycles category keys.
     param($Tab)
     $ft = $Tab['FTab']
-    $items = @($ft['Items'])
-    if ($ft['Filter'] -ne 'All') { $items = @($items | Where-Object { $_.CategoryKey -eq $ft['Filter'] }) }
-    if (-not [string]::IsNullOrEmpty($ft['Search'])) {
-        $n = $ft['Search']
-        $items = @($items | Where-Object { ($_.Name -like "*$n*") -or ($_.Principal -like "*$n*") -or ($_.Path -like "*$n*") })
+    $cat = [string]$ft['Filter']
+    $n = [string]$ft['Search']
+    $list = [System.Collections.Generic.List[object]]::new()
+    foreach ($it in @($ft['Items'])) {
+        if ($cat -ne 'All' -and $it.CategoryKey -ne $cat) { continue }
+        if ($n -and -not (($it.Name -like "*$n*") -or ($it.Principal -like "*$n*") -or ($it.Path -like "*$n*"))) { continue }
+        $list.Add($it)
     }
-    $ft['View'] = @($items | Sort-Object Category, Path)
+    $ft['View'] = @($list | Sort-Object Category, Path)
     if ($ft['Cursor'] -ge @($ft['View']).Count) { $ft['Cursor'] = [Math]::Max(0, @($ft['View']).Count - 1) }
     $script:UI.Dirty = $true
 }
@@ -145,18 +154,27 @@ function Add-TargetsView {
     }
 
     $view = @($Tab['View'])
-    $selCount = @($Tab['Items'] | Where-Object { $_.Selected }).Count
+    # One pass for every context-line count. Runs on every redraw (each arrow
+    # key), so no pipelines here: six Where-Object passes over 15k targets
+    # cost ~1.2 s per frame.
+    $selCount = 0; $doneCount = 0; $cleanCount = 0; $withFindings = 0; $totalFindings = 0; $unprov = 0
+    foreach ($it in @($Tab['Items'])) {
+        if ($it.Selected) { $selCount++ }
+        $s = [string]$it.Status
+        if ($s -eq 'Clean' -or $s -eq 'Findings' -or $s -eq 'Revoked') {
+            $doneCount++
+            $fc = [int]$it.FindingCount
+            $totalFindings += $fc
+            if ($fc -gt 0) { $withFindings++ } else { $cleanCount++ }
+        } elseif ($s -eq 'Unprovisioned') { $unprov++ }
+    }
     $dir = [string]$g.Up
     if ($Tab['SortDesc']) { $dir = [string]$g.Down }
     $ctx = (' {0} of {1} {2}   {3} selected   filter:{4}   sort:{5}' -f (Get-CtxHi $t.Cloud @($view).Count), (Get-CtxHi $t.Cloud @($Tab['Items']).Count), $Tab['Noun'], (Get-CtxHi $t.Pending $selCount), (Get-CtxHi $t.Warn $Tab['Filter']), (Get-CtxHi $t.Warn "$($Tab['SortCol'])$dir"))
     # Persistent scan summary: visible at all times once anything is scanned.
-    $done = @($Tab['Items'] | Where-Object { $_.Status -in @('Clean','Findings','Revoked') })
-    if ($done.Count -gt 0) {
-        $totalFindings = ($done | Measure-Object FindingCount -Sum).Sum
-        $withFindings = @($done | Where-Object { $_.FindingCount -gt 0 }).Count
-        $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f (Get-CtxHi $t.Cloud $done.Count), (Get-CtxHi $t.Good @($done | Where-Object { $_.FindingCount -eq 0 }).Count), (Get-CtxHi $t.Warn $withFindings), (Get-CtxHi $t.Warn $totalFindings))
+    if ($doneCount -gt 0) {
+        $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f (Get-CtxHi $t.Cloud $doneCount), (Get-CtxHi $t.Good $cleanCount), (Get-CtxHi $t.Warn $withFindings), (Get-CtxHi $t.Warn $totalFindings))
     }
-    $unprov = @($Tab['Items'] | Where-Object { $_.Status -eq 'Unprovisioned' }).Count
     if ($unprov -gt 0) { $ctx += ('   unprovisioned:{0} (F to view)' -f (Get-CtxHi $t.Attention $unprov)) }
     if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + (Get-CtxHi $t.Warn $Tab['Search']) + '"') }
     if ($Tab['CachedAt']) {
@@ -228,7 +246,8 @@ function Add-FindingsView {
     $t = $script:T; $g = $script:G
     $ft = $Tab['FTab']
     $view = @($ft['View'])
-    $selCount = @($ft['Items'] | Where-Object { $_.Selected }).Count
+    $selCount = 0
+    foreach ($it in @($ft['Items'])) { if ($it.Selected) { $selCount++ } }
     $ctx = (' {0}   {1} of {2} findings   {3} selected   filter:{4}' -f (Get-CtxHi $t.CtxHi $ft['Target'].Url), (Get-CtxHi $t.Cloud @($view).Count), (Get-CtxHi $t.Cloud @($ft['Items']).Count), (Get-CtxHi $t.Pending $selCount), (Get-CtxHi $t.Warn $ft['Filter']))
     if (-not [string]::IsNullOrEmpty($ft['Search'])) { $ctx += ('   search:"' + (Get-CtxHi $t.Warn $ft['Search']) + '"') }
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)

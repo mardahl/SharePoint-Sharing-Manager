@@ -86,29 +86,29 @@ function Get-TenantTargets {
     # is a locked or deprovisioned site that would only 403 on scan, so filter it
     # out here.
     $sites = Get-SsmTenantSiteProperties -IncludePersonal $OneDrive -Progress $Progress
-    $out = @()
+    $out = [System.Collections.Generic.List[object]]::new()
     $locked = 0
     foreach ($s in $sites) {
         $isPersonal = ($s.Template -like 'SPSPERS*')
         if ($OneDrive -ne $isPersonal) { continue }
         if ([string]$s.LockState -ne 'Unlock') { $locked++; continue }
-        $out += (New-Target -Url $s.Url -Title $s.Title -Template $s.Template)
+        $out.Add((New-Target -Url $s.Url -Title $s.Title -Template $s.Template))
     }
     if ($locked -gt 0) {
         Write-SsmLog -Message ("Filtered out {0} locked/inaccessible {1} (LockState not Unlock)." -f $locked, ($OneDrive ? 'OneDrives' : 'sites')) -Level WARN
     }
     Write-SsmLog -Message ("Enumerated {0} {1} from the tenant." -f $out.Count, ($OneDrive ? 'OneDrives' : 'sites'))
-    return $out
+    return $out.ToArray()
 }
 
 function Get-TabFindings {
     # Every finding across all targets in a tab (same object references).
     param($Tab)
-    $out = @()
+    $out = [System.Collections.Generic.List[object]]::new()
     foreach ($it in @($Tab['Items'])) {
-        if (@($it.Findings).Count -gt 0) { $out += @($it.Findings) }
+        foreach ($f in @($it.Findings)) { $out.Add($f) }
     }
-    return $out
+    return $out.ToArray()
 }
 
 #endregion

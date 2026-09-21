@@ -37,6 +37,27 @@ Invoke-SsmTest 'Update-TabView with a filter matching exactly one item does not 
     Assert-Equal 'https://x/b' $tab['View'][0].Url
 }
 
+Invoke-SsmTest 'Update-TabView: placeholders hidden everywhere except Unprovisioned; search applies on top of filter' {
+    $tab = @{
+        Items = @(
+            @{ Url = 'https://x/a'; Title = 'alpha'; Status = 'Clean'; FindingCount = 0 },
+            @{ Url = 'https://x/b'; Title = 'beta'; Status = 'Findings'; FindingCount = 2 },
+            @{ Url = 'https://x/c'; Title = 'gamma'; Status = 'Revoked'; FindingCount = 1 },
+            @{ Url = 'https://x/d'; Title = 'delta'; Status = 'ScanFailed'; FindingCount = 0 },
+            @{ Url = 'https://x/e'; Title = 'eps'; Status = 'Unprovisioned'; FindingCount = 0 },
+            @{ Url = 'https://x/f'; Title = 'zeta'; Status = 'ProvisionRequested'; FindingCount = 0 }
+        )
+        Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @()
+    }
+    Update-TabView -Tab $tab;               Assert-Equal 4 @($tab['View']).Count 'All hides placeholders'
+    $tab['Filter'] = 'Unprovisioned'; Update-TabView -Tab $tab; Assert-Equal 2 @($tab['View']).Count 'Unprovisioned shows both placeholder kinds'
+    $tab['Filter'] = 'Findings'; Update-TabView -Tab $tab;      Assert-Equal 2 @($tab['View']).Count 'Findings includes Revoked'
+    $tab['Filter'] = 'Failed'; Update-TabView -Tab $tab;        Assert-Equal 1 @($tab['View']).Count '*Failed wildcard'
+    $tab['Filter'] = 'All'; $tab['Search'] = 'eta'; Update-TabView -Tab $tab
+    Assert-Equal 1 @($tab['View']).Count 'search on Title, placeholder zeta excluded'
+    Assert-Equal 'https://x/b' $tab['View'][0].Url
+}
+
 Invoke-SsmTest 'Update-TabView cursor clamps to the shrunk view size' {
     $tab = @{
         Items = @(@{ Url = 'https://x/a'; Title = 'a'; Status = 'Clean'; FindingCount = 0 })
