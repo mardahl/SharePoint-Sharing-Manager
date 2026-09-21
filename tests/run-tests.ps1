@@ -36,7 +36,7 @@ function Exit-SsmTestLogFile {
 }
 
 # Pure-logic files only - keep in sync as files gain PnP-free helpers
-foreach ($f in @('15-drawing','20-modals','25-config','30-connections','35-scan-engine','40-revoke','45-targets','46-onedrive-admin','47-onedrive-provision','50-csv','55-tenant-actions','60-setup-actions','65-views','70-cache','72-update-check','75-key-dispatch')) {
+foreach ($f in @('15-drawing','20-modals','25-config','30-connections','35-scan-engine','40-revoke','45-targets','46-onedrive-admin','47-onedrive-provision','50-csv','52-xlsx','55-tenant-actions','60-setup-actions','65-views','70-cache','72-update-check','75-key-dispatch')) {
     $p = Join-Path $root "src/$f.ps1"
     if (Test-Path $p) { . $p }
 }
