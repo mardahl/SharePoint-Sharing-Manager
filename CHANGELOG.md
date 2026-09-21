@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [1.10.1-rc.3] - 2026-09-21
+## [1.10.1] - 2026-09-21
 
 - Fix: secondary-admin Add/Remove (`M`) sat on a blank screen after the UPN
   prompt while it connected to the admin site, resolved the account, and
@@ -11,17 +11,11 @@
   preflight aborts before the confirmation step.
 - UI: row-3 context values (selected count, filter, sort, search, scan
   counts, cache time) are color-highlighted so they stand out from labels.
-
-## [1.10.1-rc.2] - 2026-09-19
-
 - Fix: pre-provision (`P`) showed no progress modal after the browser
   sign-in - the modal was only painted when a 200-user batch finished, so
   a single-batch run looked frozen. The modal and spinner now appear
   before the first request, and the Graph/personal-site loading phase
   runs under the spinner too.
-
-## [1.10.1-rc.1] - 2026-09-15
-
 - Fix: loading the OneDrives tab and the unprovisioned pre-check paged
   through every site collection in the tenant (the CSOM `Include` personal
   site filter adds OneDrives on top of regular sites), so the progress
