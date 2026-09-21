@@ -231,6 +231,26 @@ function Show-ConfirmModal {
     }
 }
 
+function Show-ExportModal {
+    # Export format picker. Returns 'CSV', 'XLSX' or $null (cancelled).
+    $lines = ConvertTo-ModalLines -Width 64 -Lines @(
+        'C   CSV      - current view, same columns as before',
+        'X   Excel    - report workbook: Summary, Findings, Sites',
+        '',
+        @($script:T.Muted, 'Excel export needs the ImportExcel module (installed on demand).'))
+    while ($true) {
+        Write-Screen
+        [void](Write-ModalFrame -Title 'Export' -BodyLines $lines -FooterHint 'C csv   X excel   Esc cancel' -BorderStyle $script:T.Border)
+        $k = Read-ModalKey
+        if ($k.Key -eq 'Escape') { $script:UI.Dirty = $true; return $null }
+        if (($k.Modifiers -band [ConsoleModifiers]::Control) -and $k.Key -eq 'C') { $script:UI.Dirty = $true; return $null }
+        switch ([char]::ToUpper($k.KeyChar)) {
+            'C' { $script:UI.Dirty = $true; return 'CSV' }
+            'X' { $script:UI.Dirty = $true; return 'XLSX' }
+        }
+    }
+}
+
 function Show-TypedConfirmModal {
     # Requires the operator to type an exact word. Returns $true/$false.
     # The warning, prompt and input field are pinned to the bottom of the box,

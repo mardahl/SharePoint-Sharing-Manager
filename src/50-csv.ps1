@@ -81,4 +81,36 @@ function Export-SsmProvisionCsv {
     return $path
 }
 
+function Get-ExportScope {
+    # What an Excel report covers, following the current view.
+    param($Tab)
+    $inFindings = ($Tab['Mode'] -eq 'Findings' -and $Tab['FTab'])
+    if ($inFindings) {
+        $ft = $Tab['FTab']
+        $agg = [bool]$ft['Aggregate']
+        $tag = if ($agg) { 'ALL' } else { ([string]$ft['Target'].Url).TrimEnd('/') -split '/' | Select-Object -Last 1 }
+        $label = if ($agg) { 'All ' + $Tab['Noun'] } else { [string]$ft['Target'].Url }
+        return @{ Findings = @($ft['View']); Targets = @($Tab['Items']); SiteTag = $tag; ScopeLabel = $label; IncludeSites = $agg }
+    }
+    return @{ Findings = @(Get-TabFindings -Tab $Tab); Targets = @($Tab['Items']); SiteTag = 'ALL'; ScopeLabel = ('All ' + $Tab['Noun']); IncludeSites = $true }
+}
+
+function Invoke-ViewExport {
+    # E key: pick CSV (unchanged path) or Excel report.
+    param($Tab)
+    $choice = Show-ExportModal
+    if ($choice -eq 'CSV') { Export-ViewCsv -Tab $Tab; return }
+    if ($choice -ne 'XLSX') { return }
+    $scope = Get-ExportScope -Tab $Tab
+    if (@($scope.Findings).Count -eq 0) { Show-MsgModal -Title 'Export' -Lines @('No findings to report. Scan targets first (S or X).'); return }
+    if (-not (Install-SsmImportExcel)) { return }
+    try {
+        $path = Export-FindingsXlsx -Findings $scope.Findings -Targets $scope.Targets -TabName $Tab['Name'] -ScopeLabel $scope.ScopeLabel -SiteTag $scope.SiteTag -IncludeSites $scope.IncludeSites
+        Show-MsgModal -Title 'Exported' -Lines @('Excel report written to:', $path)
+    } catch {
+        Write-SsmErrorLog -Context 'Excel report export failed' -ErrorRecord $_
+        Show-MsgModal -Title 'Export failed' -Lines @($_.Exception.Message, 'See the Log tab. CSV export is still available.') -Kind Error
+    }
+}
+
 #endregion

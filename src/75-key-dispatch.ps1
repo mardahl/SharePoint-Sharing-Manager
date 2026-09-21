@@ -118,7 +118,7 @@ function Invoke-TargetsKey {
             }
             return
         }
-        'E' { Export-ViewCsv -Tab $Tab; return }
+        'E' { Invoke-ViewExport -Tab $Tab; return }
         'G' { Enter-AggregateMode -Tab $Tab; return }
         'R' {
             $selCount = 0
@@ -226,7 +226,7 @@ function Invoke-FindingsKey {
             return
         }
         'R' { Invoke-FindingsRevoke -Tab $Tab; return }
-        'E' { Export-ViewCsv -Tab $Tab; return }
+        'E' { Invoke-ViewExport -Tab $Tab; return }
     }
 }
 

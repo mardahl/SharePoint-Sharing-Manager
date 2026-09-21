@@ -1403,12 +1403,12 @@ function Get-TabHints {
             if ($Tab['Mode'] -eq 'Findings') {
                 $revokeHint = if ($Tab['FTab']['Aggregate']) { 'revoke all sites' } else { 'revoke selected' }
                 return @(@('Spc','select'),@('A','all'),@('N','none'),@('/','find'),@('F','filter'),
-                         @('R',$revokeHint),@('E','export'),@('Esc','back'),@('?','help'),@('Q','quit'))
+                         @('R',$revokeHint),@('E','export...'),@('Esc','back'),@('?','help'),@('Q','quit'))
             }
             $base = @(@('Spc','select'),@('A','all'),@('N','none'),@('/','find'),@('F','filter'),
                      @('S','scan'),@('X','scan all'),@('T','rules'),@('G','all findings'),
                      @('R','revoke selected'),@('U','add url'),@('I','import csv'),
-                     @('Enter','open/load'),@('C','reload'),@('L','restore'),@('E','export'))
+                     @('Enter','open/load'),@('C','reload'),@('L','restore'),@('E','export...'))
             if ($Tab['OneDrive']) { $base += @(,@('M','manage admins'),@('P','pre-provision')) }
             return $base + @(@('?','help'),@('Q','quit'))
         }

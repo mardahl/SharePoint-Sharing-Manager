@@ -133,3 +133,29 @@ Invoke-SsmTest 'Export-FindingsXlsx writes workbook with three sheets (skipped w
         $script:ExportDir = $prev
     }
 }
+
+Invoke-SsmTest 'Export scope: target list = whole tab, findings view = current view' {
+    $ta = New-Target -Url 'https://x/sites/a' -Title 'A'
+    $ta.Findings = @((New-XlsxTestFinding -Site 'https://x/sites/a' -Key 'OrgLink'), (New-XlsxTestFinding -Site 'https://x/sites/a' -Key 'AnonymousLink'))
+    $tb = New-Target -Url 'https://x/sites/b' -Title 'B'
+    $tb.Findings = @(New-XlsxTestFinding -Site 'https://x/sites/b' -Key 'EEEU')
+    $tab = @{ Kind='Targets'; Name='Sites'; Noun='sites'; Mode='Targets'; Items=@($ta,$tb); View=@($ta,$tb) }
+    $s = Get-ExportScope -Tab $tab
+    Assert-Equal 3 @($s.Findings).Count
+    Assert-Equal 'ALL' $s.SiteTag
+    Assert-Equal $true $s.IncludeSites
+    Assert-Equal 'All sites' $s.ScopeLabel
+
+    $tab['Mode'] = 'Findings'
+    $tab['FTab'] = @{ Target = $ta; Items = @($ta.Findings); View = @($ta.Findings[0]); Filter='OrgLink'; Search='' }
+    $s2 = Get-ExportScope -Tab $tab
+    Assert-Equal 1 @($s2.Findings).Count
+    Assert-Equal 'a' $s2.SiteTag
+    Assert-Equal $false $s2.IncludeSites
+
+    $tab['FTab'] = @{ Target = @{ Url = 'All sites' }; Items = @($ta.Findings + $tb.Findings); View = @($ta.Findings + $tb.Findings); Filter='All'; Search=''; Aggregate=$true }
+    $s3 = Get-ExportScope -Tab $tab
+    Assert-Equal 'ALL' $s3.SiteTag
+    Assert-Equal $true $s3.IncludeSites
+}
+
