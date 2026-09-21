@@ -58,6 +58,61 @@ Invoke-SsmTest 'Update-TabView: placeholders hidden everywhere except Unprovisio
     Assert-Equal 'https://x/b' $tab['View'][0].Url
 }
 
+Invoke-SsmTest 'Update-TabView sort: Findings numeric (not lexical), Desc reverses, ties deterministic' {
+    $tab = @{
+        Items = @(
+            @{ Url = 'https://x/b'; Title = 'b'; Status = 'Findings'; FindingCount = 10 },
+            @{ Url = 'https://x/a'; Title = 'a'; Status = 'Findings'; FindingCount = 9 },
+            @{ Url = 'https://x/c'; Title = 'c'; Status = 'Findings'; FindingCount = 100 },
+            @{ Url = 'https://x/d'; Title = 'd'; Status = 'Clean'; FindingCount = 9 }
+        )
+        Filter = 'All'; Search = ''; SortCol = 'Findings'; SortDesc = $false; Cursor = 0; View = @()
+    }
+    Update-TabView -Tab $tab
+    Assert-Equal 'https://x/a,https://x/d,https://x/b,https://x/c' (($tab['View'] | ForEach-Object Url) -join ',') 'asc numeric, tie 9 broken by Url'
+    $tab['SortDesc'] = $true; Update-TabView -Tab $tab
+    Assert-Equal 'https://x/c' $tab['View'][0].Url
+    $tab['SortCol'] = 'Status'; $tab['SortDesc'] = $false; Update-TabView -Tab $tab
+    Assert-Equal 'https://x/d' $tab['View'][0].Url 'Clean < Findings'
+    Assert-Equal 'True' ([string]($tab['View'] -is [array]))
+}
+
+Invoke-SsmTest 'Update-TabView -Incremental narrows the previous View and only when Search grew' {
+    $tab = @{
+        Items = @(
+            @{ Url = 'https://x/alpha'; Title = 'alpha'; Status = 'Clean'; FindingCount = 0 },
+            @{ Url = 'https://x/alps';  Title = 'alps';  Status = 'Clean'; FindingCount = 0 },
+            @{ Url = 'https://x/beta';  Title = 'beta';  Status = 'Clean'; FindingCount = 0 }
+        )
+        Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @()
+    }
+    Update-TabView -Tab $tab
+    $tab['Search'] = 'al'; Update-TabView -Tab $tab -Incremental
+    Assert-Equal 2 @($tab['View']).Count
+    $tab['Search'] = 'alp'; Update-TabView -Tab $tab -Incremental
+    Assert-Equal 2 @($tab['View']).Count
+    $tab['Search'] = 'alph'; Update-TabView -Tab $tab -Incremental
+    Assert-Equal 1 @($tab['View']).Count
+    Assert-Equal 'https://x/alpha' $tab['View'][0].Url
+    # Search shrank (backspace path): -Incremental must fall back to a full pass.
+    $tab['Search'] = 'a'; Update-TabView -Tab $tab -Incremental
+    Assert-Equal 3 @($tab['View']).Count 'beta matches "a" too'
+    # Without -Incremental a new Item is picked up even though Search only grew.
+    $tab['Items'] += @{ Url = 'https://x/alphabet'; Title = 'alphabet'; Status = 'Clean'; FindingCount = 0 }
+    $tab['Search'] = 'alpha'; Update-TabView -Tab $tab
+    Assert-Equal 2 @($tab['View']).Count
+}
+
+Invoke-SsmTest 'Update-FindingsView sorts Category then Path and honors -Incremental' {
+    $mk = { param($c,$p,$n) [pscustomobject]@{ Category=$c; CategoryKey=$c; Path=$p; Name=$n; Principal='u'; Selected=$false } }
+    $tab = @{ FTab = @{ Items = @((& $mk 'B' '/2' 'x'), (& $mk 'A' '/9' 'y'), (& $mk 'A' '/1' 'zed')); Filter='All'; Search=''; Cursor=0; View=@() } }
+    Update-FindingsView -Tab $tab
+    Assert-Equal '/1,/9,/2' (($tab['FTab']['View'] | ForEach-Object Path) -join ',')
+    $tab['FTab']['Search'] = 'z'; Update-FindingsView -Tab $tab -Incremental
+    Assert-Equal 1 @($tab['FTab']['View']).Count
+    Assert-Equal 'zed' $tab['FTab']['View'][0].Name
+}
+
 Invoke-SsmTest 'Update-TabView cursor clamps to the shrunk view size' {
     $tab = @{
         Items = @(@{ Url = 'https://x/a'; Title = 'a'; Status = 'Clean'; FindingCount = 0 })

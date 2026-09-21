@@ -16,19 +16,20 @@ function Select-SsmSharePointLicensed {
     # Keep Graph users with an Enabled SharePoint service plan. Matching on
     # the assignedPlans.service name avoids maintaining a plan-GUID list.
     param([object[]]$Users)
-    $out = @()
+    $out = [System.Collections.Generic.List[object]]::new()
     foreach ($u in @($Users)) {
         $plans = @()
         if ($u.PSObject.Properties['assignedPlans'] -and $u.assignedPlans) { $plans = @($u.assignedPlans) }
-        $hit = $plans | Where-Object { $_.service -eq 'SharePoint' -and $_.capabilityStatus -eq 'Enabled' } | Select-Object -First 1
+        $hit = $false
+        foreach ($p in $plans) { if ($p.service -eq 'SharePoint' -and $p.capabilityStatus -eq 'Enabled') { $hit = $true; break } }
         if (-not $hit) { continue }
-        $out += [pscustomobject]@{
+        $out.Add([pscustomobject]@{
             Id          = [string]$u.id
             Upn         = [string]$u.userPrincipalName
             DisplayName = if ($u.PSObject.Properties['displayName']) { [string]$u.displayName } else { '' }
-        }
+        })
     }
-    return $out
+    return $out.ToArray()
 }
 
 function Get-SsmUnprovisionedUsers {
@@ -37,13 +38,13 @@ function Get-SsmUnprovisionedUsers {
         [object[]]$Licensed,
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.HashSet[string]]$OwnerSet
     )
-    $out = @()
+    $out = [System.Collections.Generic.List[object]]::new()
     foreach ($u in @($Licensed)) {
         if ($OwnerSet.Contains($u.Upn)) { continue }
         if ($OwnerSet.Contains((ConvertTo-SsmPersonalSlug -Upn $u.Upn))) { continue }
-        $out += $u
+        $out.Add($u)
     }
-    return $out
+    return $out.ToArray()
 }
 
 function Split-SsmBatch {

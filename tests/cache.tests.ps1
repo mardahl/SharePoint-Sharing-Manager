@@ -69,3 +69,36 @@ Invoke-SsmTest 'ConvertTo-SsmCacheObject omits placeholder rows' {
     Assert-Equal 1 @($o.Tabs[0].Items).Count
     Assert-Equal 'https://x/a' $o.Tabs[0].Items[0].Url
 }
+
+Invoke-SsmTest 'Save-SsmCache -Throttle skips within 10 s of the last save; plain call always writes' {
+    $script:Version = '9.9.9'
+    $script:CacheDir  = Join-Path ([IO.Path]::GetTempPath()) ("ssmcache-{0}" -f [guid]::NewGuid())
+    $script:CacheFile = Join-Path $script:CacheDir 'session.json'
+    $script:CacheWarning = 'test-warning'
+    $script:CacheLastSave = $null
+    $script:Tabs = @(@{ Kind='Targets'; Name='Sites'; Categories=[System.Collections.ArrayList]@(); Items=@() })
+    Save-SsmCache -Throttle                    # no prior save: writes
+    Assert-Equal 'True' ([string](Test-Path -LiteralPath $script:CacheFile))
+    $first = (Get-Item -LiteralPath $script:CacheFile).LastWriteTimeUtc
+    Remove-Item -LiteralPath $script:CacheFile
+    Save-SsmCache -Throttle                    # <10 s later: skipped
+    Assert-Equal 'False' ([string](Test-Path -LiteralPath $script:CacheFile)) 'throttled save must not write'
+    Save-SsmCache                              # unthrottled: writes
+    Assert-Equal 'True' ([string](Test-Path -LiteralPath $script:CacheFile))
+    $script:CacheLastSave = (Get-Date).AddSeconds(-11)
+    Remove-Item -LiteralPath $script:CacheFile
+    Save-SsmCache -Throttle                    # >10 s: writes
+    Assert-Equal 'True' ([string](Test-Path -LiteralPath $script:CacheFile))
+    Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Invoke-SsmTest 'ConvertTo-SsmCacheObject drops placeholders and keeps Items an array at 1 element' {
+    $tabs = @(@{ Kind='Targets'; Name='OneDrives'; Categories=@(); Items=@(
+        @{ Url='https://x/personal/a'; Title='a'; Template='SPSPERS'; Status='Clean'; FindingCount=0; Findings=@(); Selected=$false },
+        @{ Url='https://x/personal/b'; Title='b'; Template=''; Status='Unprovisioned'; FindingCount=0; Findings=@(); Selected=$false },
+        @{ Url='https://x/personal/c'; Title='c'; Template=''; Status='ProvisionRequested'; FindingCount=0; Findings=@(); Selected=$false }) })
+    $o = ConvertTo-SsmCacheObject -Tabs $tabs
+    Assert-Equal 1 @($o.Tabs).Count
+    Assert-Equal 1 @($o.Tabs[0].Items).Count
+    Assert-Equal 'True' ([string]($o.Tabs[0].Items -is [array]))
+}

@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.10.2-rc.2] - 2026-09-21
+
+- Perf: verified at 100k targets. Session cache serialization used `$arr +=`
+  (quadratic: ~20 s per save at 100k, and it ran after every scanned
+  target); now linear (~0.5 s) and, inside scan/revoke loops, throttled to
+  one save per 10 s plus a final save when the run ends or is cancelled.
+  Search filters the previous result while you type (15 ms/keystroke at
+  100k) and uses literal substring matching instead of `-like` (wildcards
+  `*?[` in the search box are now matched literally). Sorting uses a
+  precomputed key array (`Findings` sorts numerically, ties broken by URL),
+  ~5x faster than `Sort-Object`. Remaining per-item pipelines in revoke
+  status recompute, the `R` finding collector, the findings `F` filter
+  cycle, and OneDrive provisioning user filters replaced with single passes.
+
 ## [1.10.2-rc.1] - 2026-09-21
 
 - Perf: large lists (15k+ sites/OneDrives, thousands of findings) were near

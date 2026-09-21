@@ -2,60 +2,105 @@
 #region Views
 # ============================================================================
 
+function Invoke-SsmRowSort {
+    # Sort rows by a precomputed string key array with [Array]::Sort - roughly
+    # 5x faster than Sort-Object at 100k rows. Keys carry a unique tiebreaker so
+    # the order is deterministic (equal keys never shuffle between refreshes).
+    param([object[]]$Rows, [string[]]$Keys, [bool]$Descending)
+    if ($Rows.Count -gt 1) {
+        # Explicit IComparer cast matters: without it PowerShell binds an overload
+        # that sorts the keys but leaves $Rows untouched.
+        [Array]::Sort($Keys, $Rows, [System.Collections.IComparer][System.StringComparer]::OrdinalIgnoreCase)
+        if ($Descending) { [Array]::Reverse($Rows) }
+    }
+    return ,$Rows   # comma: keep a 0/1-element array from unrolling to $null/scalar
+}
+
 function Update-TabView {
     # Filter + sort targets. Filter: All | NotScanned | Clean | Findings | Failed | Unprovisioned.
-    param($Tab)
-    # Single foreach pass instead of chained Where-Object pipelines: with
-    # ~15k targets the pipeline version cost ~0.5 s per search keystroke.
+    # -Incremental: the caller only appended characters to Search since the last
+    # call (search-mode typing), so the current View is a sorted superset of the
+    # result: filter it instead of Items and skip the sort. Never pass it after
+    # Items or any row's Status changed.
+    param($Tab, [switch]$Incremental)
     $filter = [string]$Tab['Filter']
     $n = [string]$Tab['Search']
+    $prev = if ($Tab.ContainsKey('ViewSearch')) { [string]$Tab['ViewSearch'] } else { $null }
+    $incremental = $Incremental -and $null -ne $prev -and $Tab.ContainsKey('View') -and $n.StartsWith($prev, [System.StringComparison]::OrdinalIgnoreCase)
+    $source = if ($incremental) { @($Tab['View']) } else { @($Tab['Items']) }
+    # Single foreach pass instead of chained Where-Object pipelines (~0.5 s per
+    # search keystroke at 15k targets). String.Contains instead of -like: the
+    # wildcard match compiles to a regex per row and is ~13x slower on hits.
+    $ci = [System.StringComparison]::OrdinalIgnoreCase
     $list = [System.Collections.Generic.List[object]]::new()
-    foreach ($it in @($Tab['Items'])) {
-        $s = [string]$it.Status
-        # Placeholder rows (users without a personal site) only surface under
-        # the dedicated Unprovisioned filter; every other filter hides them.
-        # Mirrors Test-SsmPlaceholderTarget, inlined: a function call per row
-        # is the dominant cost at 15k rows.
-        $placeholder = ($s -eq 'Unprovisioned' -or $s -eq 'ProvisionRequested')
-        $keep = switch ($filter) {
-            'Unprovisioned' { $placeholder }
-            'NotScanned'    { -not $placeholder -and $s -eq 'NotScanned' }
-            'Clean'         { -not $placeholder -and $s -eq 'Clean' }
-            'Findings'      { -not $placeholder -and ($s -eq 'Findings' -or $s -eq 'Revoked') }
-            'Failed'        { -not $placeholder -and $s -like '*Failed' }
-            default         { -not $placeholder }
+    foreach ($it in $source) {
+        if (-not $incremental) {
+            $s = [string]$it.Status
+            # Placeholder rows (users without a personal site) only surface under
+            # the dedicated Unprovisioned filter; every other filter hides them.
+            # Mirrors Test-SsmPlaceholderTarget, inlined: a function call per row
+            # is the dominant cost at scale.
+            $placeholder = ($s -eq 'Unprovisioned' -or $s -eq 'ProvisionRequested')
+            $keep = switch ($filter) {
+                'Unprovisioned' { $placeholder }
+                'NotScanned'    { -not $placeholder -and $s -eq 'NotScanned' }
+                'Clean'         { -not $placeholder -and $s -eq 'Clean' }
+                'Findings'      { -not $placeholder -and ($s -eq 'Findings' -or $s -eq 'Revoked') }
+                'Failed'        { -not $placeholder -and $s -like '*Failed' }
+                default         { -not $placeholder }
+            }
+            if (-not $keep) { continue }
         }
-        if (-not $keep) { continue }
-        if ($n -and -not (($it.Url -like "*$n*") -or ($it.Title -like "*$n*"))) { continue }
+        if ($n -and -not (([string]$it.Url).Contains($n, $ci) -or ([string]$it.Title).Contains($n, $ci))) { continue }
         $list.Add($it)
     }
     $items = $list.ToArray()
-    $prop = $Tab['SortCol']   # Url | Title | Status | Findings
-    $expr = switch ($prop) { 'Findings' { { $_.FindingCount } } default { { $_.$prop } } }
-    # @() must wrap the whole if/else, not each branch: an if-expression that
-    # streams zero or one object collapses to $null / a scalar on assignment
-    # even when each branch's own output was array-cast (0 or 1 matches is
-    # the common case - e.g. an empty tab, or a filter with a single hit).
-    $items = @(if ($Tab['SortDesc']) { $items | Sort-Object -Property $expr -Descending } else { $items | Sort-Object -Property $expr })
+    if (-not $incremental) {
+        $prop = [string]$Tab['SortCol']   # Url | Title | Status | Findings
+        $keys = [string[]]::new($items.Count)
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            $it = $items[$i]
+            $k = if ($prop -eq 'Findings') { '{0:D10}' -f [int]$it.FindingCount } else { [string]$it.$prop }
+            $keys[$i] = $k + "`u{1}" + [string]$it.Url
+        }
+        $items = Invoke-SsmRowSort -Rows $items -Keys $keys -Descending ([bool]$Tab['SortDesc'])
+    }
     $Tab['View'] = $items
+    $Tab['ViewSearch'] = $n
     if ($Tab['Cursor'] -ge $items.Count) { $Tab['Cursor'] = [Math]::Max(0, $items.Count - 1) }
     $script:UI.Dirty = $true
 }
 
 function Update-FindingsView {
     # Filter + sort the findings sub-view. Filter cycles category keys.
-    param($Tab)
+    # -Incremental: see Update-TabView.
+    param($Tab, [switch]$Incremental)
     $ft = $Tab['FTab']
     $cat = [string]$ft['Filter']
     $n = [string]$ft['Search']
+    $prev = if ($ft.ContainsKey('ViewSearch')) { [string]$ft['ViewSearch'] } else { $null }
+    $incremental = $Incremental -and $null -ne $prev -and $ft.ContainsKey('View') -and $n.StartsWith($prev, [System.StringComparison]::OrdinalIgnoreCase)
+    $source = if ($incremental) { @($ft['View']) } else { @($ft['Items']) }
+    $ci = [System.StringComparison]::OrdinalIgnoreCase
     $list = [System.Collections.Generic.List[object]]::new()
-    foreach ($it in @($ft['Items'])) {
-        if ($cat -ne 'All' -and $it.CategoryKey -ne $cat) { continue }
-        if ($n -and -not (($it.Name -like "*$n*") -or ($it.Principal -like "*$n*") -or ($it.Path -like "*$n*"))) { continue }
+    foreach ($it in $source) {
+        if (-not $incremental -and $cat -ne 'All' -and $it.CategoryKey -ne $cat) { continue }
+        if ($n -and -not (([string]$it.Name).Contains($n, $ci) -or ([string]$it.Principal).Contains($n, $ci) -or ([string]$it.Path).Contains($n, $ci))) { continue }
         $list.Add($it)
     }
-    $ft['View'] = @($list | Sort-Object Category, Path)
-    if ($ft['Cursor'] -ge @($ft['View']).Count) { $ft['Cursor'] = [Math]::Max(0, @($ft['View']).Count - 1) }
+    $items = $list.ToArray()
+    if (-not $incremental) {
+        $keys = [string[]]::new($items.Count)
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            $it = $items[$i]
+            # Category, Path, then Principal/Name so equal paths keep a stable order.
+            $keys[$i] = [string]$it.Category + "`u{1}" + [string]$it.Path + "`u{1}" + [string]$it.Principal + "`u{1}" + [string]$it.Name
+        }
+        $items = Invoke-SsmRowSort -Rows $items -Keys $keys -Descending $false
+    }
+    $ft['View'] = $items
+    $ft['ViewSearch'] = $n
+    if ($ft['Cursor'] -ge $items.Count) { $ft['Cursor'] = [Math]::Max(0, $items.Count - 1) }
     $script:UI.Dirty = $true
 }
 
@@ -357,9 +402,10 @@ function Invoke-TabScan {
             }
         } finally {
             Stop-LoadSpinner
-            if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
+            if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache -Throttle }
         }
     }
+    if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
     Update-TabView -Tab $Tab
 }
 
@@ -466,9 +512,12 @@ function Update-TabTargetStatuses {
     # Recompute per-target FindingCount/Status from live RevokeStatus values.
     param($Tab)
     foreach ($it in @($Tab['Items'])) {
-        $remaining = @(@($it.Findings) | Where-Object { $_.RevokeStatus -ne 'Removed' -and $_.RevokeStatus -ne 'AlreadyRevoked' })
-        $it.FindingCount = $remaining.Count
-        if (@($it.Findings).Count -gt 0 -and $remaining.Count -eq 0) { $it.Status = 'Revoked' }
+        $all = @($it.Findings)
+        if ($all.Count -eq 0) { $it.FindingCount = 0; continue }   # skip the per-item pipeline for the bulk of a large tenant
+        $remaining = 0
+        foreach ($f in $all) { if ($f.RevokeStatus -ne 'Removed' -and $f.RevokeStatus -ne 'AlreadyRevoked') { $remaining++ } }
+        $it.FindingCount = $remaining
+        if ($remaining -eq 0) { $it.Status = 'Revoked' }
     }
 }
 
@@ -519,13 +568,14 @@ function Invoke-BulkRevoke {
             # restart/restore with a stale "Findings" status - Save-SsmCache
             # snapshots whatever Status the target currently holds.
             Update-TabTargetStatuses -Tab $Tab
-            if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
+            if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache -Throttle }
             # Checked after the evidence CSV and cache save, so a cancelled run
             # still records everything it actually did.
             if ($state.Cancel) { break }
         }
     } finally {
         Stop-LoadSpinner
+        if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
     }
     $summary = @(("Removed {0} of {1} across {2} site(s)." -f $totalRemoved, $sel.Count, $groups.Count))
     if ($state.Cancel) {

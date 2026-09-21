@@ -46,7 +46,7 @@ function Invoke-TargetsKey {
         if ($K.KeyChar -and -not [char]::IsControl($K.KeyChar)) {
             $Tab['Search'] = $Tab['Search'] + $K.KeyChar
             $Tab['Cursor'] = 0
-            Update-TabView -Tab $Tab
+            Update-TabView -Tab $Tab -Incremental
         }
         return
     }
@@ -87,7 +87,7 @@ function Invoke-TargetsKey {
     switch ([char]::ToUpper($K.KeyChar)) {
         'A' { foreach ($it in $view) { $it.Selected = $true }; return }
         'N' { foreach ($it in @($Tab['Items'])) { $it.Selected = $false }; return }
-        '/' { $script:UI.SearchMode = $true; return }
+        '/' { Update-TabView -Tab $Tab; $script:UI.SearchMode = $true; return }   # full refresh: -Incremental typing then builds on a current View
         'F' {
             $order = @('All','NotScanned','Clean','Findings','Failed')
             if ($Tab['OneDrive']) { $order += 'Unprovisioned' }
@@ -121,10 +121,15 @@ function Invoke-TargetsKey {
         'E' { Export-ViewCsv -Tab $Tab; return }
         'G' { Enter-AggregateMode -Tab $Tab; return }
         'R' {
-            $selTargets = @($Tab['Items'] | Where-Object { $_.Selected -and -not (Test-SsmPlaceholderTarget -Target $_) })
-            if ($selTargets.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('No targets selected. Space selects a drive.'); return }
-            $findings = @()
-            foreach ($tt in $selTargets) { if (@($tt.Findings).Count -gt 0) { $findings += @($tt.Findings) } }
+            $selCount = 0
+            $findings = [System.Collections.Generic.List[object]]::new()
+            foreach ($tt in @($Tab['Items'])) {
+                if (-not $tt.Selected -or (Test-SsmPlaceholderTarget -Target $tt)) { continue }
+                $selCount++
+                foreach ($f in @($tt.Findings)) { $findings.Add($f) }
+            }
+            if ($selCount -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('No targets selected. Space selects a drive.'); return }
+            $findings = $findings.ToArray()
             if ($findings.Count -eq 0) { Show-MsgModal -Title 'Revoke' -Lines @('Selected targets have no findings to revoke.'); return }
             Invoke-BulkRevoke -Findings $findings -Tab $Tab
             return
@@ -177,7 +182,7 @@ function Invoke-FindingsKey {
         if ($K.KeyChar -and -not [char]::IsControl($K.KeyChar)) {
             $ft['Search'] = $ft['Search'] + $K.KeyChar
             $ft['Cursor'] = 0
-            Update-FindingsView -Tab $Tab
+            Update-FindingsView -Tab $Tab -Incremental
         }
         return
     }
@@ -207,9 +212,11 @@ function Invoke-FindingsKey {
     switch ([char]::ToUpper($K.KeyChar)) {
         'A' { foreach ($it in $view) { $it.Selected = $true }; return }
         'N' { foreach ($it in @($ft['Items'])) { $it.Selected = $false }; return }
-        '/' { $script:UI.SearchMode = $true; return }
+        '/' { Update-FindingsView -Tab $Tab; $script:UI.SearchMode = $true; return }
         'F' {
-            $keys = @($ft['Items'] | Select-Object -ExpandProperty CategoryKey -Unique)
+            $seen = [System.Collections.Generic.HashSet[string]]::new()
+            $keys = [System.Collections.Generic.List[string]]::new()
+            foreach ($f in @($ft['Items'])) { if ($seen.Add([string]$f.CategoryKey)) { $keys.Add([string]$f.CategoryKey) } }
             $order = @('All') + $keys
             $idx = [Array]::IndexOf($order, $ft['Filter'])
             if ($idx -lt 0) { $idx = 0 }

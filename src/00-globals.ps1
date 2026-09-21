@@ -2,7 +2,7 @@
 #region Globals & State
 # ============================================================================
 
-$script:Version = '1.10.2-rc.1'
+$script:Version = '1.10.2-rc.2'
 $script:ESC     = [char]27
 $script:IsWin   = ($PSVersionTable.PSVersion.Major -lt 6) -or ($null -ne (Get-Variable -Name IsWindows -ErrorAction SilentlyContinue) -and $IsWindows)
 
@@ -16,6 +16,7 @@ $script:LogBuffer = New-Object System.Collections.ArrayList
 $script:Spinner   = $null
 $script:CacheDir     = $null   # set by Set-SsmTenantPaths
 $script:CacheFile    = $null
+$script:CacheLastSave = $null   # Save-SsmCache -Throttle gate
 $script:CacheWarning = @(
     'This directory holds cached SharePoint/OneDrive scan results.'
     'session.json contains directory data - site paths, principal names,'

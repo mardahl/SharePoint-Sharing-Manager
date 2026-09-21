@@ -84,7 +84,7 @@ Revoked links and grants cannot be restored from within the tool. Review the BEF
 
 ## Scan cache
 
-Enumerated target lists and scan results are cached per tenant in `SSM-Cache/<tenant-slug>/session.json` and survive a restart; `L` restores the saved session on demand. The cache holds one session per install directory, so two installs on the same machine get independent caches. When the list on screen came from the cache, the status line above it reads `from cache (saved <date>, C reloads)`. A restored session may be stale relative to the tenant's current sharing state; rescan before acting on old results, or press `C` to discard the list and enumerate the tenant afresh. The cache contains directory data, so treat the directory accordingly.
+Enumerated target lists and scan results are cached per tenant in `SSM-Cache/<tenant-slug>/session.json` and survive a restart; `L` restores the saved session on demand. During a scan or revoke run the cache is written at most every 10 seconds and once more when the run ends or is cancelled, so an interrupted run loses at most the last few targets' results (a save of 100k targets takes about half a second, which used to be paid per target). The cache holds one session per install directory, so two installs on the same machine get independent caches. When the list on screen came from the cache, the status line above it reads `from cache (saved <date>, C reloads)`. A restored session may be stale relative to the tenant's current sharing state; rescan before acting on old results, or press `C` to discard the list and enumerate the tenant afresh. The cache contains directory data, so treat the directory accordingly.
 
 ## Sharing-link age (optional)
 
