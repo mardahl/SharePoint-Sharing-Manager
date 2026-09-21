@@ -395,6 +395,7 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState binds the owner-bearing drive via pagi
     }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     $script:pageCalls = 0
     $script:capturedGraphUrl = $null
     function Invoke-PnPGraphMethod {
@@ -406,7 +407,7 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState binds the owner-bearing drive via pagi
                 value = @(
                     @{ id = 'd2'; driveType = 'business'
                        owner = @{ user = @{ id = '22222222-2222-2222-2222-222222222222'; userPrincipalName = 'user@contoso.com' } }
-                       sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666' } }
+                       sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }
                 )
             }
         }
@@ -414,7 +415,7 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState binds the owner-bearing drive via pagi
             value = @(
                 @{ id = 'd1'; driveType = 'business'
                    owner = @{ user = @{ id = '99999999-9999-9999-9999-999999999999'; userPrincipalName = 'unrelated@contoso.com' } }
-                   sharepointIds = @{ siteId = '55555555-5555-5555-5555-555555555555'; webId = '66666666-6666-6666-6666-666666666666' } }
+                   sharepointIds = @{ siteId = '55555555-5555-5555-5555-555555555555'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }
             )
             '@odata.nextLink' = 'sites/contoso-my.sharepoint.com,44444444-4444-4444-4444-444444444444,66666666-6666-6666-6666-666666666666/drives?page2'
         }
@@ -466,17 +467,43 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState fails closed when zero drives bind to 
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         @{ value = @(@{ id = 'd1'; driveType = 'business'
                          owner = @{ user = @{ id = '99999999-9999-9999-9999-999999999999'; userPrincipalName = 'unrelated@contoso.com' } }
-                         sharepointIds = @{ siteId = '55555555-5555-5555-5555-555555555555'; webId = '66666666-6666-6666-6666-666666666666' } }) }
+                         sharepointIds = @{ siteId = '55555555-5555-5555-5555-555555555555'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     $caught = $false
     try {
         Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{} | Out-Null
     } catch { $caught = $true }
     Assert-Equal $true $caught
+}
+
+Invoke-SsmTest 'Get-SsmOneDriveAdminState ignores a second library drive (Site Assets) on the same site/web and binds the template-700 list' {
+    $identity = @{ Id = [guid]'22222222-2222-2222-2222-222222222222'; Upn = 'user@contoso.com'; TenantId = [guid]'11111111-1111-1111-1111-111111111111' }
+    function Get-SsmConnectionTenantId { param($Connection) [guid]'11111111-1111-1111-1111-111111111111' }
+    function Connect-SsmAdmin { $true }
+    function Get-PnPConnection { @{ Url = 'https://contoso-admin.sharepoint.com' } }
+    function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
+    function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
+    function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
+    function Invoke-PnPGraphMethod {
+        param($Method, $Url, $Connection, $ErrorAction)
+        @{ value = @(
+            @{ id = 'assets'; driveType = 'business'
+               owner = @{ user = @{ id = '99999999-9999-9999-9999-999999999999'; userPrincipalName = 'unrelated@contoso.com' } }
+               sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '89898989-8989-8989-8989-898989898989' } },
+            @{ id = 'docs'; driveType = 'business'
+               owner = @{ user = @{ id = '22222222-2222-2222-2222-222222222222'; userPrincipalName = 'user@contoso.com' } }
+               sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
+    }
+    function Get-PnPSiteCollectionAdmin { param($Connection, $Includes, $ErrorAction) @() }
+    $state = Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{}
+    Assert-Equal ([guid]'22222222-2222-2222-2222-222222222222') $state.OwnerId
+    Assert-Equal 'user@contoso.com' $state.OwnerUpn
 }
 
 Invoke-SsmTest 'Get-SsmOneDriveAdminState fails closed when a drive matches siteId but not webId' {
@@ -487,13 +514,14 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState fails closed when a drive matches site
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         # Matches the resolved site GUID but a different web GUID - must not
         # be treated as bound to this exact personal site/web.
         @{ value = @(@{ id = 'd1'; driveType = 'business'
                          owner = @{ user = @{ id = '22222222-2222-2222-2222-222222222222'; userPrincipalName = 'user@contoso.com' } }
-                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '77777777-7777-7777-7777-777777777777' } }) }
+                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '77777777-7777-7777-7777-777777777777'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     $caught = $false
     try {
@@ -515,11 +543,12 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState returns Unlocked=$false for a locked t
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'NoAccess'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         @{ value = @(@{ id = 'd1'; driveType = 'business'
                          owner = @{ user = @{ id = '22222222-2222-2222-2222-222222222222'; userPrincipalName = 'user@contoso.com' } }
-                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666' } }) }
+                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     function Get-PnPSiteCollectionAdmin { param($Connection, $Includes, $ErrorAction) @() }
     $s = Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{}
@@ -538,11 +567,12 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState returns IsPersonalSite=$false for a no
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'STS#0'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         @{ value = @(@{ id = 'd1'; driveType = 'business'
                          owner = @{ user = @{ id = '22222222-2222-2222-2222-222222222222'; userPrincipalName = 'user@contoso.com' } }
-                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666' } }) }
+                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     function Get-PnPSiteCollectionAdmin { param($Connection, $Includes, $ErrorAction) @() }
     $s = Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{}
@@ -559,11 +589,12 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState leaves OwnerId/OwnerUpn null when the 
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         # No 'owner' key at all - matches Graph's documented-optional field.
         @{ value = @(@{ id = 'd1'; driveType = 'business'
-                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666' } }) }
+                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     function Get-PnPSiteCollectionAdmin { param($Connection, $Includes, $ErrorAction) @() }
     $s = Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{}
@@ -579,11 +610,12 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState leaves OwnerId/OwnerUpn null when the 
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         @{ value = @(@{ id = 'd1'; driveType = 'business'
                          owner = @{ group = @{ id = '66666666-6666-6666-6666-666666666666'; displayName = 'Some Group' } }
-                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666' } }) }
+                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     function Get-PnPSiteCollectionAdmin { param($Connection, $Includes, $ErrorAction) @() }
     $s = Get-SsmOneDriveAdminState -Url 'https://contoso-my.sharepoint.com/personal/user' -Identity $identity -Connection @{}
@@ -604,11 +636,12 @@ Invoke-SsmTest 'Get-SsmOneDriveAdminState reports AdminPresent=$null (not $false
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         @{ value = @(@{ id = 'd1'; driveType = 'business'
                          owner = @{ user = @{ id = '33333333-3333-3333-3333-333333333333'; userPrincipalName = 'owner@contoso.com' } }
-                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666' } }) }
+                         sharepointIds = @{ siteId = '44444444-4444-4444-4444-444444444444'; webId = '66666666-6666-6666-6666-666666666666'; listId = '88888888-8888-8888-8888-888888888888' } }) }
     }
     function Get-PnPSiteCollectionAdmin {
         param($Connection, $Includes, $ErrorAction)
@@ -642,6 +675,7 @@ Invoke-SsmTest 'DIAGNOSTICS: Get-SsmOneDriveAdminState logs the original ErrorRe
     function Get-PnPTenantSite { param($Identity, [switch]$Detailed, $Connection, $ErrorAction) @{ Template = 'SPSPERS#10'; LockState = 'Unlock'; Owner = 'primary@contoso.com' } }
     function Get-PnPSite { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'44444444-4444-4444-4444-444444444444' } }
     function Get-PnPWeb { param($Includes, $Connection, $ErrorAction) @{ Id = [guid]'66666666-6666-6666-6666-666666666666' } }
+    function Get-PnPList { param($Includes, $Connection, $ErrorAction) @(@{ Id = [guid]'88888888-8888-8888-8888-888888888888'; BaseTemplate = 700 }, @{ Id = [guid]'89898989-8989-8989-8989-898989898989'; BaseTemplate = 101 }) }
     function Invoke-PnPGraphMethod {
         param($Method, $Url, $Connection, $ErrorAction)
         $err = New-Object System.Management.Automation.ErrorRecord(
