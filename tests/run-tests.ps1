@@ -8,6 +8,10 @@ $root = Split-Path $PSScriptRoot -Parent
 $script:LogBuffer = New-Object System.Collections.ArrayList
 $script:LogFile = Join-Path ([IO.Path]::GetTempPath()) 'ssm-test.log'
 $script:UI = @{ Dirty = $false }
+$script:Version = 'test'
+$script:Auth = @{ AdminUrl = 'https://contoso-admin.sharepoint.com' }
+$script:Conn = @{ Account = 'tester@contoso.com' }
+$script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) 'ssm-test-export'
 function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') }
 function Write-SsmErrorLog { param([string]$Context, $ErrorRecord) }
 

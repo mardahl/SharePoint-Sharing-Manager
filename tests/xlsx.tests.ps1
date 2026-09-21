@@ -77,3 +77,59 @@ Invoke-SsmTest 'Summary: counts, distinct sites, top sites ordering' {
     Assert-Equal 'Anonymous link' $s.ByCategory[0].Category
     Assert-Equal 2 @($s.ByAccess | Where-Object { $_.Access -eq 'View' })[0].Count
 }
+
+Invoke-SsmTest 'Report filename pattern' {
+    $n = Get-ReportFileName -TabName 'OneDrives' -SiteTag 'ALL'
+    if ($n -notmatch '^SSM_REPORT_OneDrive_ALL_\d{8}-\d{6}\.xlsx$') { throw "bad name: $n" }
+    $n2 = Get-ReportFileName -TabName 'Sites' -SiteTag 'hr'
+    if ($n2 -notmatch '^SSM_REPORT_SharePoint_hr_\d{8}-\d{6}\.xlsx$') { throw "bad name: $n2" }
+}
+
+Invoke-SsmTest 'Report rows carry title, sharing type, full path, reach, ids' {
+    $t = New-Target -Url 'https://x/sites/a' -Title 'HR Site'
+    $f = @(New-XlsxTestFinding -Site 'https://x/sites/a' -Key 'OrgLink' -Reach 1)
+    $f[0].LinkCreated = '2026-07-24T07:10:18.520Z'
+    $rows = @(ConvertTo-ReportRows -Findings $f -Targets @($t))
+    Assert-Equal 'HR Site' $rows[0].'Site Title'
+    Assert-Equal 'https://x/sites/a' $rows[0].'Site URL'
+    Assert-Equal 'Link' $rows[0].'Sharing Type'
+    Assert-Equal '/x/https://x/sites/a/doc.docx' $rows[0].'Full Path'
+    Assert-Equal '2026-07-24' $rows[0].'Link Created'
+    Assert-Equal 1 $rows[0].'Reach (items)'
+    Assert-Equal 'L' $rows[0].'List Id'
+}
+
+Invoke-SsmTest 'Report rows: direct grant label, blank date, title fallback' {
+    $f = @(New-XlsxTestFinding -Site 'https://x/sites/zz' -Key 'EEEU' -Kind 'DirectGrant')
+    $rows = @(ConvertTo-ReportRows -Findings $f -Targets @())
+    Assert-Equal 'Direct grant' $rows[0].'Sharing Type'
+    Assert-Equal '' $rows[0].'Link Created'
+    Assert-Equal 'zz' $rows[0].'Site Title'
+}
+
+Invoke-SsmTest 'Export-FindingsXlsx writes workbook with three sheets (skipped without ImportExcel)' {
+    if (-not (Get-Module -ListAvailable ImportExcel)) { Write-Host '  (skipped: ImportExcel not installed)'; return }
+    Import-Module ImportExcel
+    $prev = $script:ExportDir
+    $script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) ("ssm-xlsx-{0}" -f [guid]::NewGuid())
+    try {
+        $t = New-Target -Url 'https://x/sites/a' -Title 'A'; $t.ItemsScanned = 100; $t.Status = 'Findings'; $t.FindingCount = 1
+        $f = @(New-XlsxTestFinding -Site 'https://x/sites/a' -Key 'AnonymousLink')
+        $t.Findings = $f
+        $p = Export-FindingsXlsx -Findings $f -Targets @($t) -TabName 'Sites' -ScopeLabel 'All SharePoint sites' -SiteTag 'ALL' -IncludeSites $true
+        if (-not (Test-Path -LiteralPath $p)) { throw "no file: $p" }
+        $pkg = Open-ExcelPackage -Path $p
+        $sheets = @($pkg.Workbook.Worksheets | ForEach-Object { $_.Name })
+        Assert-Equal 'Summary,Findings,Sites' ($sheets -join ',')
+        $findingsHeaderCols = @($pkg.Workbook.Worksheets['Findings'].Dimension.Columns)
+        Assert-Equal 15 $findingsHeaderCols
+        $a1 = [string]$pkg.Workbook.Worksheets['Summary'].Cells['A1'].Value
+        if ($a1 -notmatch 'SharePoint Sharing Manager') { throw "Summary A1 missing title: $a1" }
+        Close-ExcelPackage $pkg -NoSave
+        $tmpLeftover = [IO.Path]::ChangeExtension($p, '.tmp.xlsx')
+        if (Test-Path -LiteralPath $tmpLeftover) { throw 'temp file left behind' }
+    } finally {
+        if (Test-Path -LiteralPath $script:ExportDir) { Remove-Item -Recurse -Force $script:ExportDir }
+        $script:ExportDir = $prev
+    }
+}
