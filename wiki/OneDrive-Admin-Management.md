@@ -60,9 +60,12 @@ secondary administrator role; other access grants remain in place.
    canonical `userPrincipalName` - an alias-only match is rejected, and
    mixed case/whitespace is normalized, not silently substituted for a
    different account.
-3. A read-only preflight runs against every selected target and shows a
-   preview: display name, resolved UPN, object ID, tenant, a full-access
+3. A read-only preflight runs against every selected target (one connect
+   and one admin read per OneDrive, so expect a few seconds each) and shows
+   a preview: display name, resolved UPN, object ID, tenant, a full-access
    warning, every target URL, and a Selected/Eligible/No-op/Blocked count.
+   A progress modal tracks the directory lookup and each target; **Esc**
+   during preflight aborts before anything is written.
 4. If at least one target is eligible, a typed confirmation
    (`ADDADMIN`/`REMOVEADMIN`) is required before anything is written.
 5. Eligible targets are processed **one at a time**; the operation can be

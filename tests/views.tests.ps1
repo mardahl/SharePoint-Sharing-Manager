@@ -464,8 +464,8 @@ Invoke-SsmTest 'Cancellation after the first target marks the remaining target C
         # Sets Cancel on the state the entry function owns, exactly as a real
         # Esc-then-confirm would, without needing a keyboard/console.
         param($Title, $State, $CancelMode)
-        $st = $State
-        return { param($Count, $Total, $Label, $Ok, $Failed) if ($Count -ge 1) { $st.Cancel = $true } }.GetNewClosure()
+        $st = $State; $ttl = $Title
+        return { param($Count, $Total, $Label, $Ok, $Failed) if ($ttl -eq 'Updating OneDrive Admins' -and $Count -ge 1) { $st.Cancel = $true } }.GetNewClosure()
     }
     function Invoke-SsmOneDriveAdminChange {
         param($Action, $Identity, $Snapshot, $Connection)
@@ -480,6 +480,39 @@ Invoke-SsmTest 'Cancellation after the first target marks the remaining target C
     Assert-Equal 1 $script:MutateCalls.Count
     $rowB = $script:LastReport | Where-Object { $_.TargetUrl -like '*b' }
     Assert-Equal 'Cancelled' $rowB.Result
+}
+
+Invoke-SsmTest 'Esc during preflight aborts before confirmation and mutates nothing' {
+    $a = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/a' -Title 'a'
+    $b = New-SsmAdminTestItem -Url 'https://contoso-my.sharepoint.com/personal/b' -Title 'b'
+    $tab = New-SsmAdminTestTab -Items @($a, $b)
+    $script:MutateCalls = New-Object System.Collections.ArrayList
+    $script:ConfirmShown = $false
+    $script:PreflightReads = 0
+    function Show-ListModal { param($Title, $Prompt, $Options) return 'Add' }
+    function Show-InputModal { param($Title, $Prompt) return 'admin@contoso.com' }
+    function Connect-SsmAdmin { return $true }
+    function Get-PnPConnection { return @{ Url = 'admin-conn' } }
+    function Get-SsmConnectionTenantId { param($Connection) return [guid]'11111111-1111-1111-1111-111111111111' }
+    function Resolve-SsmDirectoryUser { param($Upn, $TenantId, $Connection) return New-SsmAdminTestIdentity }
+    function Connect-SsmSite { param($Url) return $true }
+    function Get-SsmOneDriveAdminState { param($Url, $Identity, $Connection) $script:PreflightReads++; return New-SsmAdminTestSnapshot -Url $Url -AdminPresent $false }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) $script:ConfirmShown = $true; return $true }
+    function Export-SsmAdminCsv { param($Rows, $OperationId, $Phase) return 'stub-path' }
+    function New-SsmProgressCallback {
+        param($Title, $State, $CancelMode)
+        $st = $State
+        return { param($Count, $Total, $Label, $Ok, $Failed) if ($Count -ge 2) { $st.Cancel = $true } }.GetNewClosure()
+    }
+    function Invoke-SsmOneDriveAdminChange { param($Action, $Identity, $Snapshot, $Connection) [void]$script:MutateCalls.Add($Snapshot.Url); return @{ Result = 'Success'; StopBatch = $false; Detail = '' } }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed) }
+    function Start-LoadSpinner {}
+    function Stop-LoadSpinner {}
+    Invoke-SsmOneDriveAdmin -Tab $tab
+    Assert-Equal 1 $script:PreflightReads
+    Assert-Equal $false $script:ConfirmShown
+    Assert-Equal 0 $script:MutateCalls.Count
 }
 
 Invoke-SsmTest 'An Unverified mutation outcome records AdminAfter as unknown, not false' {

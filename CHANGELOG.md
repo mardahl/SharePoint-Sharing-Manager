@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.10.1-rc.3] - 2026-09-21
+
+- Fix: secondary-admin Add/Remove (`M`) sat on a blank screen after the UPN
+  prompt while it connected to the admin site, resolved the account, and
+  ran a connect + admin read against every selected OneDrive. A spinner and
+  progress modal now cover that whole stretch, per-target, and Esc during
+  preflight aborts before the confirmation step.
+- UI: row-3 context values (selected count, filter, sort, search, scan
+  counts, cache time) are color-highlighted so they stand out from labels.
+
 ## [1.10.1-rc.2] - 2026-09-19
 
 - Fix: pre-provision (`P`) showed no progress modal after the browser

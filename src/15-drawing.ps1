@@ -24,6 +24,13 @@ function Add-FrameLine {
     [void]$Sb.Append("$($script:T.Reset)$script:ESC[K")
 }
 
+function Get-CtxHi {
+    # Wrap one value in a highlight style, then fall back to the context-row
+    # style, so labels stay muted and values pop on row 3.
+    param([string]$Style, $Value)
+    return $Style + [string]$Value + $script:T.Ctx
+}
+
 function Get-StatusBadge {
     param([string]$Status, [int]$Width)
     # Colored, padded badge for a target's scan status.

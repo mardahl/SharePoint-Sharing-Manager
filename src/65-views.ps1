@@ -148,20 +148,21 @@ function Add-TargetsView {
     $selCount = @($Tab['Items'] | Where-Object { $_.Selected }).Count
     $dir = [string]$g.Up
     if ($Tab['SortDesc']) { $dir = [string]$g.Down }
-    $ctx = (' {0} of {1} {2}   {3} selected   filter:{4}   sort:{5}{6}' -f @($view).Count, @($Tab['Items']).Count, $Tab['Noun'], $selCount, $Tab['Filter'], $Tab['SortCol'], $dir)
+    $ctx = (' {0} of {1} {2}   {3} selected   filter:{4}   sort:{5}' -f (Get-CtxHi $t.Cloud @($view).Count), (Get-CtxHi $t.Cloud @($Tab['Items']).Count), $Tab['Noun'], (Get-CtxHi $t.Pending $selCount), (Get-CtxHi $t.Warn $Tab['Filter']), (Get-CtxHi $t.Warn "$($Tab['SortCol'])$dir"))
     # Persistent scan summary: visible at all times once anything is scanned.
     $done = @($Tab['Items'] | Where-Object { $_.Status -in @('Clean','Findings','Revoked') })
     if ($done.Count -gt 0) {
         $totalFindings = ($done | Measure-Object FindingCount -Sum).Sum
-        $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f $done.Count, @($done | Where-Object { $_.FindingCount -eq 0 }).Count, @($done | Where-Object { $_.FindingCount -gt 0 }).Count, $totalFindings)
+        $withFindings = @($done | Where-Object { $_.FindingCount -gt 0 }).Count
+        $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f (Get-CtxHi $t.Cloud $done.Count), (Get-CtxHi $t.Good @($done | Where-Object { $_.FindingCount -eq 0 }).Count), (Get-CtxHi $t.Warn $withFindings), (Get-CtxHi $t.Warn $totalFindings))
     }
     $unprov = @($Tab['Items'] | Where-Object { $_.Status -eq 'Unprovisioned' }).Count
-    if ($unprov -gt 0) { $ctx += ('   unprovisioned:{0} (F to view)' -f $unprov) }
-    if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + $Tab['Search'] + '"') }
+    if ($unprov -gt 0) { $ctx += ('   unprovisioned:{0} (F to view)' -f (Get-CtxHi $t.Attention $unprov)) }
+    if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + (Get-CtxHi $t.Warn $Tab['Search']) + '"') }
     if ($Tab['CachedAt']) {
         $saved = $Tab['CachedAt']
         try { $saved = ([datetime]$Tab['CachedAt']).ToString('yyyy-MM-dd HH:mm') } catch { }
-        $ctx += ('   from cache (saved {0}, C reloads)' -f $saved)
+        $ctx += ('   from cache (saved {0}, C reloads)' -f (Get-CtxHi $t.CtxHi $saved))
     }
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)
 
@@ -228,8 +229,8 @@ function Add-FindingsView {
     $ft = $Tab['FTab']
     $view = @($ft['View'])
     $selCount = @($ft['Items'] | Where-Object { $_.Selected }).Count
-    $ctx = (' {0}   {1} of {2} findings   {3} selected   filter:{4}' -f $ft['Target'].Url, @($view).Count, @($ft['Items']).Count, $selCount, $ft['Filter'])
-    if (-not [string]::IsNullOrEmpty($ft['Search'])) { $ctx += ('   search:"' + $ft['Search'] + '"') }
+    $ctx = (' {0}   {1} of {2} findings   {3} selected   filter:{4}' -f (Get-CtxHi $t.CtxHi $ft['Target'].Url), (Get-CtxHi $t.Cloud @($view).Count), (Get-CtxHi $t.Cloud @($ft['Items']).Count), (Get-CtxHi $t.Pending $selCount), (Get-CtxHi $t.Warn $ft['Filter']))
+    if (-not [string]::IsNullOrEmpty($ft['Search'])) { $ctx += ('   search:"' + (Get-CtxHi $t.Warn $ft['Search']) + '"') }
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)
 
     $agg = [bool]$ft['Aggregate']
@@ -931,7 +932,15 @@ function Invoke-SsmOneDriveAdmin {
     # move the shared/default PnP connection elsewhere. Every read/write below
     # takes its connection object explicitly rather than relying on whichever
     # site Connect-SsmSite most recently cached as the default.
+    # Everything from here to the confirmation is network-bound (admin
+    # connect, directory lookup, then one connect + one admin read per
+    # target). Keep the spinner and progress modal alive so the operator can
+    # see it is working and not hung; stop it before any modal is shown.
+    Start-LoadSpinner
+    Write-ProgressModal -Title 'Manage Secondary Admin' -Done 0 -Total 0 `
+        -Label 'Connecting to the tenant admin site...' -Ok 0 -Failed 0
     if (-not (Connect-SsmAdmin)) {
+        Stop-LoadSpinner
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Could not connect to the tenant admin site.') -Kind Error
         return
@@ -941,6 +950,7 @@ function Invoke-SsmOneDriveAdmin {
     try {
         $tenantId = Get-SsmConnectionTenantId -Connection $adminConn
     } catch {
+        Stop-LoadSpinner
         Write-SsmErrorLog -Context 'Invoke-SsmOneDriveAdmin: tenant identity lookup failed' -ErrorRecord $_
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Could not determine the tenant identity - no changes were made:',
@@ -951,9 +961,12 @@ function Invoke-SsmOneDriveAdmin {
     # Global account validation. A failure here stops the whole operation
     # before any target is touched, per the design's mandatory-validation
     # section.
+    Write-ProgressModal -Title 'Manage Secondary Admin' -Done 0 -Total 0 `
+        -Label 'Validating the account in the directory...' -Ok 0 -Failed 0
     try {
         $identity = Resolve-SsmDirectoryUser -Upn $trimmedUpn -TenantId $tenantId -Connection $adminConn
     } catch {
+        Stop-LoadSpinner
         Write-SsmErrorLog -Context "Invoke-SsmOneDriveAdmin: account validation failed for '$trimmedUpn'" -ErrorRecord $_
         Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
             'Account validation failed - no changes were made:',
@@ -968,7 +981,13 @@ function Invoke-SsmOneDriveAdmin {
     # state-read failure blocks only that target; the rest still reach
     # preview/confirmation.
     $rows = New-Object System.Collections.ArrayList
+    $preState = @{ LastTick = 0; Offset = 0; Total = $targets.Count; Cancel = $false }
+    $preCb = New-SsmProgressCallback -Title 'Preflight: reading OneDrive admins' -State $preState -CancelMode 'Flag'
+    $preDone = 0
     foreach ($tgt in $targets) {
+        $preDone++
+        & $preCb $preDone $targets.Count (ConvertTo-SsmSafeDisplay $tgt.Url) 0 0
+        if ($preState.Cancel) { break }
         $row = New-SsmOneDriveAdminRow -OperationId $operationId -TenantId $tenantId -Actor $actor `
             -Action $action -TargetUrl $tgt.Url -Title $tgt.Title -EnteredUpn $trimmedUpn -Identity $identity
 
@@ -1011,6 +1030,12 @@ function Invoke-SsmOneDriveAdmin {
         [void]$rows.Add($row)
     }
     $rows = @($rows)
+    Stop-LoadSpinner
+    if ($preState.Cancel) {
+        Show-MsgModal -Title 'Manage Secondary Admin' -Lines @(
+            'Cancelled during preflight - no changes were made.')
+        return
+    }
 
     $eligible = @($rows | Where-Object { $_.Eligible })
     $blockedCount = @($rows | Where-Object { -not $_.Eligible -and $_.Classification -ne 'NoOp' -and $_.Classification -ne 'Failed' }).Count
