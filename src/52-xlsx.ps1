@@ -19,7 +19,8 @@ function Get-ExposureScore {
     foreach ($f in @($Findings)) {
         if (-not $f) { continue }
         $r = 1
-        if ($f.PSObject.Properties['Reach'] -and $f.Reach) { $r = [int]$f.Reach }
+        $p = $f.PSObject.Properties['Reach']
+        if ($p -and $null -ne $p.Value) { $r = [int]$p.Value }
         $w = 1
         $key = [string]$f.CategoryKey
         if ($script:ExposureWeights.Contains($key)) { $w = [int]$script:ExposureWeights[$key] }
@@ -127,7 +128,8 @@ function ConvertTo-ReportRows {
         $lc = $f.PSObject.Properties['LinkCreated']
         if ($lc -and $lc.Value) { [datetime]$d = [datetime]::MinValue; if ([datetime]::TryParse([string]$lc.Value, [ref]$d)) { $created = $d.ToString('yyyy-MM-dd') } }
         $reach = 1
-        if ($f.PSObject.Properties['Reach'] -and $f.Reach) { $reach = [int]$f.Reach }
+        $p = $f.PSObject.Properties['Reach']
+        if ($p -and $null -ne $p.Value) { $reach = [int]$p.Value }
         $rows.Add([pscustomobject]@{
             'Site Title'    = $title
             'Site URL'      = $site

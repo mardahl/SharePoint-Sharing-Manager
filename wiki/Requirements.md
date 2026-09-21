@@ -7,7 +7,8 @@
 
 ## Modules
 
-- [`PnP.PowerShell`](https://www.powershellgallery.com/packages/PnP.PowerShell) v3, the only dependency. Installed on demand at first launch, CurrentUser scope.
+- [`PnP.PowerShell`](https://www.powershellgallery.com/packages/PnP.PowerShell) v3 - required. Installed on demand at first launch, CurrentUser scope.
+- [`ImportExcel`](https://www.powershellgallery.com/packages/ImportExcel) - optional, installed on demand (CurrentUser) only for the Excel report export (`E` → `X`); prompted on first use.
 
 ## Entra roles per task
 

@@ -29,6 +29,18 @@ Invoke-SsmTest 'Exposure: library EEEU reaching every item -> 100 Critical' {
     Assert-Equal 'Critical' $r.Band
 }
 
+Invoke-SsmTest 'Exposure and report rows: Reach 0 is preserved (empty library/web)' {
+    $f = @(New-XlsxTestFinding -Site 'https://x/sites/s1' -Key 'EEEU' -Loc 'Library' -Reach 0 -Kind 'DirectGrant')
+    $r = Get-ExposureScore -Findings $f -ItemsScanned 100
+    Assert-Equal 0 $r.WeightedReach
+    Assert-Equal 0 $r.Score
+    Assert-Equal 'Low' $r.Band
+    Assert-Equal 0 $r.ExposedPercent
+
+    $rows = @(ConvertTo-ReportRows -Findings $f -Targets @())
+    Assert-Equal 0 $rows[0].'Reach (items)'
+}
+
 Invoke-SsmTest 'Exposure: zero items scanned -> n/a' {
     $r = Get-ExposureScore -Findings @(New-XlsxTestFinding -Site 's1' -Key 'OrgLink') -ItemsScanned 0
     Assert-Equal 0 $r.Score
