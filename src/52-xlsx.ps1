@@ -27,7 +27,7 @@ function Get-ExposureScore {
         $reach += $r
     }
     if ($ItemsScanned -le 0) { return @{ Score = 0; Band = 'n/a'; WeightedReach = $weighted; ExposedPercent = 0.0 } }
-    $score = [int][Math]::Min(100, [Math]::Round($weighted / $ItemsScanned * 1000))
+    $score = [int][Math]::Min(100, [Math]::Round($weighted / $ItemsScanned * 1000, [MidpointRounding]::AwayFromZero))
     $band = if ($score -le 10) { 'Low' } elseif ($score -le 40) { 'Medium' } elseif ($score -le 70) { 'High' } else { 'Critical' }
     $pct = [Math]::Round(100.0 * $reach / $ItemsScanned, 2)
     return @{ Score = $score; Band = $band; WeightedReach = $weighted; ExposedPercent = $pct }
@@ -35,6 +35,7 @@ function Get-ExposureScore {
 
 function Get-CountTable {
     # Group by a property; returns ordered list of @{ <Label>=value; Count=n } sorted by Count desc.
+    # PowerShell Sort-Object is stable: ties keep insertion order from the map.
     param([object[]]$Items, [string]$Property, [string]$Label)
     $map = [ordered]@{}
     foreach ($it in @($Items)) {

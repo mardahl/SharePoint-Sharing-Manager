@@ -9,7 +9,8 @@ $script:RuleCategories = [ordered]@{
 
 function New-XlsxTestFinding {
     param([string]$Site, [string]$Key, [string]$Loc = 'File', [int]$Reach = 1, [string]$Access = 'View', [string]$Status = 'NotAttempted', [string]$Kind = 'Link')
-    [pscustomobject]@{ Site=$Site; Location=$Loc; Name='doc.docx'; CategoryKey=$Key; Category=$script:RuleCategories[$Key]; Access=$Access; Principal='p'; Path="/x/$Site/doc.docx"; RemovalKind=$Kind; LinkId='1'; ListId='L'; ItemId=1; PrincipalId=$null; LinkCreated=''; Reach=$Reach; RevokeStatus=$Status; Selected=$false }
+    $cat = if ($script:RuleCategories.Contains($Key)) { $script:RuleCategories[$Key] } else { $Key }
+    [pscustomobject]@{ Site=$Site; Location=$Loc; Name='doc.docx'; CategoryKey=$Key; Category=$cat; Access=$Access; Principal='p'; Path="/x/$Site/doc.docx"; RemovalKind=$Kind; LinkId='1'; ListId='L'; ItemId=1; PrincipalId=$null; LinkCreated=''; Reach=$Reach; RevokeStatus=$Status; Selected=$false }
 }
 
 Invoke-SsmTest 'Exposure: 5 anonymous links in 1000 items -> 25 Medium' {
@@ -40,6 +41,16 @@ Invoke-SsmTest 'Exposure: bands at boundaries' {
     Assert-Equal 'Low' (Get-ExposureScore -Findings $low -ItemsScanned 1000).Band
     $high = @(New-XlsxTestFinding -Site 's1' -Key 'OrgLink' -Reach 20)  # 3*20=60 -> High
     Assert-Equal 'High' (Get-ExposureScore -Findings $high -ItemsScanned 1000).Band
+}
+
+Invoke-SsmTest 'Exposure: midpoint rounding at .5 boundary rounds away from zero' {
+    # 141 findings of weight 1 (unknown CategoryKey 'Other') reach 1 in 2000 items:
+    # 141 / 2000 * 1000 = 70.5 -> AwayFromZero rounds to 71 (Critical), not 70 (High).
+    $f = @(1..141 | ForEach-Object { New-XlsxTestFinding -Site 's1' -Key 'Other' -Reach 1 })
+    $r = Get-ExposureScore -Findings $f -ItemsScanned 2000
+    Assert-Equal 141 $r.WeightedReach
+    Assert-Equal 71 $r.Score
+    Assert-Equal 'Critical' $r.Band
 }
 
 Invoke-SsmTest 'Summary: counts, distinct sites, top sites ordering' {
