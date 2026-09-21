@@ -28,7 +28,7 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 - **PowerShell 7.4+** on Windows, macOS, Linux
 - Only dependency: [PnP.PowerShell](https://www.powershellgallery.com/packages/PnP.PowerShell) v3 (installed on demand, CurrentUser scope)
 - **No telemetry**: the only network calls are to SharePoint Online and Microsoft Graph, triggered explicitly by the operator
-- Destructive operations sit behind typed confirmations (`REVOKE` / `APPLY` / `CIS`), and every scan and revoke run writes BEFORE/REVOKED CSV evidence
+- Destructive operations sit behind typed confirmations (`REVOKE` / `APPLY` / `CIS`, case-sensitive; a wrong word keeps the prompt open, only Esc cancels), and every scan and revoke run writes BEFORE/REVOKED CSV evidence
 - License: MIT. Provided as-is. Test in a non-production tenant first.
 - **Latest stable release: v1.9.0.** OneDrive secondary-admin management (`M`) released in v1.9.0 with limited live validation; `List` is read-only, and Add has an operator-reported app-only success, but Remove and delegated auth are still pending validation - see [[OneDrive-Admin-Management]].
 

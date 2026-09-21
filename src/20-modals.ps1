@@ -239,6 +239,7 @@ function Show-TypedConfirmModal {
     param([string]$Title, [object[]]$Lines, [string]$Word)
     $typed = ''
     $scroll = 0
+    $mismatch = $false
     while ($true) {
         Write-Screen
         $body = New-Object System.Collections.ArrayList
@@ -247,7 +248,11 @@ function Show-TypedConfirmModal {
         [void]$body.Add(@($script:T.Row, ''))
         [void]$body.Add(@($script:T.Warn, 'Files and folders are never deleted. This cannot be undone.'))
         [void]$body.Add(@($script:T.Row, ''))
-        [void]$body.Add(@($script:T.CtxHi, "Type $Word and press Enter to proceed:"))
+        if ($mismatch) {
+            [void]$body.Add(@($script:T.Warn, "Did not match. Type exactly $Word (case-sensitive) or Esc to cancel:"))
+        } else {
+            [void]$body.Add(@($script:T.CtxHi, "Type $Word and press Enter to proceed:"))
+        }
         $field = $typed + '_'
         [void]$body.Add(@($script:T.Input, ('  ' + $field)))
         $geo = Write-ModalFrame -Title $Title -BodyLines $body.ToArray() -FooterHint 'Up/Down scroll   Enter confirm   Esc cancel' -BorderStyle $script:T.BorderErr -BodyScroll $scroll -PinnedLines 5
@@ -255,8 +260,11 @@ function Show-TypedConfirmModal {
         if ($k.Key -eq 'Escape') { $script:UI.Dirty = $true; return $false }
         if (($k.Modifiers -band [ConsoleModifiers]::Control) -and $k.Key -eq 'C') { $script:UI.Dirty = $true; return $false }
         if ($k.Key -eq 'Enter') {
-            $script:UI.Dirty = $true
-            return ($typed -ceq $Word)
+            if ($typed -ceq $Word) { $script:UI.Dirty = $true; return $true }
+            # Mismatch never dismisses: a silent close reads as "done" to the operator.
+            $mismatch = $true
+            $typed = ''
+            continue
         }
         # Scroll keys must be consumed before the text-append branch below.
         if ($k.Key -eq 'UpArrow')   { if ($scroll -gt 0) { $scroll-- }; continue }

@@ -2,17 +2,18 @@
 
 ## [Unreleased]
 
-## [1.10.2-rc.3] - 2026-09-21
+## [1.10.2] - 2026-09-21
 
+- Fix: typed confirmations (`REVOKE`, `APPLY`, `ADDADMIN`, ...) no longer
+  close silently on a wrong or lowercase word, which could read as the
+  operation having run. The modal now stays open, shows "Did not match"
+  and clears the field; only Esc/Ctrl+C cancel.
 - Fix: OneDrive admin preflight failed with `expected exactly one business
   drive bound to site ... found 2` on OneDrives holding a second document
   library (Site Assets, migration leftovers, user-created libraries). The
   owner drive is now pinned to the personal library (list template 700,
   MySiteDocumentLibrary) via `sharepointIds.listId`, in addition to the
   site and web GUIDs.
-
-## [1.10.2-rc.2] - 2026-09-21
-
 - Perf: verified at 100k targets. Session cache serialization used `$arr +=`
   (quadratic: ~20 s per save at 100k, and it ran after every scanned
   target); now linear (~0.5 s) and, inside scan/revoke loops, throttled to
@@ -24,9 +25,6 @@
   ~5x faster than `Sort-Object`. Remaining per-item pipelines in revoke
   status recompute, the `R` finding collector, the findings `F` filter
   cycle, and OneDrive provisioning user filters replaced with single passes.
-
-## [1.10.2-rc.1] - 2026-09-21
-
 - Perf: large lists (15k+ sites/OneDrives, thousands of findings) were near
   unresponsive - every redraw ran six `Where-Object` passes over all targets
   for the row-3 counts (~1.2 s per arrow key at 15k), and every search
