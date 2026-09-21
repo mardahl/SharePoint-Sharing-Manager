@@ -89,7 +89,10 @@ as granting site-collection-admin anywhere else.
 - **Unresolved/unknown owner or primary admin blocks the request**: if
   either identity cannot be determined (blank or group-valued owner field,
   or a read failure), the target is blocked, not treated as safe. Unknown
-  never defaults to "not protected."
+  never defaults to "not protected." The owner is read from the personal
+  library's drive (the one list with template 700 / MySiteDocumentLibrary),
+  so extra document libraries in a OneDrive (Site Assets, migration
+  leftovers) do not affect the check.
 - **Identity drift stops the whole batch**: if the confirmed account is
   found to have changed (deleted, renamed away, or recreated under the same
   UPN) at write time, no further targets in that batch are touched.

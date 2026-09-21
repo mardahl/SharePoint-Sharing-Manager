@@ -247,11 +247,31 @@ function Get-SsmOneDriveAdminState {
     }
     $graphSiteId = "$hostName,$siteId,$webId"
 
+    # Personal library: a OneDrive site can hold more than one non-hidden
+    # document library (Site Assets, migration leftovers, user-created libs),
+    # and Graph's site drive listing returns all of them with the same
+    # siteId/webId. The personal "Documents" library is the only list with
+    # BaseTemplate 700 (MySiteDocumentLibrary); its list GUID pins the drive.
+    try {
+        $personalList = @(Get-PnPList -Connection $Connection -Includes Id, BaseTemplate -ErrorAction Stop |
+            Where-Object { $_.BaseTemplate -eq 700 })
+    } catch {
+        Write-SsmErrorLog -Context "Get-SsmOneDriveAdminState: list read failed for '$norm'" -ErrorRecord $_
+        throw "Get-SsmOneDriveAdminState: list read failed for '$norm': $($_.Exception.Message)"
+    }
+    if ($personalList.Count -ne 1) {
+        throw "Get-SsmOneDriveAdminState: expected exactly one MySiteDocumentLibrary (template 700) in '$norm', found $($personalList.Count)."
+    }
+    $personalListId = ConvertTo-SsmGuidOrNull -Value (Get-SsmFieldValue -InputObject $personalList[0] -Name 'Id')
+    if (-not $personalListId -or $personalListId -eq [guid]::Empty) {
+        throw "Get-SsmOneDriveAdminState: could not resolve the personal library id for '$norm'."
+    }
+
     # Owner: site-bound List Drives (documented application-permission path;
     # Get drive documents "Not supported" for app-only), fully paginated,
-    # bound to the resolved site AND web GUIDs via sharepointIds, requiring
-    # exactly one matching business drive. The tenant Owner field above is
-    # never used as ownership proof by itself.
+    # bound to the resolved site, web AND personal list GUIDs via
+    # sharepointIds, requiring exactly one matching business drive. The
+    # tenant Owner field above is never used as ownership proof by itself.
     $drives = [System.Collections.ArrayList]::new()
     $next = "sites/$graphSiteId/drives?`$select=id,owner,sharepointIds,driveType"
     $guard = 0
@@ -279,10 +299,12 @@ function Get-SsmOneDriveAdminState {
         $spWebId = ConvertTo-SsmGuidOrNull -Value (Get-SsmFieldValue -InputObject $spIds -Name 'webId')
         if (-not $spSiteId -or $spSiteId -ne $siteId) { continue }
         if (-not $spWebId -or $spWebId -ne $webId) { continue }
+        $spListId = ConvertTo-SsmGuidOrNull -Value (Get-SsmFieldValue -InputObject $spIds -Name 'listId')
+        if (-not $spListId -or $spListId -ne $personalListId) { continue }
         $bound += $d
     }
     if (@($bound).Count -ne 1) {
-        throw "Get-SsmOneDriveAdminState: expected exactly one business drive bound to site '$siteId'/web '$webId' for '$norm', found $(@($bound).Count)."
+        throw "Get-SsmOneDriveAdminState: expected exactly one business drive bound to site '$siteId'/web '$webId'/list '$personalListId' for '$norm', found $(@($bound).Count)."
     }
     $drive = $bound[0]
 

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.10.2-rc.3] - 2026-09-21
+
+- Fix: OneDrive admin preflight failed with `expected exactly one business
+  drive bound to site ... found 2` on OneDrives holding a second document
+  library (Site Assets, migration leftovers, user-created libraries). The
+  owner drive is now pinned to the personal library (list template 700,
+  MySiteDocumentLibrary) via `sharepointIds.listId`, in addition to the
+  site and web GUIDs.
+
 ## [1.10.2-rc.2] - 2026-09-21
 
 - Perf: verified at 100k targets. Session cache serialization used `$arr +=`
