@@ -135,7 +135,7 @@ function Connect-SsmProvisioningSession {
 # synchronously server-side: large batches outlive the CSOM client timeout,
 # the call throws, yet the server keeps provisioning part of the batch. Small
 # batches keep each call well inside the timeout and limit a failure's blast radius.
-$script:SsmProvisionBatchSize = 10
+$script:SsmProvisionBatchSize = 5
 
 function Test-SsmAuthExpiredError {
     # True for expired/invalid token errors a fresh sign-in can fix. The

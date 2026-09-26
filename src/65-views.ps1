@@ -420,6 +420,11 @@ function Invoke-TabEnumerate {
     $cb = { param($n) Write-ProgressModal -Title 'Enumerating tenant' -Done $n -Total 0 -Label $label -Ok 0 -Failed 0 }.GetNewClosure()
     try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] -Progress $cb } finally { Stop-LoadSpinner }
     Add-TargetsToTab -Tab $Tab -Targets $targets
+    # Reloading while viewing the Unprovisioned filter reloads the placeholders
+    # too (they are never cached); otherwise P loads them on demand.
+    if ($Tab['OneDrive'] -and $Tab['Filter'] -eq 'Unprovisioned' -and @($targets).Count -gt 0) {
+        [void](Import-SsmUnprovisionedRows -Tab $Tab)
+    }
     $script:UI.Dirty = $true
 }
 
@@ -1276,6 +1281,48 @@ function Invoke-SsmOneDriveAdmin {
     Update-TabView -Tab $Tab
 }
 
+function Import-SsmUnprovisionedRows {
+    # Query Graph for SharePoint-licensed users, diff against personal-site
+    # owners, add placeholder rows to the tab. Returns @{Count;Csv}, or $null
+    # on failure (already reported to the user).
+    param($Tab)
+    $title = 'Loading unprovisioned OneDrives'
+    # Connect first: a list restored from the session cache has not opened
+    # any PnP connection yet, and the Graph call below uses the current one.
+    # Connect-SsmAdmin reports its own failure.
+    if (-not (Connect-SsmAdmin)) { return $null }
+    Start-LoadSpinner
+    Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
+    try {
+        $licensed = @(Get-SsmLicensedUsers -Progress { param($n)
+            Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0 })
+    } catch {
+        Stop-LoadSpinner
+        Write-SsmErrorLog -Context 'Pre-provision: Graph user query failed' -ErrorRecord $_
+        $msg = $_.Exception.Message
+        $lines = if ($msg -match '403|Forbidden|Authorization_RequestDenied') {
+            @('Graph returned 403; unprovisioned OneDrives were not loaded.', '',
+              'Delegated sign-in needs User.Read.All;',
+              'app-only registrations need the User.Read.All application permission.')
+        } else { @('Graph user query failed:', $msg) }
+        Show-MsgModal -Title $title -Lines $lines -Kind Error
+        return $null
+    }
+    Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0
+    try {
+        $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
+            Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
+    } finally { Stop-LoadSpinner }
+    if ($null -eq $ownerSet) { return $null }   # Connect-SsmAdmin already reported the failure
+
+    $missing = @(Get-SsmUnprovisionedUsers -Licensed $licensed -OwnerSet $ownerSet)
+    Write-SsmLog -Message ("Pre-provision: {0} licensed, {1} personal sites, {2} unprovisioned." -f $licensed.Count, $ownerSet.Count, $missing.Count)
+    if ($missing.Count -eq 0) { return @{ Count = 0; Csv = $null } }
+    $csv = Export-SsmProvisionCsv -Rows $missing -Phase UNPROVISIONED
+    Add-TargetsToTab -Tab $Tab -Targets @($missing | ForEach-Object { New-SsmPlaceholderTarget -User $_ })
+    return @{ Count = $missing.Count; Csv = $csv }
+}
+
 function Invoke-SsmOneDriveProvision {
     # P on the OneDrives tab. Context-aware:
     #   no placeholder rows loaded      -> query Graph + tenant, add rows, switch to Unprovisioned filter
@@ -1290,47 +1337,19 @@ function Invoke-SsmOneDriveProvision {
 
     $placeholders = @($Tab['Items'] | Where-Object { Test-SsmPlaceholderTarget -Target $_ })
     if ($placeholders.Count -eq 0) {
-        # Connect first: a list restored from the session cache has not opened
-        # any PnP connection yet, and the Graph call below uses the current one.
-        # Connect-SsmAdmin reports its own failure.
-        if (-not (Connect-SsmAdmin)) { return }
-        Start-LoadSpinner
-        Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0
-        try {
-            $licensed = @(Get-SsmLicensedUsers -Progress { param($n)
-                Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for licensed users' -Ok 0 -Failed 0 })
-        } catch {
-            Stop-LoadSpinner
-            Write-SsmErrorLog -Context 'Pre-provision: Graph user query failed' -ErrorRecord $_
-            $msg = $_.Exception.Message
-            $lines = if ($msg -match '403|Forbidden|Authorization_RequestDenied') {
-                @('Graph returned 403.', '', 'Delegated sign-in needs User.Read.All;',
-                  'app-only registrations need the User.Read.All application permission.')
-            } else { @('Graph user query failed:', $msg) }
-            Show-MsgModal -Title $title -Lines $lines -Kind Error
-            return
-        }
-        Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0
-        try {
-            $ownerSet = Get-SsmProvisionedOwnerSet -Progress { param($n)
-                Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Enumerating personal sites' -Ok 0 -Failed 0 }
-        } finally { Stop-LoadSpinner }
-        if ($null -eq $ownerSet) { return }   # Connect-SsmAdmin already reported the failure
-
-        $missing = @(Get-SsmUnprovisionedUsers -Licensed $licensed -OwnerSet $ownerSet)
-        Write-SsmLog -Message ("Pre-provision: {0} licensed, {1} personal sites, {2} unprovisioned." -f $licensed.Count, $ownerSet.Count, $missing.Count)
-        if ($missing.Count -eq 0) {
+        # Load on demand (also done by Invoke-TabEnumerate under the Unprovisioned filter).
+        $r = Import-SsmUnprovisionedRows -Tab $Tab
+        if ($null -eq $r) { return }
+        if ($r.Count -eq 0) {
             Show-MsgModal -Title $title -Lines @('No unprovisioned licensed users found.')
             return
         }
-        $csv = Export-SsmProvisionCsv -Rows $missing -Phase UNPROVISIONED
-        Add-TargetsToTab -Tab $Tab -Targets @($missing | ForEach-Object { New-SsmPlaceholderTarget -User $_ })
         $Tab['Filter'] = 'Unprovisioned'
         $Tab['Cursor'] = 0
         Update-TabView -Tab $Tab
         Show-MsgModal -Title $title -Lines @(
-            ("{0} unprovisioned user(s) loaded under the Unprovisioned filter." -f $missing.Count),
-            "CSV: $csv", '',
+            ("{0} unprovisioned user(s) loaded under the Unprovisioned filter." -f $r.Count),
+            "CSV: $($r.Csv)", '',
             'Space/A selects rows, P provisions the selection.')
         return
     }
@@ -1340,7 +1359,7 @@ function Invoke-SsmOneDriveProvision {
         Show-MsgModal -Title $title -Kind Warn -Lines @(
             'Nothing selected.', '',
             'F to the Unprovisioned filter, Space/A to select, then P.',
-            'C clears the list so P can reload it.')
+            'C under the Unprovisioned filter reloads them.')
         return
     }
 

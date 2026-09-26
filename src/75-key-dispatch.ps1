@@ -141,6 +141,9 @@ function Invoke-TargetsKey {
                 'session cache, then enumerate the tenant again?') -Danger
             if (-not $ok) { return }
             $Tab['Items'] = @(); $Tab['Loaded'] = $false; $Tab['CachedAt'] = $null
+            # Keep Unprovisioned (reload refills it); other filters would show an empty fresh list.
+            if ($Tab['Filter'] -ne 'Unprovisioned') { $Tab['Filter'] = 'All' }
+            $Tab['Cursor'] = 0
             Update-TabView -Tab $Tab
             Save-SsmCache
             Write-SsmLog -Message ("Cleared {0} list; re-enumerating." -f $Tab['Noun'])

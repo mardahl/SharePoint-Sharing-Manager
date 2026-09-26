@@ -1539,6 +1539,41 @@ Invoke-SsmTest 'Enter on an empty Unprovisioned view loads placeholders instead 
     Assert-Equal $false $script:Enumerated
 }
 
+Invoke-SsmTest 'Invoke-TabEnumerate on OneDrives loads placeholders only under the Unprovisioned filter' {
+    $script:UI = @{ Dirty = $false }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Write-ProgressModal { }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+    function Save-SsmCache { }
+    function Connect-SsmAdmin { $true }
+    function Export-SsmProvisionCsv { param($Rows, $Phase) 'x.csv' }
+    function Get-TenantTargets { param($OneDrive, $Progress) @(New-Target -Url 'https://x/personal/has_contoso_com' -Title 'Has' -Template 'SPSPERS#10') }
+    function Get-SsmLicensedUsers { param($Progress) @([pscustomobject]@{ Id='2'; Upn='new@contoso.com'; DisplayName='New' }) }
+    function Get-SsmProvisionedOwnerSet { param($Progress) return ,([System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)) }
+    $tab = @{ OneDrive = $true; Items = @(); View = @(); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0 }
+    Invoke-TabEnumerate -Tab $tab
+    Assert-Equal 1 @($tab['Items']).Count
+    $tab = @{ OneDrive = $true; Items = @(); View = @(); Filter = 'Unprovisioned'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0 }
+    Invoke-TabEnumerate -Tab $tab
+    Assert-Equal 2 @($tab['Items']).Count
+    Assert-Equal 1 @($tab['View']).Count
+}
+
+Invoke-SsmTest 'C resets other filters to All but keeps Unprovisioned' {
+    $script:UI = @{ Dirty = $false; SearchMode = $false; H = 24 }
+    $script:FilterAtEnum = $null
+    function Show-ConfirmModal { param($Title, $Lines, [switch]$Danger) $true }
+    function Save-SsmCache { }
+    function Invoke-TabEnumerate { param($Tab) $script:FilterAtEnum = $Tab['Filter'] }
+    $k = [System.ConsoleKeyInfo]::new('C', [System.ConsoleKey]::C, $true, $false, $false)
+    foreach ($case in @(@('Findings','All'), @('Unprovisioned','Unprovisioned'))) {
+        $tab = @{ OneDrive = $true; Noun = 'OneDrives'; Items = @(@{ Url='https://x/a'; Title='a'; Status='Clean'; FindingCount=0 }); View = @(); Filter = $case[0]; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 3 }
+        Invoke-TargetsKey -Tab $tab -K $k
+        Assert-Equal $case[1] $script:FilterAtEnum
+    }
+}
+
 Invoke-SsmTest 'Update-TabView hides placeholder rows under All and shows only them under Unprovisioned' {
     $tab = @{
         Items = @(
