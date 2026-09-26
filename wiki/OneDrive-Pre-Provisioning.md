@@ -52,7 +52,11 @@ the list; `P` reloads them.
    `SSM-Exports/<tenant>/` when at least one user is found.
 2. Select the users to provision with Space or `A`.
 3. Press `P`, type `PROVISION`. The selected UPNs are sent to
-   `Request-PnPPersonalSite` in batches of 200.
+   `Request-PnPPersonalSite` in batches of 10 (large batches time out client-side while the server still provisions part of them).
+   Progress updates after each batch. If the provisioning sign-in expires
+   mid-run, the browser opens once for a fresh sign-in and the batch is
+   retried; if that fails, remaining batches are marked Failed with a
+   "Sign-in expired" error and nothing more is sent.
 4. Successfully submitted rows change to `Requested`;
    `SSM_ONEDRIVE_REQUESTED_<stamp>.csv` records `Upn, Batch, Status, Error`.
    Rows in a failed batch stay `Unprovisioned` so they can be retried.

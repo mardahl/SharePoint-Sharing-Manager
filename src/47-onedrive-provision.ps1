@@ -131,24 +131,63 @@ function Connect-SsmProvisioningSession {
     return $script:ProvConn
 }
 
+# API max is 200 UPNs per call, but RequestPersonalSites is processed
+# synchronously server-side: large batches outlive the CSOM client timeout,
+# the call throws, yet the server keeps provisioning part of the batch. Small
+# batches keep each call well inside the timeout and limit a failure's blast radius.
+$script:SsmProvisionBatchSize = 10
+
+function Test-SsmAuthExpiredError {
+    # True for expired/invalid token errors a fresh sign-in can fix. The
+    # "unauthorized operation" permission error (missing AllProfiles.Manage)
+    # deliberately does not match: re-auth would not help it.
+    param([string]$Message)
+    return ($Message -match '\b401\b|token|expired|invalid_grant|interaction_required|AADSTS\d+')
+}
+
 function Invoke-SsmPersonalSiteRequest {
-    # Up to 200 UPNs per call; SharePoint queues the work and provisions
-    # asynchronously. A failed batch marks every UPN in it Failed and the run
-    # continues.
+    # SharePoint queues the work and provisions asynchronously. A failed batch
+    # marks every UPN in it Failed and the run continues.
+    # Expired/invalid sign-in: -Reauth (returns a fresh connection) is invoked
+    # once per run and the batch retried. If re-auth fails or the fresh token
+    # is rejected too, the remaining batches are marked Failed without calling.
     # ponytail: no retry/backoff; add if 429 throttling shows up in the log.
-    param([string[]]$Upns, [Parameter(Mandatory)]$Connection, [scriptblock]$Progress)
+    param([string[]]$Upns, [Parameter(Mandatory)]$Connection, [scriptblock]$Progress, [scriptblock]$Reauth)
     $rows = @()
-    $batches = @(Split-SsmBatch -Items $Upns -Size 200)
+    $batches = @(Split-SsmBatch -Items $Upns -Size $script:SsmProvisionBatchSize)
     $n = 0
+    $reauthed = $false; $abort = ''
     foreach ($b in $batches) {
         $n++
         $status = 'Requested'; $err = ''
-        try {
-            Request-PnPPersonalSite -UserEmails @($b) -Connection $Connection -ErrorAction Stop
-            Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested ({2} users)." -f $n, $batches.Count, @($b).Count) -Level OK
-        } catch {
-            $status = 'Failed'; $err = $_.Exception.Message
-            Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed" -f $n, $batches.Count) -ErrorRecord $_
+        if ($abort) {
+            $status = 'Failed'; $err = $abort
+        } else {
+            $tries = 0
+            while ($true) {
+                $tries++
+                try {
+                    Request-PnPPersonalSite -UserEmails @($b) -Connection $Connection -ErrorAction Stop
+                    Write-SsmLog -Message ("Pre-provision: batch {0}/{1} requested ({2} users)." -f $n, $batches.Count, @($b).Count) -Level OK
+                    break
+                } catch {
+                    $status = 'Failed'; $err = $_.Exception.Message
+                    Write-SsmErrorLog -Context ("Pre-provision: batch {0}/{1} failed" -f $n, $batches.Count) -ErrorRecord $_
+                    if (-not (Test-SsmAuthExpiredError $err)) { break }
+                    if ($reauthed -or -not $Reauth) {
+                        $abort = "Sign-in expired or rejected; stopped submitting. Last error: $err"
+                        $err = $abort; break
+                    }
+                    $reauthed = $true
+                    Write-SsmLog -Message 'Pre-provision: sign-in expired, re-authenticating.' -Level WARN
+                    try { $Connection = & $Reauth } catch {
+                        Write-SsmErrorLog -Context 'Pre-provision: re-authentication failed' -ErrorRecord $_
+                        $abort = "Sign-in expired and re-sign-in failed: $($_.Exception.Message)"
+                        $err = $abort; break
+                    }
+                    $status = 'Requested'; $err = ''
+                }
+            }
         }
         foreach ($u in @($b)) { $rows += [pscustomobject]@{ Upn=$u; Batch=$n; Status=$status; Error=$err } }
         if ($Progress) { & $Progress $n $batches.Count }

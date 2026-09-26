@@ -91,6 +91,32 @@ Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest marks the whole batch Failed on er
     if ($r[0].Error -notmatch 'unauthorized') { throw "error not captured: $($r[0].Error)" }
 }
 
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest re-auths once on expired token and retries the batch' {
+    $script:Reauths = 0
+    function Request-PnPPersonalSite { param($UserEmails, $Connection)
+        if ($Connection.Fresh -ne $true) { throw 'The remote server returned an error: (401) Unauthorized.' } }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @(1..25 | ForEach-Object { "u$_@x.com" }) -Connection ([pscustomobject]@{ Fresh = $false }) `
+        -Reauth { $script:Reauths++; [pscustomobject]@{ Fresh = $true } })
+    Assert-Equal 1 $script:Reauths
+    Assert-Equal 25 @($r | Where-Object Status -eq 'Requested').Count
+}
+
+Invoke-SsmTest 'Invoke-SsmPersonalSiteRequest stops after a second auth rejection instead of looping' {
+    $script:Calls = 0; $script:Reauths = 0
+    function Request-PnPPersonalSite { param($UserEmails, $Connection) $script:Calls++; throw 'Access token has expired.' }
+    $r = @(Invoke-SsmPersonalSiteRequest -Upns @(1..25 | ForEach-Object { "u$_@x.com" }) -Connection ([pscustomobject]@{}) `
+        -Reauth { $script:Reauths++; [pscustomobject]@{} })
+    Assert-Equal 1 $script:Reauths
+    Assert-Equal 2 $script:Calls
+    Assert-Equal 25 @($r | Where-Object Status -eq 'Failed').Count
+    if ($r[-1].Error -notmatch '^Sign-in expired') { throw "no clear abort message: $($r[-1].Error)" }
+}
+
+Invoke-SsmTest 'Test-SsmAuthExpiredError ignores the unauthorized-operation permission error' {
+    if (Test-SsmAuthExpiredError 'Attempted to perform an unauthorized operation.') { throw 'permission error misread as expiry' }
+    if (-not (Test-SsmAuthExpiredError 'AADSTS700082: The refresh token has expired')) { throw 'expiry not detected' }
+}
+
 Invoke-SsmTest 'Connect-SsmProvisioningSession uses the SPO Management Shell client id and caches the connection' {
     $script:ProvConn = $null
     $script:Auth = @{ AdminUrl = 'https://contoso-admin.sharepoint.com'; Tenant = 'contoso.onmicrosoft.com' }

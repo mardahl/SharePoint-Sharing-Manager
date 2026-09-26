@@ -1368,12 +1368,21 @@ function Invoke-SsmOneDriveProvision {
     # Each batch is one blocking Request-PnPPersonalSite call and the callback
     # only fires when a batch finishes, so paint the modal (with a background
     # spinner) before the first call or a single-batch run shows nothing.
-    $batchTotal = [Math]::Ceiling($upns.Count / 200)
+    $batchTotal = [Math]::Ceiling($upns.Count / $script:SsmProvisionBatchSize)
     Start-LoadSpinner
     Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label 'Submitting provisioning batches' -Ok 0 -Failed 0
     try {
         $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Connection $provConn -Progress { param($b, $t)
-            Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 })
+            Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 } -Reauth {
+            # Spinner paints from a background runspace; stop it so it cannot
+            # draw over the browser sign-in prompt on the main buffer.
+            Stop-LoadSpinner
+            $script:ProvConn = $null
+            try { Connect-SsmProvisioningSession } finally {
+                Start-LoadSpinner
+                Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label 'Signed in again - resuming provisioning batches' -Ok 0 -Failed 0
+            }
+        })
     } finally { Stop-LoadSpinner }
     $ok = @{}
     foreach ($r in $rows) { if ($r.Status -eq 'Requested') { $ok[$r.Upn] = $true } }
@@ -1390,7 +1399,11 @@ function Invoke-SsmOneDriveProvision {
         'Rows now show Requested. C then P reloads the list to verify later.')
     if ($failed -gt 0) {
         $firstErr = [string](@($rows | Where-Object { $_.Status -eq 'Failed' })[0].Error)
-        $lines += @('', "First error: $firstErr", '') + (Get-SsmProvisionFailureHint)
+        $hint = if ($firstErr -match '^Sign-in expired' -or (Test-SsmAuthExpiredError $firstErr)) {
+            @('The provisioning sign-in expired and could not be renewed.',
+              'Press P again to sign in fresh and resubmit the Failed rows.')
+        } else { @(Get-SsmProvisionFailureHint) }
+        $lines += @('', "First error: $firstErr", '') + $hint
     }
     Show-MsgModal -Title $title -Kind ($failed -gt 0 ? 'Warn' : 'Info') -Lines $lines
 }

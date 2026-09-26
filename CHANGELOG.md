@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Fix: OneDrive pre-provisioning of large selections (~100 users) reported the
+  whole request as failed even though some OneDrives were created. The single
+  200-user `Request-PnPPersonalSite` call outlived the client timeout while the
+  server kept working. Requests now go in batches of 10.
+- Fix: an expired provisioning sign-in no longer fails silently (error only in
+  the log). The browser re-opens once for a fresh sign-in and the batch is
+  retried; if that fails, the summary says the sign-in expired and to press
+  `P` again.
+
 - New: Excel report export. `E` on the Sites/OneDrives tab and in the findings
   view now opens an export menu: `C` writes the CSV as before, `X` writes
   `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx`
