@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.11.0-rc.1] - 2026-09-26
+
 - Fix: OneDrive pre-provisioning of large selections (~100 users) reported the
   whole request as failed even though some OneDrives were created. The single
   200-user `Request-PnPPersonalSite` call outlived the client timeout while the
