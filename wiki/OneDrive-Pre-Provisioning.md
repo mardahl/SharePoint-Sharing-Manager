@@ -15,8 +15,9 @@ the OneDrive to exist first.
 | Unprovisioned rows selected | Asks for `PROVISION` and submits only the selected users |
 | Rows loaded, nothing selected | Shows a hint |
 
-`Enter` on an empty list while the `Unprovisioned` filter is active also
-loads the rows.
+Loading or reloading the list (`Enter`, `C`) while the `Unprovisioned`
+filter is active also loads the rows. Under any other filter they load only
+through `P`.
 
 ## What counts as licensed
 
@@ -42,7 +43,8 @@ and an orange `! Unprovisioned` badge. The status line shows
 
 These rows are placeholders: scans (`S`), admin actions (`M`) skip them, and
 they are not saved to the session cache. `C` clears them with the rest of
-the list; `P` reloads them.
+the list; under the `Unprovisioned` filter it reloads them, under any other
+filter it resets the filter to `All`.
 
 ## Flow
 
@@ -52,7 +54,7 @@ the list; `P` reloads them.
    `SSM-Exports/<tenant>/` when at least one user is found.
 2. Select the users to provision with Space or `A`.
 3. Press `P`, type `PROVISION`. The selected UPNs are sent to
-   `Request-PnPPersonalSite` in batches of 10 (large batches time out client-side while the server still provisions part of them).
+   `Request-PnPPersonalSite` in batches of 5 (larger batches fail or time out client-side while the server still provisions part of them).
    Progress updates after each batch. If the provisioning sign-in expires
    mid-run, the browser opens once for a fresh sign-in and the batch is
    retried; if that fails, remaining batches are marked Failed with a

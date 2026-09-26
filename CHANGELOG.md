@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fix: `C` (clear and reload) on the OneDrives tab under the `Unprovisioned`
+  filter now reloads the unprovisioned users too, instead of showing an empty
+  list. Under any other filter, `C` resets the filter to `All`.
+- Fix: OneDrive provisioning batches reduced from 10 to 5 users; batches
+  larger than 5 failed.
+
 ## [1.11.0-rc.1] - 2026-09-26
 
 - Fix: OneDrive pre-provisioning of large selections (~100 users) reported the

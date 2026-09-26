@@ -52,7 +52,7 @@ Once anything is scanned, the status line above the target list always shows a r
 | `U` | Add URL |
 | `I` | Import CSV |
 | `Enter` | Open/load |
-| `C` | Clear the list and reload it from the tenant (Y/N confirm; discards scan results for the tab) |
+| `C` | Clear the list and reload it from the tenant (Y/N confirm; discards scan results for the tab; resets the filter to `All`, except `Unprovisioned` on the OneDrives tab, which is kept and reloaded) |
 | `L` | Restore the saved scan session |
 | `E` | Export menu: `C` CSV, `X` Excel report |
 
