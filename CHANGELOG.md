@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.11.0-rc.2] - 2026-09-26
+
 - Fix: `C` (clear and reload) on the OneDrives tab under the `Unprovisioned`
   filter now reloads the unprovisioned users too, instead of showing an empty
   list. Under any other filter, `C` resets the filter to `All`.
