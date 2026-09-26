@@ -1387,19 +1387,22 @@ function Invoke-SsmOneDriveProvision {
     # Each batch is one blocking Request-PnPPersonalSite call and the callback
     # only fires when a batch finishes, so paint the modal (with a background
     # spinner) before the first call or a single-batch run shows nothing.
-    $batchTotal = [Math]::Ceiling($upns.Count / $script:SsmProvisionBatchSize)
+    $batchSize = $script:SsmProvisionBatchSize
+    $batchTotal = [Math]::Ceiling($upns.Count / $batchSize)
+    $userTotal = $upns.Count
+    $batchLabel = { param($b) '{0} selected users in {1} batch(es) of up to {2}: {3} sent' -f $userTotal, $batchTotal, $batchSize, [Math]::Min($b * $batchSize, $userTotal) }.GetNewClosure()
     Start-LoadSpinner
-    Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label 'Submitting provisioning batches' -Ok 0 -Failed 0
+    Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label (& $batchLabel 0) -Ok 0 -Failed 0 -Unit 'batches'
     try {
         $rows = @(Invoke-SsmPersonalSiteRequest -Upns $upns -Connection $provConn -Progress { param($b, $t)
-            Write-ProgressModal -Title $title -Done $b -Total $t -Label 'Submitting provisioning batches' -Ok 0 -Failed 0 } -Reauth {
+            Write-ProgressModal -Title $title -Done $b -Total $t -Label (& $batchLabel $b) -Ok 0 -Failed 0 -Unit 'batches' } -Reauth {
             # Spinner paints from a background runspace; stop it so it cannot
             # draw over the browser sign-in prompt on the main buffer.
             Stop-LoadSpinner
             $script:ProvConn = $null
             try { Connect-SsmProvisioningSession } finally {
                 Start-LoadSpinner
-                Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label 'Signed in again - resuming provisioning batches' -Ok 0 -Failed 0
+                Write-ProgressModal -Title $title -Done 0 -Total $batchTotal -Label 'Signed in again - resuming provisioning batches' -Ok 0 -Failed 0 -Unit 'batches'
             }
         })
     } finally { Stop-LoadSpinner }

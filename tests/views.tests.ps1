@@ -1574,6 +1574,29 @@ Invoke-SsmTest 'C resets other filters to All but keeps Unprovisioned' {
     }
 }
 
+Invoke-SsmTest 'Provision progress names batches, batch size and users submitted' {
+    $script:UI = @{ Dirty = $false }
+    $script:Prog = [System.Collections.Generic.List[object]]::new()
+    function Write-ProgressModal { param($Title, $Done, $Total, $Label, $Ok, $Failed, $Unit) $script:Prog.Add(@{ Label = $Label; Unit = $Unit }) }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Show-MsgModal { param($Title, $Lines, $Kind) }
+    function Export-SsmProvisionCsv { param($Rows, $Phase) 'x.csv' }
+    function Show-TypedConfirmModal { param($Title, $Lines, $Word) $true }
+    function Connect-SsmProvisioningSession { [pscustomobject]@{ Url = 'https://contoso-admin.sharepoint.com' } }
+    function Write-Screen { }
+    function Invoke-SsmPersonalSiteRequest { param($Upns, $Connection, $Progress, $Reauth)
+        & $Progress 1 3; & $Progress 3 3
+        @($Upns | ForEach-Object { [pscustomobject]@{ Upn=$_; Batch=1; Status='Requested'; Error='' } }) }
+    $rows = @(1..14 | ForEach-Object { @{ Url="https://x/$_"; Title="$_"; Status='Unprovisioned'; FindingCount=0; Findings=@(); Selected=$true; Upn="u$_@x.com" } })
+    $tab = @{ OneDrive = $true; Items = $rows; View = @(); Filter = 'Unprovisioned'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0 }
+    Invoke-SsmOneDriveProvision -Tab $tab
+    Assert-Equal '14 selected users in 3 batch(es) of up to 5: 0 sent' $script:Prog[0].Label
+    Assert-Equal '14 selected users in 3 batch(es) of up to 5: 5 sent' $script:Prog[1].Label
+    Assert-Equal '14 selected users in 3 batch(es) of up to 5: 14 sent' $script:Prog[2].Label
+    Assert-Equal 'batches' $script:Prog[0].Unit
+}
+
 Invoke-SsmTest 'Update-TabView hides placeholder rows under All and shows only them under Unprovisioned' {
     $tab = @{
         Items = @(

@@ -455,7 +455,8 @@ function Write-ProgressModal {
     # Total > 0  : determinate - percent bar, "Processing X of Y".
     # Total <= 0 : indeterminate - marquee bar + spinner, "Retrieved X so far";
     #              used while streaming results whose total is not known upfront.
-    param([string]$Title, [int]$Done, [int]$Total, [string]$Label, [int]$Ok, [int]$Failed)
+    # -Unit (optional, plural noun) turns the header into "X of Y <unit> done".
+    param([string]$Title, [int]$Done, [int]$Total, [string]$Label, [int]$Ok, [int]$Failed, [string]$Unit)
     $t = $script:T; $g = $script:G
     $size = Get-ConsoleSize; $W = $size[0]; $H = $size[1]
     # Match the floor Write-Screen enforces so this cannot paint over the
@@ -472,7 +473,7 @@ function Write-ProgressModal {
         # 7-char suffix: ' 100%' plus a space and the spinner cell, matching
         # the indeterminate layout so the spinner lands in the same column.
         $bar = $t.BarOn + ([string]$g.BarOn * $fill) + $t.BarOff + ([string]$g.BarOff * ($barW - $fill)) + $t.Reset + $t.Row + (' {0,3}%  ' -f $pct)
-        $head = "Processing $Done of $Total"
+        $head = $Unit ? "$Done of $Total $Unit done" : "Processing $Done of $Total"
     } else {
         # Marquee: short segment bouncing across the bar; frame from the clock
         # so every repaint advances it. Suffix is 5 visible chars, like ' 100%'.
