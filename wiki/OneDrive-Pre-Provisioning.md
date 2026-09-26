@@ -55,7 +55,8 @@ filter it resets the filter to `All`.
 2. Select the users to provision with Space or `A`.
 3. Press `P`, type `PROVISION`. The selected UPNs are sent to
    `Request-PnPPersonalSite` in batches of 5 (larger batches fail or time out client-side while the server still provisions part of them).
-   Progress updates after each batch. If the provisioning sign-in expires
+   Progress updates after each batch, e.g. `1 of 3 batches done` with
+   `14 selected users in 3 batch(es) of up to 5: 5 sent`. If the provisioning sign-in expires
    mid-run, the browser opens once for a fresh sign-in and the batch is
    retried; if that fails, remaining batches are marked Failed with a
    "Sign-in expired" error and nothing more is sent.

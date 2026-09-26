@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Change: the OneDrive provisioning progress modal now says it counts
+  batches ("1 of 3 batches done") and shows the batch size and users
+  submitted so far ("14 selected users in 3 batch(es) of up to 5: 5 sent").
+
 ## [1.11.0-rc.2] - 2026-09-26
 
 - Fix: `C` (clear and reload) on the OneDrives tab under the `Unprovisioned`
