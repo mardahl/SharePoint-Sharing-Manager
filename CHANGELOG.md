@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.11.0-rc.4] - 2026-09-27
+
 - New: Files and Storage columns on the Sites/OneDrives target list and in
   the Excel Sites sheet (`Files`, `Storage (GB)`). Storage comes from tenant
   enumeration (no extra calls); Files is counted during the scan (folders
