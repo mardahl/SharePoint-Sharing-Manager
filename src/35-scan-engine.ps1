@@ -110,8 +110,9 @@ function Add-GrantsRest {
 
 function Complete-SiteScan {
     # Record totals on the target and give web-level findings the full site reach.
-    param($Target, $Bag, [int]$TotalItems, [int]$LibCount)
+    param($Target, $Bag, [int]$TotalItems, [int]$LibCount, [int]$FileCount)
     $Target.ItemsScanned = $TotalItems
+    $Target.FilesScanned = $FileCount
     $Target.LibrariesScanned = $LibCount
     foreach ($f in $Bag) { if ($f.Location -eq 'Web') { $f.Reach = $TotalItems } }
     return $Bag.ToArray()
@@ -121,7 +122,7 @@ function Invoke-SiteScan {
     # Scan the currently-connected site/OneDrive; return an array of findings.
     param($Target, [string[]]$Categories, [scriptblock]$Progress)
     $bag = New-Object System.Collections.Generic.List[object]
-    $totalItems = 0; $libCount = 0
+    $totalItems = 0; $libCount = 0; $fileCount = 0
     $site = $Target.Url
     $grantKeys = @('GuestGrant', 'EEEU', 'Everyone')
     $linkKeys = @('AnonymousLink', 'OrgLink', 'GuestLink')
@@ -138,7 +139,7 @@ function Invoke-SiteScan {
         Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
     }
 
-    if (-not ($scanGrants -or $scanLinks)) { return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount }
+    if (-not ($scanGrants -or $scanLinks)) { return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount -FileCount $fileCount }
 
     $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
@@ -165,6 +166,7 @@ function Invoke-SiteScan {
             $rows = @($resp.value)
             foreach ($r in $rows) {
                 $scanned++
+                if ([int]$r.FSObjType -eq 0) { $fileCount++ }
                 if ($r.HasUniqueRoleAssignments) { $unique.Add($r) }
                 if ($r.Id -gt $lastId) { $lastId = $r.Id }
             }
@@ -227,7 +229,7 @@ function Invoke-SiteScan {
             }
         }
     }
-    return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount
+    return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount -FileCount $fileCount
 }
 
 #endregion

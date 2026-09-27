@@ -37,6 +37,8 @@ Per-site failure isolation: a site that will not connect or scan is logged and t
 
 Once anything is scanned, the status line above the target list always shows a running summary: `scanned:N (X clean, Y with findings, Z total findings)`. Per-target counts live in the Findings column; `Enter` drills into one target, `G` aggregates all findings.
 
+The target list also shows **Files** and **Storage** columns. Storage is the tenant-reported usage (`StorageUsageCurrent`, includes version history and recycle bin), filled in at enumeration with no extra calls; blank for manually added or CSV-imported targets. Files is the count of files (folders excluded) across the scanned document libraries, filled in by the scan.
+
 ## Keys: target list
 
 | Key | Action |
@@ -90,7 +92,7 @@ Writes `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx
 |---|---|
 | Summary | Tool version, tenant, scope, generated time, operator; totals (findings, sites affected, items scanned, links vs direct grants, anonymous links, removed/failed/not attempted); Copilot Exposure Indicator; counts by category, access and revoke status; top 10 sites |
 | Findings | One row per finding: Site Title, Site URL, Location, Category, Sharing Type, Item Name, Full Path, Access, Shared With, Link Created, Reach (items), Revoke Status, Link Id, List Id, Item Id |
-| Sites | Whole-tab exports only: Title, URL, Status, Findings, Items Scanned, Exposure Score, Band |
+| Sites | Whole-tab exports only: Title, URL, Status, Findings, Items Scanned, Files, Storage (GB), Exposure Score, Band |
 
 #### Copilot Exposure Indicator
 

@@ -223,9 +223,12 @@ function Export-FindingsXlsx {
                 if (-not $t) { continue }
                 $tf = @($t.Findings)
                 $te = Get-ExposureScore -Findings $tf -ItemsScanned ([int]$t.ItemsScanned)
+                $files = 0; if ($t.Contains('FilesScanned')) { $files = [int]$t.FilesScanned }
+                $mb = [long]0; if ($t.Contains('StorageMB')) { $mb = [long]$t.StorageMB }
                 [pscustomobject]@{
                     'Title' = [string]$t.Title; 'URL' = [string]$t.Url; 'Status' = [string]$t.Status
                     'Findings' = $tf.Count; 'Items Scanned' = [int]$t.ItemsScanned
+                    'Files' = $files; 'Storage (GB)' = [Math]::Round($mb / 1024, 2)
                     'Exposure Score' = $te.Score; 'Band' = $te.Band
                 }
             }

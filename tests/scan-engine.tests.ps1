@@ -58,7 +58,7 @@ Invoke-SsmTest 'New-Target defaults ItemsScanned and LibrariesScanned to 0' {
 
 Invoke-SsmTest 'Cache round-trips ItemsScanned and finding Reach' {
     $t = New-Target -Url 'https://x.sharepoint.com/sites/a'
-    $t.ItemsScanned = 1234; $t.LibrariesScanned = 2; $t.Status = 'Findings'; $t.FindingCount = 1
+    $t.ItemsScanned = 1234; $t.LibrariesScanned = 2; $t.FilesScanned = 1200; $t.StorageMB = 5120; $t.Status = 'Findings'; $t.FindingCount = 1
     $t.Findings = @([pscustomobject]@{ Site=$t.Url; Location='Library'; Name='Documents'; CategoryKey='EEEU'; Category='EEEU grant'; Access='Read'; Principal='Everyone except external users'; Path='/sites/a/Shared Documents'; RemovalKind='DirectGrant'; LinkId=$null; ListId='L'; ItemId=$null; PrincipalId=4; LinkCreated=''; Reach=1000; RevokeStatus='NotAttempted'; Selected=$false })
     $tab = @{ Kind='Targets'; Name='Sites'; Categories=@('EEEU'); Items=@($t) }
     $json = ConvertTo-SsmCacheObject -Tabs @($tab) | ConvertTo-Json -Depth 10
@@ -66,6 +66,9 @@ Invoke-SsmTest 'Cache round-trips ItemsScanned and finding Reach' {
     ConvertFrom-SsmCacheObject -Cache ($json | ConvertFrom-Json) -Tabs @($tab2)
     Assert-Equal 1234 $tab2['Items'][0].ItemsScanned
     Assert-Equal 2 $tab2['Items'][0].LibrariesScanned
+    Assert-Equal 1200 $tab2['Items'][0].FilesScanned
+    Assert-Equal 5120 $tab2['Items'][0].StorageMB
+    Assert-Equal ('{0:N1} GB' -f 5.0) (Format-SsmStorage -MB 5120)
     Assert-Equal 1000 $tab2['Items'][0].Findings[0].Reach
 }
 

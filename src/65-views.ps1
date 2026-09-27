@@ -160,15 +160,23 @@ function Add-TabBar {
     Add-FrameLine -Sb $Sb -Row 2 -Content $line
 }
 
+function Format-SsmStorage {
+    # MB (as reported by tenant StorageUsageCurrent) -> short human string.
+    param([long]$MB)
+    if ($MB -le 0) { return '' }
+    if ($MB -ge 1024) { return ('{0:N1} GB' -f ($MB / 1024)) }
+    return ('{0} MB' -f $MB)
+}
+
 function Get-TargetsLayout {
     param([int]$W)
-    # ' ' sel(3) ' ' Title(flex 35%) '  ' Url(flex 65%) '  ' Findings(8) '  ' Status(15)
-    $fixed = 1 + 3 + 1 + 2 + 2 + 8 + 2 + 15
+    # ' ' sel(3) ' ' Title(flex 35%) '  ' Url(flex 65%) '  ' Files(9) '  ' Storage(10) '  ' Findings(8) '  ' Status(15)
+    $fixed = 1 + 3 + 1 + 2 + 2 + 9 + 2 + 10 + 2 + 8 + 2 + 15
     $flex = $W - $fixed - 1
     if ($flex -lt 20) { $flex = 20 }
     $titleW = [int]($flex * 0.35)
     $urlW = $flex - $titleW
-    return @{ Title = $titleW; Url = $urlW; Findings = 8; Status = 15 }
+    return @{ Title = $titleW; Url = $urlW; Files = 9; Storage = 10; Findings = 8; Status = 15 }
 }
 
 function Add-TargetsView {
@@ -230,7 +238,7 @@ function Add-TargetsView {
     Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + $ctx)
 
     $col = Get-TargetsLayout -W $W
-    $head = ' ' + (Get-PadCell 'sel' 3) + ' ' + (Get-PadCell 'Title' $col.Title) + '  ' + (Get-PadCell 'Url' $col.Url) + '  ' + (Get-PadCell 'Findings' $col.Findings -AlignRight) + '  ' + (Get-PadCell 'Status' $col.Status)
+    $head = ' ' + (Get-PadCell 'sel' 3) + ' ' + (Get-PadCell 'Title' $col.Title) + '  ' + (Get-PadCell 'Url' $col.Url) + '  ' + (Get-PadCell 'Files' $col.Files -AlignRight) + '  ' + (Get-PadCell 'Storage' $col.Storage -AlignRight) + '  ' + (Get-PadCell 'Findings' $col.Findings -AlignRight) + '  ' + (Get-PadCell 'Status' $col.Status)
     Add-FrameLine -Sb $Sb -Row 4 -Content ($t.ColHead + $head)
 
     $top = 5; $bottom = $H - 1
@@ -267,6 +275,10 @@ function Add-TargetsView {
         $line += (Get-PadCell $item.Title $col.Title) + '  '
         if ($isCursor) { $line += (Get-PadCell $item.Url $col.Url) }
         else { $line += $t.RowDim + (Get-PadCell $item.Url $col.Url) + $t.Row }
+        $files = ''; if ($item.Contains('FilesScanned') -and [int]$item.FilesScanned -gt 0) { $files = ('{0:N0}' -f [int]$item.FilesScanned) }
+        $store = ''; if ($item.Contains('StorageMB')) { $store = Format-SsmStorage -MB ([long]$item.StorageMB) }
+        $line += '  ' + (Get-PadCell $files $col.Files -AlignRight)
+        $line += '  ' + (Get-PadCell $store $col.Storage -AlignRight)
         $line += '  ' + (Get-PadCell ([string]$item.FindingCount) $col.Findings -AlignRight)
         $line += '  ' + (Get-StatusBadge -Status $item.Status -Width $col.Status)
         Add-FrameLine -Sb $Sb -Row $row -Content $line

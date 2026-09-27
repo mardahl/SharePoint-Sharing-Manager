@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- New: Files and Storage columns on the Sites/OneDrives target list and in
+  the Excel Sites sheet (`Files`, `Storage (GB)`). Storage comes from tenant
+  enumeration (no extra calls); Files is counted during the scan (folders
+  excluded). Both are kept in the session cache.
+
 ## [1.11.0-rc.3] - 2026-09-26
 
 - Change: the OneDrive provisioning progress modal now says it counts

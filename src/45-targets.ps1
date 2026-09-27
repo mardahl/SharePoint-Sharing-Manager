@@ -3,13 +3,14 @@
 # ============================================================================
 
 function New-Target {
-    param([string]$Url, [string]$Title = '', [string]$Template = '')
+    param([string]$Url, [string]$Title = '', [string]$Template = '', [long]$StorageMB = 0)
     if (-not $Title) { $Title = ($Url.TrimEnd('/') -split '/')[-1] }
     return @{
         Url = $Url.Trim(); Title = $Title; Template = $Template
         Status = 'NotScanned'; FindingCount = 0
         Findings = @(); Selected = $false
-        ItemsScanned = 0; LibrariesScanned = 0
+        ItemsScanned = 0; LibrariesScanned = 0; FilesScanned = 0
+        StorageMB = $StorageMB
     }
 }
 
@@ -93,7 +94,7 @@ function Get-TenantTargets {
         $isPersonal = ($s.Template -like 'SPSPERS*')
         if ($OneDrive -ne $isPersonal) { continue }
         if ([string]$s.LockState -ne 'Unlock') { $locked++; continue }
-        $out.Add((New-Target -Url $s.Url -Title $s.Title -Template $s.Template))
+        $out.Add((New-Target -Url $s.Url -Title $s.Title -Template $s.Template -StorageMB ([long]$s.StorageUsageCurrent)))
     }
     if ($locked -gt 0) {
         Write-SsmLog -Message ("Filtered out {0} locked/inaccessible {1} (LockState not Unlock)." -f $locked, ($OneDrive ? 'OneDrives' : 'sites')) -Level WARN

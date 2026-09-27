@@ -16,10 +16,13 @@ function ConvertTo-SsmCacheObject {
             if ($s -eq 'Unprovisioned' -or $s -eq 'ProvisionRequested') { continue }   # Test-SsmPlaceholderTarget, inlined
             $itemsScanned = 0; if ($it.Contains('ItemsScanned')) { $itemsScanned = [int]$it['ItemsScanned'] }
             $libsScanned  = 0; if ($it.Contains('LibrariesScanned')) { $libsScanned = [int]$it['LibrariesScanned'] }
+            $filesScanned = 0; if ($it.Contains('FilesScanned')) { $filesScanned = [int]$it['FilesScanned'] }
+            $storageMB    = 0; if ($it.Contains('StorageMB')) { $storageMB = [long]$it['StorageMB'] }
             $items.Add([ordered]@{
                 Url = $it.Url; Title = $it.Title; Template = $it.Template
                 Status = $it.Status; FindingCount = $it.FindingCount
                 ItemsScanned = $itemsScanned; LibrariesScanned = $libsScanned
+                FilesScanned = $filesScanned; StorageMB = $storageMB
                 Findings = @($it.Findings)
             })
         }
@@ -53,10 +56,14 @@ function ConvertFrom-SsmCacheObject {
             $scannedItems = 0; $scannedLibs = 0
             if ($ci.PSObject.Properties['ItemsScanned']) { $scannedItems = [int]$ci.ItemsScanned }
             if ($ci.PSObject.Properties['LibrariesScanned']) { $scannedLibs = [int]$ci.LibrariesScanned }
+            $scannedFiles = 0; $storageMB = [long]0
+            if ($ci.PSObject.Properties['FilesScanned']) { $scannedFiles = [int]$ci.FilesScanned }
+            if ($ci.PSObject.Properties['StorageMB']) { $storageMB = [long]$ci.StorageMB }
             $items.Add(@{
                 Url = $ci.Url; Title = $ci.Title; Template = $ci.Template
                 Status = $ci.Status; FindingCount = $ci.FindingCount
                 ItemsScanned = $scannedItems; LibrariesScanned = $scannedLibs
+                FilesScanned = $scannedFiles; StorageMB = $storageMB
                 Findings = $findings.ToArray(); Selected = $false
             })
         }
