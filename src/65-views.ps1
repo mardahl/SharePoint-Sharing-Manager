@@ -161,7 +161,7 @@ function Add-TabBar {
 }
 
 function Format-SsmStorage {
-    # MB (as reported by tenant StorageUsageCurrent) -> short human string.
+    # MB (as reported by tenant SiteProperties.StorageUsage) -> short human string.
     param([long]$MB)
     if ($MB -le 0) { return '' }
     if ($MB -ge 1024) { return ('{0:N1} GB' -f ($MB / 1024)) }

@@ -94,7 +94,7 @@ function Get-TenantTargets {
         $isPersonal = ($s.Template -like 'SPSPERS*')
         if ($OneDrive -ne $isPersonal) { continue }
         if ([string]$s.LockState -ne 'Unlock') { $locked++; continue }
-        $out.Add((New-Target -Url $s.Url -Title $s.Title -Template $s.Template -StorageMB ([long]$s.StorageUsageCurrent)))
+        $out.Add((New-Target -Url $s.Url -Title $s.Title -Template $s.Template -StorageMB ([long]$s.StorageUsage)))
     }
     if ($locked -gt 0) {
         Write-SsmLog -Message ("Filtered out {0} locked/inaccessible {1} (LockState not Unlock)." -f $locked, ($OneDrive ? 'OneDrives' : 'sites')) -Level WARN

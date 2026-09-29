@@ -40,3 +40,14 @@ Invoke-SsmTest 'Get-TabFindings flattens findings across targets' {
     Assert-Equal 3 $all.Count
 }
 Remove-Item -LiteralPath $csv -ErrorAction SilentlyContinue
+
+Invoke-SsmTest 'Get-TenantTargets maps CSOM SiteProperties.StorageUsage (MB) to StorageMB' {
+    function Connect-SsmAdmin { $true }
+    function Write-SsmLog { param($Message, $Level) }
+    # Shape mirrors the CSOM SiteProperties type: StorageUsage, no StorageUsageCurrent.
+    function Get-SsmTenantSiteProperties { param($IncludePersonal, $Progress)
+        @([pscustomobject]@{ Url='https://x-my/personal/a'; Title='A'; Template='SPSPERS#10'; LockState='Unlock'; StorageUsage=2048 }) }
+    $t = @(Get-TenantTargets -OneDrive $true)
+    Assert-Equal 1 $t.Count
+    Assert-Equal 2048 $t[0].StorageMB
+}

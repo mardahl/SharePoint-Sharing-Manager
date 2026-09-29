@@ -37,7 +37,7 @@ Per-site failure isolation: a site that will not connect or scan is logged and t
 
 Once anything is scanned, the status line above the target list always shows a running summary: `scanned:N (X clean, Y with findings, Z total findings)`. Per-target counts live in the Findings column; `Enter` drills into one target, `G` aggregates all findings.
 
-The target list also shows **Files** and **Storage** columns. Storage is the tenant-reported usage (`StorageUsageCurrent`, includes version history and recycle bin), filled in at enumeration with no extra calls; blank for manually added or CSV-imported targets. Files is the count of files (folders excluded) across the scanned document libraries, filled in by the scan.
+The target list also shows **Files** and **Storage** columns. Storage is the tenant-reported usage (`StorageUsage`, includes version history and recycle bin), filled in at enumeration with no extra calls; blank for manually added or CSV-imported targets. Files is the count of files (folders excluded) across the scanned document libraries, filled in by the scan.
 
 ## Keys: target list
 

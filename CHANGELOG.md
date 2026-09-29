@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.11.0-rc.6] - 2026-09-29
+
+- Fix: tenant enumeration failed (and in rc.4 closed the app) after the last
+  page with "The property 'StorageUsageCurrent' cannot be found". Storage is
+  now read from the correct tenant property.
+
 ## [1.11.0-rc.5] - 2026-09-29
 
 - Fix: `Esc` now cancels tenant enumeration (checked between server pages).
