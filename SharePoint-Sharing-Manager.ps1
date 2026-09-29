@@ -135,6 +135,10 @@ try {
             Start-Sleep -Milliseconds 25
         }
     }
+} catch {
+    # Last-resort net: record what killed the app before the TUI is torn down.
+    Write-SsmErrorLog -Context 'Unhandled error - application stopped' -ErrorRecord $_
+    throw
 } finally {
     Exit-Tui
     if (-not $script:KeepSessions) {

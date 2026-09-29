@@ -89,11 +89,7 @@ function Register-SsmAppOnlyApp {
     #
     # User.Read.All is added specifically so the OneDrive secondary-admin
     # feature (Task 1-5) can resolve an entered UPN to an exact directory
-    # user. That feature stays RELEASE-BLOCKED pending live-tenant validation
-    # (see docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md)
-    # - this registration change ships ahead of it so the scope is already
-    # consented once the gate clears, but nothing in this permission grant
-    # is itself proven against a live tenant.
+    # user.
     if (-not (Install-SsmModule)) { return }
     $tenant = Get-SsmTenantInput; if (-not $tenant) { return }
     $ok = Show-ConfirmModal -Title 'Register app-only certificate app' -Lines @(
@@ -101,7 +97,7 @@ function Register-SsmAppOnlyApp {
         'permissions Sites.FullControl.All (SharePoint + Graph), Graph',
         'User.Read.All, and a self-signed certificate valid for 1 YEAR,',
         'uploaded to the app.', '',
-        'User.Read.All is new: it lets the (release-blocked) OneDrive',
+        'User.Read.All is new: it lets the OneDrive',
         'secondary-admin feature look up an entered UPN as an exact,',
         'unambiguous directory user instead of a partial-match guess.', '',
         'Requires: Application Administrator (to create the app).',
@@ -326,7 +322,7 @@ function Add-SsmCertToExistingApp {
             'New certificate attached to the existing app. App-only mode is active.', '',
             'This only re-keys the certificate - it does NOT add or change API',
             'permissions on the existing app registration. If this app predates',
-            'Graph User.Read.All, the (release-blocked) OneDrive secondary-admin',
+            'Graph User.Read.All, the OneDrive secondary-admin',
             'feature will not resolve users until a Global Admin adds User.Read.All',
             '(Application) to it in the Entra portal and grants admin consent.')
     } catch {

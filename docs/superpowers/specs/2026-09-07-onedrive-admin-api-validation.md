@@ -285,3 +285,8 @@ against a real tenant, and this document is updated with the outcome.
 - https://learn.microsoft.com/en-us/graph/api/resources/drive?view=graph-rest-1.0
 - https://learn.microsoft.com/en-us/graph/api/drive-list?view=graph-rest-1.0
 - Design spec: docs/superpowers/specs/2026-09-07-onedrive-secondary-admin-design.md
+
+## Outcome (2026-09-29)
+
+Release block lifted. The operator ran the secondary-admin feature
+repeatedly against a live tenant and confirmed it works as designed.

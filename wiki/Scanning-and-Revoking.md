@@ -29,7 +29,7 @@ A practical sequence:
 
 ## Target discovery
 
-- **Auto-enumerate** from the tenant admin API (press `Enter` on the tab). The progress modal shows a running "Retrieved N so far" count that advances once per server page; on large OneDrive tenants the first page can take a while to arrive. The enumerated list is written to the scan cache immediately, so the next launch restores it instead of re-enumerating.
+- **Auto-enumerate** from the tenant admin API (press `Enter` on the tab). The progress modal shows a running "Retrieved N so far" count that advances once per server page; on large OneDrive tenants the first page can take a while to arrive. The enumerated list is written to the scan cache immediately, so the next launch restores it instead of re-enumerating. `Esc` cancels (takes effect when the current server page returns); if enumeration fails, the error is shown and logged and `Enter` retries.
 - **Manual URL entry** (`U`)
 - **CSV import** (`I`)
 

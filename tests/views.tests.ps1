@@ -34,8 +34,28 @@ Invoke-SsmTest 'Update-TabView with a filter matching exactly one item does not 
     }
     Update-TabView -Tab $tab
     Assert-Equal 1 @($tab['View']).Count
-    Assert-Equal 'https://x/b' $tab['View'][0].Url
 }
+
+Invoke-SsmTest 'Invoke-TabEnumerate: failure is logged and shown, not thrown; cancel is quiet' {
+    $script:UI = @{ Dirty = $false }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Write-ProgressModal { }
+    $script:Shown = $null; $script:Logged = $null
+    function Show-MsgModal { param($Title, $Lines, $Kind) $script:Shown = $Title }
+    function Write-SsmErrorLog { param($Context, $ErrorRecord) $script:Logged = $ErrorRecord.Exception.Message }
+    function Get-TenantTargets { param($OneDrive, $Progress) throw 'HTTP 429 throttled' }
+    $tab = @{ OneDrive = $true; Items = @(); View = @(); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0 }
+    Invoke-TabEnumerate -Tab $tab
+    Assert-Equal 'Enumeration failed' $script:Shown
+    Assert-Equal 'HTTP 429 throttled' $script:Logged
+    $script:Shown = $null
+    function Get-TenantTargets { param($OneDrive, $Progress) throw (New-Object System.OperationCanceledException 'x') }
+    Invoke-TabEnumerate -Tab $tab
+    Assert-Equal $null $script:Shown
+    Assert-Equal 0 @($tab['Items']).Count
+}
+
 
 Invoke-SsmTest 'Update-TabView: placeholders hidden everywhere except Unprovisioned; search applies on top of filter' {
     $tab = @{

@@ -183,7 +183,7 @@ function Add-TargetsView {
     param([System.Text.StringBuilder]$Sb, $Tab, [int]$W, [int]$H)
     $t = $script:T; $g = $script:G
 
-    if (-not $Tab['Loaded']) {
+    if (-not $Tab['Loaded'] -or @($Tab['Items']).Count -eq 0) {
         Add-FrameLine -Sb $Sb -Row 3 -Content ($t.Ctx + ' not loaded')
         for ($r = 4; $r -le ($H - 1); $r++) { Add-FrameLine -Sb $Sb -Row $r -Content '' }
         $head = 'No targets yet.'
@@ -429,8 +429,21 @@ function Invoke-TabEnumerate {
     $label = $Tab['OneDrive'] ? 'Loading OneDrives...' : 'Loading sites...'
     Start-LoadSpinner
     Write-ProgressModal -Title 'Enumerating tenant' -Done 0 -Total 0 -Label $label -Ok 0 -Failed 0
-    $cb = { param($n) Write-ProgressModal -Title 'Enumerating tenant' -Done $n -Total 0 -Label $label -Ok 0 -Failed 0 }.GetNewClosure()
-    try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] -Progress $cb } finally { Stop-LoadSpinner }
+    # Esc is checked between server pages (a page in flight cannot be interrupted).
+    $state = @{ LastTick = 0; Offset = 0; Total = 0; Cancel = $false }
+    $inner = New-SsmProgressCallback -Title 'Enumerating tenant' -State $state -CancelMode 'Throw'
+    $cb = { param($n) & $inner -Count $n -Label $label }.GetNewClosure()
+    try { $targets = Get-TenantTargets -OneDrive $Tab['OneDrive'] -Progress $cb }
+    catch [System.OperationCanceledException] {
+        Write-SsmLog -Message 'Enumeration cancelled by operator.' -Level WARN
+        $script:UI.Dirty = $true
+        return
+    } catch {
+        Write-SsmErrorLog -Context 'Tenant enumeration failed' -ErrorRecord $_
+        Show-MsgModal -Title 'Enumeration failed' -Lines @($_.Exception.Message, '', 'Details are in the log. Press Enter to retry.')
+        $script:UI.Dirty = $true
+        return
+    } finally { Stop-LoadSpinner }
     Add-TargetsToTab -Tab $Tab -Targets $targets
     # Reloading while viewing the Unprovisioned filter reloads the placeholders
     # too (they are never cached); otherwise P loads them on demand.
@@ -982,10 +995,6 @@ function Invoke-SsmOneDriveAdmin {
     # Task 2/3's validation, preflight and guarded-mutation primitives
     # exactly as-is; this function owns selection freezing, confirmation,
     # sequential progress, evidence persistence and stop rules only.
-    #
-    # RELEASE-BLOCKED (see docs/superpowers/specs/2026-09-07-onedrive-admin-
-    # api-validation.md): built and tested against mocked PnP/Graph calls
-    # only, per the design's deferred live-validation gate.
     param($Tab)
 
     if (-not $Tab['OneDrive']) {

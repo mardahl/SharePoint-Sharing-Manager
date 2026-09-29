@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fix: `Esc` now cancels tenant enumeration (checked between server pages).
+- Fix: a failing enumeration no longer closes the app silently; the error is
+  logged and shown, and `Enter` retries. Any other unhandled error is now
+  written to the log before the app exits.
+- Fix: an empty Sites/OneDrives list shows the "Press Enter to enumerate"
+  instructions again after an enumeration that returned nothing.
+
 ## [1.11.0-rc.4] - 2026-09-27
 
 - New: Files and Storage columns on the Sites/OneDrives target list and in
