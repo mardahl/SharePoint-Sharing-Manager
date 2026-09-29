@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="640" viewBox="0 0 1120 640" role="img" aria-label="SharePoint Sharing Manager">
+<rect width="1120" height="640" rx="10" fill="#1e1e1e" stroke="#3a3a3a"/>
+<path d="M0 10a10 10 0 0 1 10-10h1100a10 10 0 0 1 10 10v24H0z" fill="#2d2d2d"/>
+<circle cx="20" cy="17" r="6" fill="#ff5f57"/><circle cx="40" cy="17" r="6" fill="#febc2e"/><circle cx="60" cy="17" r="6" fill="#28c840"/>
+<text x="560.0" y="22" text-anchor="middle" fill="#9a9a9a" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="13">SharePoint Sharing Manager</text>
+<g transform="translate(14,48)" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
+<rect x="0.0" y="0.0" width="1083.9" height="17.3" fill="#303030"/>
+<rect x="0.0" y="17.0" width="92.7" height="17.3" fill="#303030"/>
+<rect x="92.4" y="17.0" width="109.5" height="17.3" fill="#00d7ff"/>
+<rect x="201.6" y="17.0" width="327.9" height="17.3" fill="#303030"/>
+<rect x="0.0" y="187.0" width="1083.9" height="17.3" fill="#005f87"/>
+<rect x="0.0" y="561.0" width="857.1" height="17.3" fill="#303030"/>
+<text x="8.4" y="12.5" fill="#00d7ff" font-weight="bold" textLength="84.0" lengthAdjust="spacing">SharePoint</text>
+<text x="100.8" y="12.5" fill="#00d7ff" font-weight="bold" textLength="58.8" lengthAdjust="spacing">Sharing</text>
+<text x="168.0" y="12.5" fill="#00d7ff" font-weight="bold" textLength="58.8" lengthAdjust="spacing">Manager</text>
+<text x="243.6" y="12.5" fill="#00d7ff" font-weight="bold" textLength="58.8" lengthAdjust="spacing">v1.11.0</text>
+<text x="319.2" y="12.5" fill="#00d7ff" font-weight="bold" textLength="75.6" lengthAdjust="spacing">[contoso]</text>
+<text x="957.6" y="12.5" fill="#585858" font-weight="bold" textLength="8.4" lengthAdjust="spacing">○</text>
+<text x="974.4" y="12.5" fill="#585858" font-weight="bold" textLength="25.2" lengthAdjust="spacing">Not</text>
+<text x="1008.0" y="12.5" fill="#585858" font-weight="bold" textLength="75.6" lengthAdjust="spacing">connected</text>
+<text x="16.8" y="29.5" fill="#a8a8a8" textLength="8.4" lengthAdjust="spacing">1</text>
+<text x="33.6" y="29.5" fill="#a8a8a8" textLength="42.0" lengthAdjust="spacing">Sites</text>
+<text x="100.8" y="29.5" fill="#000000" font-weight="bold" textLength="8.4" lengthAdjust="spacing">2</text>
+<text x="117.6" y="29.5" fill="#000000" font-weight="bold" textLength="75.6" lengthAdjust="spacing">OneDrives</text>
+<text x="218.4" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="8.4" lengthAdjust="spacing">3</text>
+<text x="235.2" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="58.8" lengthAdjust="spacing">Sharing</text>
+<text x="319.2" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="8.4" lengthAdjust="spacing">4</text>
+<text x="336.0" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="42.0" lengthAdjust="spacing">Setup</text>
+<text x="403.2" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="8.4" lengthAdjust="spacing">5</text>
+<text x="420.0" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="25.2" lengthAdjust="spacing">Log</text>
+<text x="470.4" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="8.4" lengthAdjust="spacing">6</text>
+<text x="487.2" y="29.5" fill="#a8a8a8" font-weight="bold" textLength="42.0" lengthAdjust="spacing">About</text>
+<text x="8.4" y="46.5" fill="#d0d0d0" textLength="537.6" lengthAdjust="spacing">https://contoso-my.sharepoint.com/personal/ana_silva_contoso_com</text>
+<text x="571.2" y="46.5" fill="#00d7ff" textLength="8.4" lengthAdjust="spacing">8</text>
+<text x="588.0" y="46.5" fill="#8a8a8a" textLength="16.8" lengthAdjust="spacing">of</text>
+<text x="613.2" y="46.5" fill="#00d7ff" textLength="8.4" lengthAdjust="spacing">8</text>
+<text x="630.0" y="46.5" fill="#8a8a8a" textLength="67.2" lengthAdjust="spacing">findings</text>
+<text x="722.4" y="46.5" fill="#d75fff" textLength="8.4" lengthAdjust="spacing">2</text>
+<text x="739.2" y="46.5" fill="#8a8a8a" textLength="67.2" lengthAdjust="spacing">selected</text>
+<text x="831.6" y="46.5" fill="#8a8a8a" textLength="58.8" lengthAdjust="spacing">filter:</text>
+<text x="890.4" y="46.5" fill="#ffd700" textLength="25.2" lengthAdjust="spacing">All</text>
+<text x="8.4" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="25.2" lengthAdjust="spacing">sel</text>
+<text x="42.0" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="67.2" lengthAdjust="spacing">Category</text>
+<text x="226.8" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="25.2" lengthAdjust="spacing">Loc</text>
+<text x="302.4" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="33.6" lengthAdjust="spacing">Name</text>
+<text x="537.6" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="75.6" lengthAdjust="spacing">Principal</text>
+<text x="882.0" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="58.8" lengthAdjust="spacing">Created</text>
+<text x="982.8" y="63.5" fill="#bcbcbc" font-weight="bold" textLength="50.4" lengthAdjust="spacing">Status</text>
+<text x="8.4" y="80.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">[</text>
+<text x="25.2" y="80.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">]</text>
+<text x="42.0" y="80.5" fill="#d0d0d0" textLength="75.6" lengthAdjust="spacing">Anonymous</text>
+<text x="126.0" y="80.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="226.8" y="80.5" fill="#d0d0d0" textLength="50.4" lengthAdjust="spacing">Folder</text>
+<text x="302.4" y="80.5" fill="#8a8a8a" textLength="42.0" lengthAdjust="spacing">Board</text>
+<text x="352.8" y="80.5" fill="#8a8a8a" textLength="58.8" lengthAdjust="spacing">Minutes</text>
+<text x="537.6" y="80.5" fill="#d0d0d0" textLength="50.4" lengthAdjust="spacing">Anyone</text>
+<text x="596.4" y="80.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">with</text>
+<text x="638.4" y="80.5" fill="#d0d0d0" textLength="25.2" lengthAdjust="spacing">the</text>
+<text x="672.0" y="80.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="882.0" y="80.5" fill="#d0d0d0" textLength="84.0" lengthAdjust="spacing">2025-08-15</text>
+<text x="982.8" y="80.5" fill="#8a8a8a" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="97.5" fill="#00d7ff" font-weight="bold" textLength="25.2" lengthAdjust="spacing">[■]</text>
+<text x="42.0" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="75.6" lengthAdjust="spacing">Anonymous</text>
+<text x="126.0" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="226.8" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="33.6" lengthAdjust="spacing">File</text>
+<text x="302.4" y="97.5" fill="#8a8a8a" font-weight="bold" textLength="142.8" lengthAdjust="spacing">Customer-List.csv</text>
+<text x="537.6" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="50.4" lengthAdjust="spacing">Anyone</text>
+<text x="596.4" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="33.6" lengthAdjust="spacing">with</text>
+<text x="638.4" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="25.2" lengthAdjust="spacing">the</text>
+<text x="672.0" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="882.0" y="97.5" fill="#d0d0d0" font-weight="bold" textLength="84.0" lengthAdjust="spacing">2026-02-20</text>
+<text x="982.8" y="97.5" fill="#8a8a8a" font-weight="bold" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="114.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">[</text>
+<text x="25.2" y="114.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">]</text>
+<text x="42.0" y="114.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">EEEU</text>
+<text x="84.0" y="114.5" fill="#d0d0d0" textLength="42.0" lengthAdjust="spacing">grant</text>
+<text x="226.8" y="114.5" fill="#d0d0d0" textLength="58.8" lengthAdjust="spacing">Library</text>
+<text x="302.4" y="114.5" fill="#8a8a8a" textLength="75.6" lengthAdjust="spacing">Documents</text>
+<text x="537.6" y="114.5" fill="#d0d0d0" textLength="67.2" lengthAdjust="spacing">Everyone</text>
+<text x="613.2" y="114.5" fill="#d0d0d0" textLength="50.4" lengthAdjust="spacing">except</text>
+<text x="672.0" y="114.5" fill="#d0d0d0" textLength="67.2" lengthAdjust="spacing">external</text>
+<text x="747.6" y="114.5" fill="#d0d0d0" textLength="42.0" lengthAdjust="spacing">users</text>
+<text x="982.8" y="114.5" fill="#8a8a8a" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="131.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">[</text>
+<text x="25.2" y="131.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">]</text>
+<text x="42.0" y="131.5" fill="#d0d0d0" textLength="42.0" lengthAdjust="spacing">Guest</text>
+<text x="92.4" y="131.5" fill="#d0d0d0" textLength="42.0" lengthAdjust="spacing">grant</text>
+<text x="226.8" y="131.5" fill="#d0d0d0" textLength="50.4" lengthAdjust="spacing">Folder</text>
+<text x="302.4" y="131.5" fill="#8a8a8a" textLength="50.4" lengthAdjust="spacing">Shared</text>
+<text x="361.2" y="131.5" fill="#8a8a8a" textLength="33.6" lengthAdjust="spacing">With</text>
+<text x="403.2" y="131.5" fill="#8a8a8a" textLength="67.2" lengthAdjust="spacing">Partners</text>
+<text x="537.6" y="131.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">Alex</text>
+<text x="579.6" y="131.5" fill="#d0d0d0" textLength="42.0" lengthAdjust="spacing">Guest</text>
+<text x="630.0" y="131.5" fill="#d0d0d0" textLength="58.8" lengthAdjust="spacing">[guest]</text>
+<text x="982.8" y="131.5" fill="#8a8a8a" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="148.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">[</text>
+<text x="25.2" y="148.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">]</text>
+<text x="42.0" y="148.5" fill="#d0d0d0" textLength="117.6" lengthAdjust="spacing">Guest-specific</text>
+<text x="168.0" y="148.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="226.8" y="148.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">File</text>
+<text x="302.4" y="148.5" fill="#8a8a8a" textLength="159.6" lengthAdjust="spacing">Contract-Draft.docx</text>
+<text x="537.6" y="148.5" fill="#d0d0d0" textLength="168.0" lengthAdjust="spacing">partner@fabrikam.com</text>
+<text x="714.0" y="148.5" fill="#d0d0d0" textLength="58.8" lengthAdjust="spacing">[guest]</text>
+<text x="882.0" y="148.5" fill="#d0d0d0" textLength="84.0" lengthAdjust="spacing">2026-06-16</text>
+<text x="982.8" y="148.5" fill="#8a8a8a" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="165.5" fill="#00d7ff" font-weight="bold" textLength="25.2" lengthAdjust="spacing">[■]</text>
+<text x="42.0" y="165.5" fill="#d0d0d0" font-weight="bold" textLength="117.6" lengthAdjust="spacing">Guest-specific</text>
+<text x="168.0" y="165.5" fill="#d0d0d0" font-weight="bold" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="226.8" y="165.5" fill="#d0d0d0" font-weight="bold" textLength="33.6" lengthAdjust="spacing">File</text>
+<text x="302.4" y="165.5" fill="#8a8a8a" font-weight="bold" textLength="159.6" lengthAdjust="spacing">Vendor-Pricing.xlsx</text>
+<text x="537.6" y="165.5" fill="#d0d0d0" font-weight="bold" textLength="142.8" lengthAdjust="spacing">pia@northwind.com</text>
+<text x="688.8" y="165.5" fill="#d0d0d0" font-weight="bold" textLength="58.8" lengthAdjust="spacing">[guest]</text>
+<text x="882.0" y="165.5" fill="#d0d0d0" font-weight="bold" textLength="84.0" lengthAdjust="spacing">2026-04-19</text>
+<text x="982.8" y="165.5" fill="#8a8a8a" font-weight="bold" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="182.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">[</text>
+<text x="25.2" y="182.5" fill="#d0d0d0" textLength="8.4" lengthAdjust="spacing">]</text>
+<text x="42.0" y="182.5" fill="#d0d0d0" textLength="100.8" lengthAdjust="spacing">Organization</text>
+<text x="151.2" y="182.5" fill="#d0d0d0" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="226.8" y="182.5" fill="#d0d0d0" textLength="50.4" lengthAdjust="spacing">Folder</text>
+<text x="302.4" y="182.5" fill="#8a8a8a" textLength="16.8" lengthAdjust="spacing">HR</text>
+<text x="327.6" y="182.5" fill="#8a8a8a" textLength="42.0" lengthAdjust="spacing">Cases</text>
+<text x="537.6" y="182.5" fill="#d0d0d0" textLength="50.4" lengthAdjust="spacing">People</text>
+<text x="596.4" y="182.5" fill="#d0d0d0" textLength="16.8" lengthAdjust="spacing">in</text>
+<text x="621.6" y="182.5" fill="#d0d0d0" textLength="58.8" lengthAdjust="spacing">contoso</text>
+<text x="882.0" y="182.5" fill="#d0d0d0" textLength="84.0" lengthAdjust="spacing">2026-09-03</text>
+<text x="982.8" y="182.5" fill="#8a8a8a" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="199.5" fill="#ffffff" textLength="8.4" lengthAdjust="spacing">[</text>
+<text x="25.2" y="199.5" fill="#ffffff" textLength="8.4" lengthAdjust="spacing">]</text>
+<text x="42.0" y="199.5" fill="#ffffff" textLength="100.8" lengthAdjust="spacing">Organization</text>
+<text x="151.2" y="199.5" fill="#ffffff" textLength="33.6" lengthAdjust="spacing">link</text>
+<text x="226.8" y="199.5" fill="#ffffff" textLength="33.6" lengthAdjust="spacing">File</text>
+<text x="302.4" y="199.5" fill="#ffffff" textLength="142.8" lengthAdjust="spacing">Payroll-2026.xlsx</text>
+<text x="537.6" y="199.5" fill="#ffffff" textLength="50.4" lengthAdjust="spacing">People</text>
+<text x="596.4" y="199.5" fill="#ffffff" textLength="16.8" lengthAdjust="spacing">in</text>
+<text x="621.6" y="199.5" fill="#ffffff" textLength="58.8" lengthAdjust="spacing">contoso</text>
+<text x="882.0" y="199.5" fill="#ffffff" textLength="84.0" lengthAdjust="spacing">2026-08-13</text>
+<text x="982.8" y="199.5" fill="#8a8a8a" textLength="100.8" lengthAdjust="spacing">NotAttempted</text>
+<text x="8.4" y="573.5" fill="#00d7ff" font-weight="bold" textLength="25.2" lengthAdjust="spacing">Spc</text>
+<text x="42.0" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="50.4" lengthAdjust="spacing">select</text>
+<text x="109.2" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">A</text>
+<text x="126.0" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="25.2" lengthAdjust="spacing">all</text>
+<text x="168.0" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">N</text>
+<text x="184.8" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="33.6" lengthAdjust="spacing">none</text>
+<text x="235.2" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">/</text>
+<text x="252.0" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="33.6" lengthAdjust="spacing">find</text>
+<text x="302.4" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">F</text>
+<text x="319.2" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="50.4" lengthAdjust="spacing">filter</text>
+<text x="386.4" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">R</text>
+<text x="403.2" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="50.4" lengthAdjust="spacing">revoke</text>
+<text x="462.0" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="67.2" lengthAdjust="spacing">selected</text>
+<text x="546.0" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">E</text>
+<text x="562.8" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="75.6" lengthAdjust="spacing">export...</text>
+<text x="655.2" y="573.5" fill="#00d7ff" font-weight="bold" textLength="25.2" lengthAdjust="spacing">Esc</text>
+<text x="688.8" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="33.6" lengthAdjust="spacing">back</text>
+<text x="739.2" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">?</text>
+<text x="756.0" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="33.6" lengthAdjust="spacing">help</text>
+<text x="806.4" y="573.5" fill="#00d7ff" font-weight="bold" textLength="8.4" lengthAdjust="spacing">Q</text>
+<text x="823.2" y="573.5" fill="#8a8a8a" font-weight="bold" textLength="33.6" lengthAdjust="spacing">quit</text>
+</g></svg>

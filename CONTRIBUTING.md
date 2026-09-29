@@ -63,6 +63,19 @@ tmux kill-session -t ssm
 If you change anything UI-related, paste a `capture-pane` snippet (or a
 screenshot) into the PR.
 
+### README screenshots
+
+`docs/screenshots/*.svg` are captures of the real TUI, not drawings. After a
+visible UI change, regenerate them (needs `tmux`, `pwsh`, `python3`):
+
+```bash
+build/screenshots/capture.sh
+```
+
+The script runs the app offline in a temporary sandbox with its own HOME and
+fictional contoso data (`build/screenshots/gen-demo-cache.py`). It never
+reads your real config or connects to a tenant.
+
 ### Testing against a real tenant
 
 Use a **test tenant**. Revoked links and grants cannot be restored from

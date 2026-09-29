@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fix: long lines in pop-up windows (help `?`, reports) lost their column
+  alignment when wrapped. Spacing is now kept and continuation lines line up
+  under the description. The help screen was reflowed to fit without wrapping.
+- Docs: README shows real screenshots of the app instead of an ASCII mockup.
+
 ## [1.11.0] - 2026-09-29
 
 - New: Excel report export. `E` on the Sites/OneDrives tab and in the findings

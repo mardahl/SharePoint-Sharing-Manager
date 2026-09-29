@@ -14,17 +14,18 @@ A portable PowerShell **terminal UI** that finds and revokes unwanted sharing ac
 
 Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest), extract, double-click `Launch-Sharing-Manager.bat` (or run `pwsh ./SharePoint-Sharing-Manager.ps1`), then pick an auth mode on the **Setup** tab. Full steps in [Quick start](#quick-start); full docs in the [wiki](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki).
 
-```
- SharePoint Sharing Manager  v1.11.0       ● https://contoso-my.sharepoint.com/personal/jane_contoso_com
-  1 Sites   2 OneDrives   3 Sharing   4 Setup   5 Log   6 About
- https://contoso-my.sharepoint.com/personal/jane_contoso_com   4 of 4 findings   0 selected   filter:All
- sel Category              Loc     Name                    Principal                 Status
- [ ] Anonymous link         File    Q4-Budget.xlsx          (anonymous)               -
- [ ] Guest grant            Web     personal_jane           bob@fabrikam.com          -
- [ ] EEEU grant              Library HR Documents            Everyone except external  -
- [ ] Organization link      Folder  Shared with Sales        (organization)            -
- Spc select  A all  N none  / find  F filter  R revoke selected  E export  Esc back  ? help  Q quit
-```
+![OneDrives tab: target list with Files, Storage, Findings and Status columns](docs/screenshots/targets.svg)
+
+<details>
+<summary>More screenshots</summary>
+
+![Findings for one OneDrive: anonymous, organization and guest links, guest and EEEU grants](docs/screenshots/findings.svg)
+
+![All findings across sites (G), ready for bulk revoke](docs/screenshots/aggregate.svg)
+
+</details>
+
+Screenshots use fictional demo data (contoso).
 
 ---
 

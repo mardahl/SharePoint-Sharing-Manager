@@ -13,23 +13,31 @@ function Split-TextLines {
         $indent = ''
         $m = [regex]::Match($para, '^\s+')
         if ($m.Success) { $indent = $m.Value }
-        $bodyW = [Math]::Max(8, $Width - $indent.Length)
         $rest = $para.TrimStart()
         if ($rest.Length -eq 0) { [void]$out.Add($para); continue }
-        $line = ''
-        foreach ($word in ($rest -split ' ')) {
-            while ($word.Length -gt $bodyW) {
-                # hard-break tokens longer than the line (e.g. file paths)
-                if ($line.Length -gt 0) { [void]$out.Add($indent + $line); $line = '' }
-                [void]$out.Add($indent + $word.Substring(0, $bodyW))
-                $word = $word.Substring($bodyW)
+        # Key/description rows ("  M      manage ...") hang continuation lines
+        # under the description column; plain prose hangs at the indent.
+        $hang = $indent
+        $k = [regex]::Match($para, '^\s*\S+(?: \S+)*\s{2,}(?=\S)')
+        if ($k.Success -and $k.Length -lt ($Width - 8)) { $hang = ' ' * $k.Length }
+        # Tokens keep their trailing spaces so aligned runs survive wrapping.
+        $line = $indent
+        foreach ($tok in [regex]::Split($rest, '(?<= )(?=\S)')) {
+            $word = $tok.TrimEnd()
+            $pad = $line.Trim().Length -gt 0
+            if ($pad -and ($line.Length + $word.Length) -gt $Width) {
+                [void]$out.Add($line.TrimEnd()); $line = $hang
             }
-            if ($word.Length -eq 0) { continue }
-            if ($line.Length -eq 0) { $line = $word }
-            elseif (($line.Length + 1 + $word.Length) -le $bodyW) { $line = $line + ' ' + $word }
-            else { [void]$out.Add($indent + $line); $line = $word }
+            $room = [Math]::Max(8, $Width - $line.Length)
+            while ($word.Length -gt $room) {
+                # hard-break tokens longer than the line (e.g. file paths)
+                [void]$out.Add($line + $word.Substring(0, $room))
+                $word = $word.Substring($room); $line = $hang
+                $room = [Math]::Max(8, $Width - $line.Length)
+            }
+            $line += $word + $tok.Substring($tok.TrimEnd().Length)
         }
-        if ($line.Length -gt 0) { [void]$out.Add($indent + $line) }
+        if ($line.Trim().Length -gt 0) { [void]$out.Add($line.TrimEnd()) }
     }
     return ,$out.ToArray()
 }
@@ -621,41 +629,50 @@ function Show-HelpModal {
         @($t.Row, '  Space                toggle selection on current row'),
         @($t.Row, '  A / N                select all / clear selection'),
         @($t.Row, '  /                    live search (Enter keep, Esc clear)'),
-        @($t.Row, '  F                    cycle filter All/NotScanned/Clean/Findings/Failed (+Unprovisioned on OneDrives)'),
-        @($t.Row, '  S                    scan selection                X  scan all not-yet-scanned'),
-        @($t.Row, '  T                    toggle rule categories        G  all findings (aggregate view)'),
+        @($t.Row, '  F                    filter: All/NotScanned/Clean/Findings/Failed'),
+        @($t.Row, '                       (+ Unprovisioned on OneDrives)'),
+        @($t.Row, '  S                    scan selection'),
+        @($t.Row, '  X                    scan all not-yet-scanned'),
+        @($t.Row, '  T                    toggle rule categories'),
+        @($t.Row, '  G                    all findings (aggregate view)'),
         @($t.Row, '  U                    add a URL                     I  import CSV'),
         @($t.Row, '  Enter                open target / drill into findings'),
         @($t.Row, '  R                    revoke all findings on selected targets'),
         @($t.Row, '  C                    clear the list and reload it from the tenant'),
         @($t.Row, '  L                    restore the saved scan session'),
         @($t.Row, '  E                    export current view: C = CSV, X = Excel report'),
-        @($t.Row, '  M                    manage secondary admin (OneDrives only): List is read-only'),
-        @($t.Row, '  P                    pre-provision OneDrives (OneDrives only): load users without a OneDrive, then provision selected'),
+        @($t.Row, '  M                    secondary admin (OneDrives): List is read-only'),
+        @($t.Row, '  P                    pre-provision OneDrives: load users without'),
+        @($t.Row, '                       a OneDrive, then provision the selected ones'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Findings (inside a target)'),
-        @($t.Row, '  Space / A / N        select findings                /  find     F  filter'),
-        @($t.Row, '  R                    revoke selected findings (revokes across every affected'),
-        @($t.Row, '                       site in the all-findings view, with one confirmation)'),
-        @($t.Row, '  E                    export findings to CSV         Esc  back to targets'),
+        @($t.Row, '  Space / A / N        select findings'),
+        @($t.Row, '  /  F                 find, filter'),
+        @($t.Row, '  R                    revoke selected findings (in the all-findings'),
+        @($t.Row, '                       view: across every site, one confirmation)'),
+        @($t.Row, '  E                    export: C = CSV, X = Excel report'),
+        @($t.Row, '  Esc                  back to targets'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Sharing tab'),
         @($t.Row, '  Up / Down            move between sharing settings'),
         @($t.Row, '  Enter                load posture, or change the highlighted setting'),
         @($t.Row, '  R                    refresh the sharing posture'),
-        @($t.Row, '  C                    apply CIS 7.2.x baseline (L1 or L1+L2, snapshots first)'),
+        @($t.Row, '  C                    apply CIS 7.2.x baseline (L1 or L1+L2,'),
+        @($t.Row, '                       takes a snapshot first)'),
         @($t.Row, '  Z                    revert to the last CIS snapshot'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Tenants'),
-        @($t.Row, '  T                    quick-switch tenant (all tabs except Sites/OneDrives)'),
-        @($t.Row, '  Setup tab            manage tenants: add, configure, set default, remove'),
+        @($t.Row, '  T                    quick-switch tenant (not on Sites/OneDrives)'),
+        @($t.Row, '  Setup tab            add, configure, set default, remove tenants'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Setup tab'),
         @($t.Row, '  Up / Down            move between tenants'),
         @($t.Row, '  Enter                actions for the highlighted tenant'),
         @($t.Row, '  A                    add a tenant'),
-        @($t.Row, '  D                    register delegated app         C  register cert app'),
-        @($t.Row, '  W                    renew certificate              X  edit config file'),
+        @($t.Row, '  D                    register delegated app'),
+        @($t.Row, '  C                    register cert app'),
+        @($t.Row, '  W                    renew certificate'),
+        @($t.Row, '  X                    edit config file'),
         @($t.Row, '  (Enter on a tenant also offers: remove app registration)'),
         @($t.Row, ''),
         @($t.ModalTitle, 'Log tab'),
