@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.11.0-rc.5] - 2026-09-29
+
 - Fix: `Esc` now cancels tenant enumeration (checked between server pages).
 - Fix: a failing enumeration no longer closes the app silently; the error is
   logged and shown, and `Enter` retries. Any other unhandled error is now
