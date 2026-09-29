@@ -4,15 +4,12 @@
 > directory/Graph lookup, and does not write CSV evidence or change any
 > permission.
 
-> **Limited live validation.** `Add` and `Remove` were implemented and
-> tested against mocked PnP/Graph calls; an operator has since reported a
-> successful **Add** against a live tenant using app-only auth, after the CSOM
-> `-Includes` fix in v1.9.0. **Remove**, owner-negative cases, bulk targets,
-> and delegated auth remain unverified against a live tenant. Treat Add/Remove
-> with care, review BEFORE/AFTER CSV evidence, and do not rely on them for
-> production access changes until the remaining cases are validated.
-> See `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md`
-> in the repo for the full validation matrix.
+> **Validation status.** App-only auth (`List`, `Add`, `Remove`, and bulk runs
+> targeting many OneDrives in one run) has been validated against a live tenant
+> as of v1.11.0. Delegated (interactive) auth and owner-negative cases
+> (attempting to add or remove the OneDrive owner is refused) have not yet been
+> validated against a live tenant. Review BEFORE/AFTER CSV evidence before and
+> after running in production.
 
 ## What it does
 
@@ -148,9 +145,10 @@ specific permission error; it never falls back to a partial-match lookup,
 and existing scans/revokes are unaffected. See
 [[FAQ-and-Troubleshooting]] and [[Authentication]] for recovery steps.
 
-App-only Add has one operator-reported live success (see the validation
-notice at the top of this page); Remove and delegated auth remain
-unproven against a real tenant.
+App-only auth (List, Add, Remove, and bulk runs) is validated on a live
+tenant as of v1.11.0 (see the validation notice at the top of this page);
+delegated auth and owner-negative cases have not yet been validated against a
+live tenant. Review BEFORE/AFTER CSV evidence carefully.
 
 ## Diagnostics and logging
 

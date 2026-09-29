@@ -19,7 +19,7 @@
 | Delegated mode: scan/revoke on a target | **Site Collection Admin** on that site or OneDrive |
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
-| OneDrive secondary-admin **Add/Remove** (`M`, limited validation) | App-only: `User.Read.All` (Graph, application) - new registrations only, manual re-consent for existing apps. Delegated: already covered by the default consent set, no extra role/consent needed. App-only Add has an operator-reported live success; Remove and delegated auth are not yet live-verified. `List` (`M`) needs no extra scope. See [[OneDrive-Admin-Management]]. |
+| OneDrive secondary-admin **Add/Remove** (`M`) | App-only: `User.Read.All` (Graph, application) - new registrations only, manual re-consent for existing apps. Delegated: already covered by the default consent set, no extra role/consent needed. App-only auth (List, Add, Remove, bulk runs) is live-validated as of v1.11.0; delegated auth and owner-negative cases are not yet live-validated. `List` (`M`) needs no extra scope. See [[OneDrive-Admin-Management]]. |
 
 ## App-only permissions
 

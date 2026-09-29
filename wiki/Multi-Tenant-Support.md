@@ -4,7 +4,7 @@ One install manages multiple tenants. Each tenant has its own:
 
 - Auth configuration (delegated or app-only)
 - Scan cache (`SSM-Cache/<tenant-slug>/`)
-- Exports
+- Exports (`SSM-Exports/<tenant-slug>/`)
 - Settings such as link-date lookup
 
 ## Setup tab: the tenant hub

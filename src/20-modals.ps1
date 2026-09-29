@@ -629,7 +629,7 @@ function Show-HelpModal {
         @($t.Row, '  R                    revoke all findings on selected targets'),
         @($t.Row, '  C                    clear the list and reload it from the tenant'),
         @($t.Row, '  L                    restore the saved scan session'),
-        @($t.Row, '  E                    export current view to CSV'),
+        @($t.Row, '  E                    export current view: C = CSV, X = Excel report'),
         @($t.Row, '  M                    manage secondary admin (OneDrives only): List is read-only'),
         @($t.Row, '  P                    pre-provision OneDrives (OneDrives only): load users without a OneDrive, then provision selected'),
         @($t.Row, ''),

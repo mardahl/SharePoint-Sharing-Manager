@@ -9,7 +9,7 @@
 - Cleanup does not prevent new sharing. Use the Sharing tab's hardening toggles for that (see [[Tenant-Hardening]]).
 - The SharePoint admin site URL is derived as `https://<tenant>-admin.sharepoint.com`; tenants that do not follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
 - Restored scan-cache sessions may be stale relative to the tenant's current sharing state; rescan before acting on old results. Scan-all (`X`) scans one target at a time.
-- OneDrive secondary-admin management (`M`) released in v1.9.0 with limited live validation. `List` is read-only (no permission-change confirmation, no directory/Graph lookup, no CSV evidence). Add has an operator-reported successful Add via app-only auth; Remove, owner-negative cases, bulk targets, and delegated auth are still pending live-tenant validation. Treat Add/Remove with care and review BEFORE/AFTER CSV evidence. See [[OneDrive-Admin-Management]].
+- OneDrive secondary-admin management (`M`): app-only auth (List, Add, Remove, and bulk runs) is validated on a live tenant as of v1.11.0. `List` is read-only (no permission-change confirmation, no directory/Graph lookup, no CSV evidence). Delegated auth and owner-negative cases (attempting to add or remove the OneDrive owner is refused) are still pending live-tenant validation. Review BEFORE/AFTER CSV evidence. See [[OneDrive-Admin-Management]].
 
 ## Common issues
 

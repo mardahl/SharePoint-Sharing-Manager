@@ -6,7 +6,7 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant → act
 
 - Registers an Entra app with **application** permissions `Sites.FullControl.All` (SharePoint), `Sites.FullControl.All` (Graph), and `User.Read.All` (Graph).
 - OneDrive pre-provisioning (`P`, see [[OneDrive-Pre-Provisioning]]) does not use this app for the provisioning request: the service only accepts Microsoft's SharePoint Online Management Shell client, so that step opens its own interactive SharePoint Administrator sign-in. No extra application permission enables it.
-- `User.Read.All` is requested so the OneDrive secondary-admin **Add/Remove** operations (`M`, OneDrives tab, limited validation - see [[OneDrive-Admin-Management]]) can resolve an entered UPN to an exact directory user; `List` needs no extra scope. New registrations get it automatically; the wizard shows the added scope and the reason before you confirm.
+- `User.Read.All` is requested so the OneDrive secondary-admin **Add/Remove** operations (`M`, OneDrives tab - see [[OneDrive-Admin-Management]]) can resolve an entered UPN to an exact directory user; `List` needs no extra scope. New registrations get it automatically; the wizard shows the added scope and the reason before you confirm.
 - **Existing app-only registrations made before this scope was added are not automatically changed.** The tool never PATCHes permissions onto an existing registration. If re-registering hits "already exists," the wizard's re-key path attaches a fresh certificate only - it does not add `User.Read.All`. To grant it: in the Entra portal, open the `SharePoint-Sharing-Manager` app registration → API permissions → add Microsoft Graph → Application → `User.Read.All` → grant admin consent (Global Administrator or Privileged Role Administrator).
 - Generates and uploads a **self-signed certificate valid one year**.
 - Once consented, **no per-target admin role is needed**. This removes the requirement to be Site Collection Admin on every OneDrive, which is what makes large-scale OneDrive cleanup practical.
@@ -18,7 +18,7 @@ Two modes, both registered from the **Setup** tab (`Enter` on the tenant → act
 ## Delegated interactive mode ("Register delegated app")
 
 - Registers an app for interactive sign-in (MSAL, via PnP.PowerShell) with PnP.PowerShell 3.3.0's documented **default** delegated scopes: `AllSites.FullControl`, `Group.ReadWrite.All`, `User.ReadWrite.All`, `TermStore.ReadWrite.All`. No narrower scope override is requested by this tool.
-- `User.ReadWrite.All` already exceeds what the OneDrive secondary-admin **Add/Remove** operations (`M`, limited validation - see [[OneDrive-Admin-Management]]) need for exact UPN lookup, so delegated mode needs no additional consent for those operations; `List` needs no directory scope at all.
+- `User.ReadWrite.All` already exceeds what the OneDrive secondary-admin **Add/Remove** operations (`M` - see [[OneDrive-Admin-Management]]) need for exact UPN lookup, so delegated mode needs no additional consent for those operations; `List` needs no directory scope at all.
 - The signed-in operator's permissions apply: **Site Collection Admin** on each target site/OneDrive to scan and revoke, **SharePoint Administrator** for the Sharing tab.
 - Every action is attributable to the signed-in operator in the audit log.
 - Practical for a handful of sites; painful for tenant-wide OneDrive cleanup.
@@ -39,11 +39,11 @@ Sign-in configuration lives in `~/.sharepoint-sharing-manager.json`, one entry p
 
 ## OneDrive secondary-admin auth-mode status (validation status)
 
-Neither auth mode's directory-lookup or admin-mutation behavior for the `M` feature has completed live validation. What's known so far:
+App-only auth has been validated against a live tenant as of v1.11.0. Delegated auth and owner-negative cases remain pending live validation:
 
 | Mode | Directory scope present | Live-verified? |
 |---|---|---|
-| App-only | `User.Read.All` (Graph, application) - new registrations only | Add: operator-reported success. Remove: no |
+| App-only | `User.Read.All` (Graph, application) - new registrations only | Yes (List, Add, Remove, bulk runs as of v1.11.0) |
 | Delegated | `User.ReadWrite.All` (Graph, default) | No |
 
-Graph's `Get drive` API is documented "Not supported" for application permissions in every variant, ruling it out for app-only owner reads; `List Drives` (`GET /sites/{siteId}/drives`) documents an application-permission path, and is the path covered by the operator-reported app-only Add above. The full validation matrix (Remove, owner-negative cases, delegated auth) is still pending. See [[OneDrive-Admin-Management]] and `docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md` in the repo for the full gate.
+Graph's `Get drive` API is documented "Not supported" for application permissions in every variant, ruling it out for app-only owner reads; `List Drives` (`GET /sites/{siteId}/drives`) documents an application-permission path, and is the path used by the live-validated app-only operations. Delegated auth and owner-negative cases (attempting to add or remove the OneDrive owner is refused) are still pending live-tenant validation. Review BEFORE/AFTER CSV evidence. See [[OneDrive-Admin-Management]].

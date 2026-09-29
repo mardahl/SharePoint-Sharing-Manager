@@ -16,7 +16,7 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 | [[Requirements]] | PowerShell, modules, Entra roles per task |
 | [[Authentication]] | Delegated vs app-only certificate mode |
 | [[Scanning-and-Revoking]] | Findings categories, keys, evidence CSVs |
-| [[OneDrive-Admin-Management]] | List, add, or remove secondary administrators on selected OneDrives - released in v1.9.0 with limited live validation; List is read-only, Add has an operator-reported app-only success, Remove and delegated auth are pending validation |
+| [[OneDrive-Admin-Management]] | List, add, or remove secondary administrators on selected OneDrives - app-only auth (List, Add, Remove, bulk runs) validated live as of v1.11.0; delegated auth and owner-negative cases are pending live validation |
 | [[OneDrive-Pre-Provisioning]] | Load OneDrive-licensed users with no personal site under an Unprovisioned filter and provision the selected ones (P, OneDrives tab) |
 | [[Tenant-Hardening]] | Sharing tab settings and the CIS baseline |
 | [[Multi-Tenant-Support]] | Managing several tenants from one install |
@@ -26,10 +26,10 @@ Cleaning up SharePoint/OneDrive sharing with delegated auth means being made Sit
 
 - **Pure PowerShell TUI** (VT/ANSI): no WinForms, no DLLs, works over SSH and in any VT-capable terminal
 - **PowerShell 7.4+** on Windows, macOS, Linux
-- Only dependency: [PnP.PowerShell](https://www.powershellgallery.com/packages/PnP.PowerShell) v3 (installed on demand, CurrentUser scope)
+- Required module: [PnP.PowerShell](https://www.powershellgallery.com/packages/PnP.PowerShell) v3 (installed on demand, CurrentUser scope). [ImportExcel](https://www.powershellgallery.com/packages/ImportExcel) is optional, only for the Excel report
 - **No telemetry**: the only network calls are to SharePoint Online and Microsoft Graph, triggered explicitly by the operator
 - Destructive operations sit behind typed confirmations (`REVOKE` / `APPLY` / `CIS`, case-sensitive; a wrong word keeps the prompt open, only Esc cancels), and every scan and revoke run writes BEFORE/REVOKED CSV evidence
 - License: MIT. Provided as-is. Test in a non-production tenant first.
-- **Latest stable release: v1.9.0.** OneDrive secondary-admin management (`M`) released in v1.9.0 with limited live validation; `List` is read-only, and Add has an operator-reported app-only success, but Remove and delegated auth are still pending validation - see [[OneDrive-Admin-Management]].
+- **Latest stable release: v1.11.0.** OneDrive secondary-admin management (`M`) is validated on a live tenant for app-only auth (List, Add, Remove, bulk runs); delegated auth and owner-negative cases remain pending live validation - see [[OneDrive-Admin-Management]].
 
 Source, releases, and issue tracker: [github.com/mardahl/SharePoint-Sharing-Manager](https://github.com/mardahl/SharePoint-Sharing-Manager)

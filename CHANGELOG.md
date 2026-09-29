@@ -2,56 +2,11 @@
 
 ## [Unreleased]
 
-## [1.11.0-rc.6] - 2026-09-29
-
-- Fix: tenant enumeration failed (and in rc.4 closed the app) after the last
-  page with "The property 'StorageUsageCurrent' cannot be found". Storage is
-  now read from the correct tenant property.
-
-## [1.11.0-rc.5] - 2026-09-29
-
-- Fix: `Esc` now cancels tenant enumeration (checked between server pages).
-- Fix: a failing enumeration no longer closes the app silently; the error is
-  logged and shown, and `Enter` retries. Any other unhandled error is now
-  written to the log before the app exits.
-- Fix: an empty Sites/OneDrives list shows the "Press Enter to enumerate"
-  instructions again after an enumeration that returned nothing.
-
-## [1.11.0-rc.4] - 2026-09-27
-
-- New: Files and Storage columns on the Sites/OneDrives target list and in
-  the Excel Sites sheet (`Files`, `Storage (GB)`). Storage comes from tenant
-  enumeration (no extra calls); Files is counted during the scan (folders
-  excluded). Both are kept in the session cache.
-
-## [1.11.0-rc.3] - 2026-09-26
-
-- Change: the OneDrive provisioning progress modal now says it counts
-  batches ("1 of 3 batches done") and shows the batch size and users
-  submitted so far ("14 selected users in 3 batch(es) of up to 5: 5 sent").
-
-## [1.11.0-rc.2] - 2026-09-26
-
-- Fix: `C` (clear and reload) on the OneDrives tab under the `Unprovisioned`
-  filter now reloads the unprovisioned users too, instead of showing an empty
-  list. Under any other filter, `C` resets the filter to `All`.
-- Fix: OneDrive provisioning batches reduced from 10 to 5 users; batches
-  larger than 5 failed.
-
-## [1.11.0-rc.1] - 2026-09-26
-
-- Fix: OneDrive pre-provisioning of large selections (~100 users) reported the
-  whole request as failed even though some OneDrives were created. The single
-  200-user `Request-PnPPersonalSite` call outlived the client timeout while the
-  server kept working. Requests now go in batches of 10.
-- Fix: an expired provisioning sign-in no longer fails silently (error only in
-  the log). The browser re-opens once for a fresh sign-in and the batch is
-  retried; if that fails, the summary says the sign-in expired and to press
-  `P` again.
+## [1.11.0] - 2026-09-29
 
 - New: Excel report export. `E` on the Sites/OneDrives tab and in the findings
   view now opens an export menu: `C` writes the CSV as before, `X` writes
-  `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx`
+  `SSM-Exports/<tenant>/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx`
   with a Summary sheet (KPIs, counts by category/access/status, top sites),
   a Findings sheet (site title, full path, sharing type, reach, ids) and,
   for whole-tab exports, a Sites sheet.
@@ -60,9 +15,34 @@
   Low/Medium/High/Critical bands. Scans now record items scanned per target
   and reach per finding; results restored from an older cache show `n/a`
   until rescanned.
+- New: Files and Storage columns on the Sites/OneDrives target list and in
+  the Excel Sites sheet (`Files`, `Storage (GB)`). Storage comes from tenant
+  enumeration (no extra calls); Files is counted during the scan (folders
+  excluded). Both are kept in the session cache.
 - New optional dependency: `ImportExcel` (PowerShell Gallery), installed on
   demand (CurrentUser) the first time Excel export is chosen. Declining keeps
   CSV export available.
+- Change: OneDrive secondary-admin management (`M`) List, Add, Remove and bulk
+  runs are validated on a live tenant with app-only auth. Delegated auth and
+  owner-negative cases are not yet live-validated.
+- Change: the OneDrive provisioning progress modal counts batches ("1 of 3
+  batches done") and shows the batch size and users submitted so far.
+- Fix: OneDrive pre-provisioning of large selections (~100 users) reported the
+  whole request as failed even though some OneDrives were created. Requests
+  now go in batches of 5.
+- Fix: an expired provisioning sign-in no longer fails silently. The browser
+  re-opens once for a fresh sign-in and the batch is retried; if that fails,
+  the summary says the sign-in expired and to press `P` again.
+- Fix: `C` (clear and reload) on the OneDrives tab under the `Unprovisioned`
+  filter now reloads the unprovisioned users too. Under any other filter, `C`
+  resets the filter to `All`.
+- Fix: `Esc` now cancels tenant enumeration (checked between server pages).
+- Fix: a failing enumeration no longer closes the app; the error is logged and
+  shown, and `Enter` retries. Any other unhandled error is written to the log
+  before the app exits.
+- Fix: an empty Sites/OneDrives list shows the "Press Enter to enumerate"
+  instructions again.
+- Fix: the help screen (`?`) lists the `E` export menu (CSV or Excel).
 
 ## [1.10.2] - 2026-09-21
 

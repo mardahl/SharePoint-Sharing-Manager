@@ -1,14 +1,10 @@
 # ============================================================================
 #region OneDrive secondary admin
 # ============================================================================
-# ponytail: this region's directory validation, preflight, and mutation
-# logic for secondary-admin management has only partial live confirmation
-# (an operator-reported successful Add in app-only auth after the CSOM
-# -Includes fix; Remove, owner-negative cases, bulk targets, and delegated
-# auth remain unverified - see
-# docs/superpowers/specs/2026-09-07-onedrive-admin-api-validation.md).
-# Do not enable, ship, or invoke it against a production tenant until the
-# remaining cases in that doc pass and it is updated with the result.
+# List, Add, Remove, and bulk runs are validated on a live tenant using
+# app-only auth as of v1.11.0. Delegated (interactive) auth and owner-negative
+# cases (attempting to add or remove the OneDrive owner is refused) are not
+# yet validated against a live tenant. Review BEFORE/AFTER CSV evidence.
 
 function Get-SsmFieldValue {
     # StrictMode-safe field read that works for both a hashtable (used by

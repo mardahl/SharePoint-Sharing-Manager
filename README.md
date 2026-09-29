@@ -15,8 +15,8 @@ A portable PowerShell **terminal UI** that finds and revokes unwanted sharing ac
 Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Manager/releases/latest), extract, double-click `Launch-Sharing-Manager.bat` (or run `pwsh ./SharePoint-Sharing-Manager.ps1`), then pick an auth mode on the **Setup** tab. Full steps in [Quick start](#quick-start); full docs in the [wiki](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki).
 
 ```
- SharePoint Sharing Manager  v1.0.0        ● https://contoso-my.sharepoint.com/personal/jane_contoso_com
-  1 Sites   2 OneDrives   3 Sharing   4 Setup   5 Log
+ SharePoint Sharing Manager  v1.11.0       ● https://contoso-my.sharepoint.com/personal/jane_contoso_com
+  1 Sites   2 OneDrives   3 Sharing   4 Setup   5 Log   6 About
  https://contoso-my.sharepoint.com/personal/jane_contoso_com   4 of 4 findings   0 selected   filter:All
  sel Category              Loc     Name                    Principal                 Status
  [ ] Anonymous link         File    Q4-Budget.xlsx          (anonymous)               -
@@ -31,7 +31,7 @@ Download the [latest release](https://github.com/mardahl/SharePoint-Sharing-Mana
 - [TL;DR](#tldr)
 - [Why](#why)
 - [Features](#features)
-- [OneDrive secondary admin (limited live validation)](#onedrive-secondary-admin-limited-live-validation)
+- [OneDrive secondary admin](#onedrive-secondary-admin)
 - [Quick start](#quick-start)
 - [Requirements](#requirements)
 - [Files the tool writes](#files-the-tool-writes)
@@ -62,34 +62,31 @@ Files and folders are never deleted and permission inheritance is never reset. "
 - **PowerShell 7.4+** on Windows, macOS, and Linux
 - **Shared scan engine**, six togglable rule categories (`T`), all enabled by default on both the Sites and OneDrives tabs
 - **Per-finding multi-select revoke** with typed `REVOKE` confirmation and BEFORE/REVOKED CSV evidence for every run
-- **Target discovery**: auto-enumerate via `Get-PnPTenantSite`, manual URL entry, or CSV import
+- **Target discovery**: auto-enumerate via `Get-PnPTenantSite` (progress shown, `Esc` cancels between pages, errors are logged and `Enter` retries), manual URL entry, or CSV import. The target list shows Title, Url, Files, Storage, Findings and Status; Storage comes from tenant enumeration, Files is counted during the scan
 - **Delegated (interactive) and app-only certificate authentication**, with a guided in-app setup wizard including 1-year certificate issuance and renewal
 - **Sharing tab**: current sharing posture (`Get-PnPTenant`) plus hardening setters (`Set-PnPTenant`) behind typed confirmation
 - **Search** (`/` live filter), category filter, multi-select, sorting
-- **CSV export** of any view, **Excel report** (`E` → `X`) with summary, detailed findings and a heuristic Copilot exposure score; CSV import of target URLs
+- **CSV export** of any view, **Excel report** (`E` → `X`, needs the optional `ImportExcel` module) with Summary, Findings and Sites sheets and a heuristic Copilot exposure score; CSV import of target URLs
 - **Timestamped log file** plus an in-app log viewer
 - **Per-site failure isolation** - a site that will not connect or scan is logged and the run continues
 - **Persistent scan cache with manual restore** - scan results survive a restart and can be reloaded on demand
 - **Bulk revocation across drives and across the full findings list** - revoke every finding on a set of selected targets, or every finding in the aggregate view, in one confirmed pass
 - **Multi-tenant** - manage multiple tenants from one install, switch between them (`T`), each with its own auth, scan cache, and exports; legacy single-tenant config migrates automatically
 - **Sharing-link age** (optional, per tenant) - Setup > tenant > "Enable link-date lookup" makes scans also fetch each link's Created date via CSOM (slower; one extra call per shared item). Shown as a Created column in the findings view and in CSV exports - useful when deciding whether an old link is safe to revoke
-- **OneDrive secondary-admin management** (`M`, OneDrives tab only, released in v1.9.0 with limited live validation) - list, add, or remove the tenant's *secondary* site-collection-admin role on selected OneDrives. **List** is read-only (no confirmation, no UPN entry, no directory lookup, no `User.Read.All` requirement, no permission change) and shows every current site collection admin per selected OneDrive as-is. Add/Remove require typed confirmation and write BEFORE/AFTER CSV evidence. **Add/Remove validation**: an operator has reported a successful Add via app-only auth; Remove, owner-negative cases, bulk targets, and delegated auth are still unverified - see [Caveats](#caveats) and [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) before relying on them.
-- **OneDrive pre-provisioning** (`P`, OneDrives tab only) - loads enabled member users with a SharePoint service plan but no personal site as rows under an `Unprovisioned` filter (never shown under `All`); select the ones you want, press `P`, type `PROVISION`, and only those are submitted via `Request-PnPPersonalSite` (batches of 5). Provisioning completes asynchronously on the service side. See [OneDrive-Pre-Provisioning](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Pre-Provisioning).
+- **OneDrive secondary-admin management** (`M`, OneDrives tab only) - list, add, or remove the tenant's *secondary* site-collection-admin role on selected OneDrives. **List** is read-only (no confirmation, no UPN entry, no directory lookup, no `User.Read.All` requirement, no permission change) and shows every current site collection admin per selected OneDrive as-is. Add/Remove require typed confirmation and write BEFORE/AFTER CSV evidence. **Validation status**: List, Add, Remove, and bulk runs are validated on a live tenant using app-only auth as of v1.11.0; delegated auth and owner-negative cases (refusing to add/remove the OneDrive owner) are not yet live-validated - see [Caveats](#caveats) and [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management).
+- **OneDrive pre-provisioning** (`P`, OneDrives tab only) - loads enabled member users with a SharePoint service plan but no personal site as rows under an `Unprovisioned` filter (never shown under `All`); select the ones you want, press `P`, type `PROVISION`, and only those are submitted via `Request-PnPPersonalSite` (batches of 5; the provisioning sign-in is renewed once if it expires mid-run). Provisioning completes asynchronously on the service side. See [OneDrive-Pre-Provisioning](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Pre-Provisioning).
 
-## OneDrive secondary admin (limited live validation)
+## OneDrive secondary admin
 
-> The whole feature (`List`, `Add`, `Remove`) was released in v1.9.0 with
-> limited live validation. **List** is read-only and does not change any
-> permission - it makes no UPN entry, confirmation, CSV evidence, or directory
+> **List**, **Add**, **Remove**, and bulk runs are validated on a live tenant
+> using app-only auth as of v1.11.0. **List** is read-only and does not change
+> any permission - it makes no UPN entry, confirmation, CSV evidence, or directory
 > (`User.Read.All`) lookup, only reading existing site collection admin
-> membership on selected OneDrives. **Add** and **Remove** additionally
-> require live-tenant validation: an operator has reported a successful
-> Add against a live tenant using app-only auth after the CSOM `-Includes`
-> fix; Remove, owner-negative cases, bulk targets, and delegated auth remain
-> unverified. Testing is limited, not complete - do not rely on this feature
-> for production access changes until the remaining cases are validated.
-> Review BEFORE/AFTER CSV evidence carefully. See the "Auth mode support" note
-> below and the full [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) wiki page.
+> membership on selected OneDrives. Delegated (interactive) auth and owner-negative
+> cases (attempting to add or remove the OneDrive owner is refused) have not yet
+> been validated against a live tenant. Review BEFORE/AFTER CSV evidence carefully.
+> See the "Auth mode support" note below and the full
+> [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management) wiki page.
 
 ```text
 Select one or more OneDrives, press M, choose List, Add, or Remove.
@@ -142,8 +139,7 @@ secondary administrator role; other access grants remain in place.
   directory-read permission beyond the scan/revoke scopes this tool already
   requests. See [Requirements](#requirements) and the
   [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication)
-  wiki page for exactly which mode(s) that has been added to and which
-  remain unverified.
+  wiki page for required scopes and auth-mode validation status.
 - **Missing consent**: if the required directory scope was never consented
   (older registration, or delegated mode's documented default doesn't
   apply), pressing `M` fails with a specific permission error - it never
@@ -184,7 +180,7 @@ Full key reference, auth trade-offs, and per-setting docs live in the [wiki](htt
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
 | OneDrive secondary-admin **List** (`M`, read-only) | Same as any other target action - no extra directory scope needed. |
-| OneDrive secondary-admin **Add/Remove** (`M`, limited validation, see [Caveats](#caveats)) | App-only mode's registration additionally requests Graph `User.Read.All` (application) for exact UPN resolution - added to new registrations by this version; existing app-only registrations need manual re-consent (guided in-app). Delegated mode's existing default consent set already covers this (`User.ReadWrite.All`); no change needed there. An operator has reported a successful Add via app-only auth; delegated auth and Remove are still unverified against a live tenant. |
+| OneDrive secondary-admin **Add/Remove** (`M`, see [Caveats](#caveats)) | App-only mode's registration additionally requests Graph `User.Read.All` (application) for exact UPN resolution - added to new registrations by this version; existing app-only registrations need manual re-consent (guided in-app). Delegated mode's existing default consent set already covers this (`User.ReadWrite.All`); no change needed there. App-only mode (List, Add, Remove, bulk runs) is live-validated as of v1.11.0; delegated auth and owner-negative cases are not yet validated against a live tenant. |
 | OneDrive pre-provisioning (`P`) | Loading the list uses the tool's normal connection. Submitting the request opens a separate browser sign-in through Microsoft's SharePoint Online Management Shell client: sign in as a **SharePoint Administrator** with a SharePoint license. The service only authorizes that first-party client for personal-site provisioning (`AllProfiles.Manage`); app-only and custom-app tokens are rejected regardless of permissions ([pnp/powershell#4329](https://github.com/pnp/powershell/issues/4329)). No extra app permission is needed. |
 
 Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/Authentication) in the wiki.
@@ -194,13 +190,15 @@ Details: [Authentication](https://github.com/mardahl/SharePoint-Sharing-Manager/
 | Location | Content |
 |---|---|
 | `SharePoint-Sharing-Manager_<timestamp>.log` | Session log (also viewable on the Log tab) |
-| `SSM-Exports/SSM_<phase>_<site>_<timestamp>.csv` | BEFORE/REVOKED evidence for each scan and revoke run |
-| `SSM-Exports/<tab>_targets_<timestamp>.csv` / `SSM-Exports/<tab>_findings_<timestamp>.csv` | View exports |
+| `SSM-Exports/<tenant-slug>/SSM_<phase>_<site>_<timestamp>.csv` | BEFORE/REVOKED evidence for each scan and revoke run |
+| `SSM-Exports/<tenant-slug>/<tab>_targets_<timestamp>.csv` / `<tab>_findings_<timestamp>.csv` | View exports (`E` → `C`) |
+| `SSM-Exports/<tenant-slug>/SSM_REPORT_<SharePoint\|OneDrive>_<site\|ALL>_<timestamp>.xlsx` | Excel report (`E` → `X`) |
+| `SSM-Exports/<tenant-slug>/SSM_ONEDRIVE_<UNPROVISIONED\|REQUESTED>_<timestamp>.csv` | OneDrive pre-provisioning lists and results |
 | `~/.sharepoint-sharing-manager.json` | Sign-in configuration - one entry per tenant, plus a default tenant name |
 | `~/.sharepoint-sharing-manager-cert/` | Self-signed certificate files for app-only mode (PFX on non-Windows) |
 | `SSM-Cache/<tenant-slug>/session.json` | Cached scan results (targets + findings) per tenant, for restore; contains directory data |
 | `SSM-Cache/README.txt` | Sensitivity notice for the cache directory |
-| `SSM-Exports/SSM_ADMIN_<BEFORE\|AFTER>_<operation-id>.csv` | BEFORE/AFTER evidence for OneDrive secondary-admin changes (see [above](#onedrive-secondary-admin-limited-live-validation)) |
+| `SSM-Exports/<tenant-slug>/SSM_ADMIN_<BEFORE\|AFTER>_<operation-id>.csv` | BEFORE/AFTER evidence for OneDrive secondary-admin changes (see [above](#onedrive-secondary-admin)) |
 
 ## Caveats
 
@@ -212,8 +210,8 @@ Known limitations:
 - Sharing links on list items outside document libraries are not handled.
 - Cleanup does not prevent new sharing - use the Sharing tab's hardening toggles for that.
 - The SharePoint admin site URL is derived from the tenant name as `https://<tenant>-admin.sharepoint.com`; tenants where the SharePoint hostname doesn't follow this pattern (vanity domains, some multi-geo setups) need the Setup tab's config editor to override `AdminUrl` manually.
-- The scan cache holds one session per install directory (`SSM-Cache/session.json`, next to the script); two installs on the same machine get independent caches. Restoring it loads whatever was scanned last, which may be stale relative to the tenant's current sharing state - rescan before acting on old results. Scan-all (`X`) scans one target at a time.
-- **OneDrive secondary-admin management (`M`) released in v1.9.0 with limited live validation.** List is read-only. An operator has reported a successful Add via app-only auth after the CSOM fix; Remove, owner-negative cases, bulk targets, and delegated auth remain unverified against a live tenant, and must not be relied on for production access changes until the remaining cases are validated. Review BEFORE/AFTER CSV evidence carefully. See [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management).
+- The scan cache holds one session per tenant per install directory (`SSM-Cache/<tenant-slug>/session.json`, next to the script); two installs on the same machine get independent caches. Restoring it loads whatever was scanned last, which may be stale relative to the tenant's current sharing state - rescan before acting on old results. Scan-all (`X`) scans one target at a time.
+- **OneDrive secondary-admin management (`M`).** App-only auth (List, Add, Remove, bulk runs) is validated on a live tenant as of v1.11.0. Delegated (interactive) auth and owner-negative cases (attempting to add or remove the OneDrive owner is refused) are not yet validated against a live tenant. Review BEFORE/AFTER CSV evidence carefully. See [OneDrive-Admin-Management](https://github.com/mardahl/SharePoint-Sharing-Manager/wiki/OneDrive-Admin-Management).
 
 ## References
 

@@ -92,7 +92,7 @@ Writes `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx
 |---|---|
 | Summary | Tool version, tenant, scope, generated time, operator; totals (findings, sites affected, items scanned, links vs direct grants, anonymous links, removed/failed/not attempted); Copilot Exposure Indicator; counts by category, access and revoke status; top 10 sites |
 | Findings | One row per finding: Site Title, Site URL, Location, Category, Sharing Type, Item Name, Full Path, Access, Shared With, Link Created, Reach (items), Revoke Status, Link Id, List Id, Item Id |
-| Sites | Whole-tab exports only: Title, URL, Status, Findings, Items Scanned, Files, Storage (GB), Exposure Score, Band |
+| Sites | Target-list and all-findings (`G`) exports only: Title, URL, Status, Findings, Items Scanned, Files, Storage (GB), Exposure Score, Band |
 
 #### Copilot Exposure Indicator
 
