@@ -94,6 +94,8 @@ Writes `SSM-Exports/SSM_REPORT_<SharePoint|OneDrive>_<site|ALL>_<timestamp>.xlsx
 | Findings | One row per finding: Site Title, Site URL, Location, Category, Sharing Type, Item Name, Full Path, Access, Shared With, Link Created, Reach (items), Revoke Status, Link Id, List Id, Item Id |
 | Sites | Target-list and all-findings (`G`) exports only: Title, URL, Status, Findings, Items Scanned, Files, Storage (GB), Exposure Score, Band |
 
+OneDrive reports (OneDrives tab) add **Owner UPN** and **Owner Object ID** (the owner's Entra ID user object id) after the URL column on the Findings and Sites sheets. The ids come from a single Graph user query at export time (one request per 999 users), which needs `User.Read.All` (see [[Requirements]]). Each OneDrive is matched on its tenant Owner first, then on the `/personal/<slug>` segment of its URL, so lists restored from the cache or imported from CSV resolve too. Cells stay blank when no unique user matches (deleted user, or two UPNs that map to the same slug). If the Graph query fails, the report is still written with blank owner columns and the message names the cause.
+
 #### Copilot Exposure Indicator
 
 A heuristic, not a Microsoft metric. Each finding is weighted by how wide its audience is (Anonymous link 5, EEEU 5, Everyone 5, Organization link 3, Guest link 2, Guest grant 2, other 1) and multiplied by its *reach*: 1 for a file or folder, the library item count for a library-level grant, the site item count for a web-level grant.

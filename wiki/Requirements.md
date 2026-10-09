@@ -20,6 +20,7 @@
 | Delegated mode: Sharing tab | **SharePoint Administrator** |
 | App-only mode | No per-target admin role needed once the app is consented |
 | OneDrive secondary-admin **Add/Remove** (`M`) | App-only: `User.Read.All` (Graph, application) - new registrations only, manual re-consent for existing apps. Delegated: already covered by the default consent set, no extra role/consent needed. App-only auth (List, Add, Remove, bulk runs) is live-validated as of v1.11.0; delegated auth and owner-negative cases are not yet live-validated. `List` (`M`) needs no extra scope. See [[OneDrive-Admin-Management]]. |
+| OneDrive Excel report owner ids (`E` → `X`, OneDrives tab) | Graph `User.Read.All`: app-only registrations created by the current setup wizard include it (older ones need it added and consented); delegated mode's default consent set covers it. Without it the report is still written, with blank owner columns. |
 
 ## App-only permissions
 
@@ -27,7 +28,7 @@ App-only mode requests **application** permissions:
 
 - `Sites.FullControl.All` (SharePoint)
 - `Sites.FullControl.All` (Graph)
-- `User.Read.All` (Graph) - for the OneDrive secondary-admin **Add/Remove** operations' exact UPN lookup (not needed for `List`); new registrations only, see [[Authentication]]
+- `User.Read.All` (Graph) - for the OneDrive secondary-admin **Add/Remove** operations' exact UPN lookup (not needed for `List`) and the owner object id columns of OneDrive Excel reports; new registrations only, see [[Authentication]]
 
 and uploads a self-signed certificate valid one year. Application Administrator can create the app registration, but admin consent for application permissions requires Global Administrator or Privileged Role Administrator. The setup wizard displays a consent URL that can be forwarded to whoever holds that role.
 

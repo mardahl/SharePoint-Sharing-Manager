@@ -46,8 +46,9 @@ Invoke-SsmTest 'Get-TenantTargets maps CSOM SiteProperties.StorageUsage (MB) to 
     function Write-SsmLog { param($Message, $Level) }
     # Shape mirrors the CSOM SiteProperties type: StorageUsage, no StorageUsageCurrent.
     function Get-SsmTenantSiteProperties { param($IncludePersonal, $Progress)
-        @([pscustomobject]@{ Url='https://x-my/personal/a'; Title='A'; Template='SPSPERS#10'; LockState='Unlock'; StorageUsage=2048 }) }
+        @([pscustomobject]@{ Url='https://x-my/personal/a'; Title='A'; Template='SPSPERS#10'; LockState='Unlock'; StorageUsage=2048; Owner='a@x.com' }) }
     $t = @(Get-TenantTargets -OneDrive $true)
     Assert-Equal 1 $t.Count
     Assert-Equal 2048 $t[0].StorageMB
+    Assert-Equal 'a@x.com' $t[0].Owner
 }

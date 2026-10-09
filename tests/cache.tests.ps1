@@ -9,7 +9,7 @@ Invoke-SsmTest 'Cache round-trips a target and finding' {
     }
     $srcTabs = @(
         @{ Kind='Targets'; Name='OneDrives'; Categories=[System.Collections.ArrayList]@('OrgLink')
-           Items=@(@{ Url='https://x/personal/a'; Title='a'; Template='SPSPERS'
+           Items=@(@{ Url='https://x/personal/a'; Title='a'; Template='SPSPERS'; Owner='a@x.com'
                       Status='Findings'; FindingCount=1; Findings=@($finding); Selected=$true }) }
     )
     $obj  = ConvertTo-SsmCacheObject -Tabs $srcTabs
@@ -24,6 +24,7 @@ Invoke-SsmTest 'Cache round-trips a target and finding' {
     Assert-Equal 1 @($dstTabs[0].Items).Count
     Assert-Equal 'https://x/personal/a' $dstTabs[0].Items[0].Url
     Assert-Equal 'Findings' $dstTabs[0].Items[0].Status
+    Assert-Equal 'a@x.com' $dstTabs[0].Items[0].Owner
     Assert-Equal 1 @($dstTabs[0].Items[0].Findings).Count
     Assert-Equal 'q.xlsx' $dstTabs[0].Items[0].Findings[0].Name
     Assert-Equal 'False' $dstTabs[0].Items[0].Findings[0].Selected   # reset on restore

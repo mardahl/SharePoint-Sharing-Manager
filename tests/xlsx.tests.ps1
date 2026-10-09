@@ -171,3 +171,73 @@ Invoke-SsmTest 'Export scope: target list = whole tab, findings view = current v
     Assert-Equal $true $s3.IncludeSites
 }
 
+
+Invoke-SsmTest 'Get-SsmUserIdMap: pages Graph, keys by UPN and slug, ambiguous slug -> null' {
+    $script:GraphPages = @(
+        [pscustomobject]@{ value = @([pscustomobject]@{ id = 'id-a'; userPrincipalName = 'ann@contoso.com' }); '@odata.nextLink' = 'next' },
+        [pscustomobject]@{ value = @(
+            [pscustomobject]@{ id = 'id-b1'; userPrincipalName = 'b.c@contoso.com' },
+            [pscustomobject]@{ id = 'id-b2'; userPrincipalName = 'b_c@contoso.com' }) }
+    )
+    $script:GraphCall = 0
+    function Invoke-PnPGraphMethod { param($Method, $Url, $ErrorAction) $script:GraphPages[$script:GraphCall++] }
+    $m = Get-SsmUserIdMap
+    Assert-Equal 2 $script:GraphCall
+    Assert-Equal 'id-a' $m['ANN@contoso.com'].Id
+    Assert-Equal 'id-a' $m['ann_contoso_com'].Id
+    Assert-Equal 'id-b2' $m['b_c@contoso.com'].Id
+    Assert-Equal $true ($null -eq $m['b_c_contoso_com'])
+}
+
+Invoke-SsmTest 'Resolve-SsmOwner: Owner UPN first, URL slug fallback, unresolved -> null' {
+    $a = @{ Id = 'id-a'; Upn = 'ann@contoso.com' }
+    $z = @{ Id = 'id-z'; Upn = 'zed@contoso.com' }
+    $map = @{ 'ann@contoso.com' = $a; 'ann_contoso_com' = $a; 'zed@contoso.com' = $z; 'zed_contoso_com' = $z }
+    # Owner wins over a URL slug that points elsewhere (e.g. suffixed duplicate URL).
+    $t1 = New-Target -Url 'https://c-my.sharepoint.com/personal/zed_contoso_com1' -Owner 'ann@contoso.com'
+    Assert-Equal 'id-a' (Resolve-SsmOwner -Target $t1 -Map $map).Id
+    # Cached/CSV-imported target without Owner resolves via slug.
+    $t2 = New-Target -Url 'https://c-my.sharepoint.com/personal/zed_contoso_com/'
+    Assert-Equal 'id-z' (Resolve-SsmOwner -Target $t2 -Map $map).Id
+    $t3 = New-Target -Url 'https://c-my.sharepoint.com/personal/nobody_contoso_com'
+    Assert-Equal $true ($null -eq (Resolve-SsmOwner -Target $t3 -Map $map))
+    Assert-Equal $true ($null -eq (Resolve-SsmOwner -Target $t2 -Map @{}))
+}
+
+Invoke-SsmTest 'Report rows: OwnerMap adds Owner UPN / Owner Object ID after Site URL' {
+    $site = 'https://c-my.sharepoint.com/personal/ann_contoso_com'
+    $t = New-Target -Url $site -Title 'Ann'
+    $f = @(New-XlsxTestFinding -Site $site -Key 'OrgLink')
+    $a = @{ Id = 'id-a'; Upn = 'ann@contoso.com' }
+    $rows = @(ConvertTo-ReportRows -Findings $f -Targets @($t) -OwnerMap @{ 'ann_contoso_com' = $a })
+    $cols = @($rows[0].PSObject.Properties.Name)
+    Assert-Equal 'Site Title,Site URL,Owner UPN,Owner Object ID,Location' (($cols | Select-Object -First 5) -join ',')
+    Assert-Equal 'id-a' $rows[0].'Owner Object ID'
+    Assert-Equal 'ann@contoso.com' $rows[0].'Owner UPN'
+    $blank = @(ConvertTo-ReportRows -Findings $f -Targets @($t) -OwnerMap @{})
+    Assert-Equal '' $blank[0].'Owner Object ID'
+    $none = @(ConvertTo-ReportRows -Findings $f -Targets @($t))
+    Assert-Equal $false ([bool]$none[0].PSObject.Properties['Owner Object ID'])
+}
+
+Invoke-SsmTest 'Export-FindingsXlsx OneDrive: owner columns on Findings and Sites sheets (skipped without ImportExcel)' {
+    if (-not (Get-Module -ListAvailable ImportExcel)) { Write-Host '  (skipped: ImportExcel not installed)'; return }
+    Import-Module ImportExcel
+    $prev = $script:ExportDir
+    $script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) ("ssm-xlsx-{0}" -f [guid]::NewGuid())
+    try {
+        $site = 'https://c-my.sharepoint.com/personal/ann_contoso_com'
+        $t = New-Target -Url $site -Title 'Ann' -Owner 'ann@contoso.com'; $t.ItemsScanned = 10
+        $f = @(New-XlsxTestFinding -Site $site -Key 'AnonymousLink'); $t.Findings = $f
+        $map = @{ 'ann@contoso.com' = @{ Id = '11111111-2222-3333-4444-555555555555'; Upn = 'ann@contoso.com' } }
+        $p = Export-FindingsXlsx -Findings $f -Targets @($t) -TabName 'OneDrives' -ScopeLabel 'All OneDrives' -SiteTag 'ALL' -IncludeSites $true -OwnerMap $map
+        $sites = @(Import-Excel -Path $p -WorksheetName 'Sites')
+        Assert-Equal '11111111-2222-3333-4444-555555555555' $sites[0].'Owner Object ID'
+        Assert-Equal 'Title,URL,Owner UPN,Owner Object ID,Status' ((@($sites[0].PSObject.Properties.Name) | Select-Object -First 5) -join ',')
+        $fr = @(Import-Excel -Path $p -WorksheetName 'Findings')
+        Assert-Equal '11111111-2222-3333-4444-555555555555' $fr[0].'Owner Object ID'
+    } finally {
+        if (Test-Path -LiteralPath $script:ExportDir) { Remove-Item -Recurse -Force $script:ExportDir }
+        $script:ExportDir = $prev
+    }
+}

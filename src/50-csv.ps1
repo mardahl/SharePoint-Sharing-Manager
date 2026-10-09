@@ -104,9 +104,30 @@ function Invoke-ViewExport {
     $scope = Get-ExportScope -Tab $Tab
     if (@($scope.Findings).Count -eq 0) { Show-MsgModal -Title 'Export' -Lines @('No findings to report. Scan targets first (S or X).'); return }
     if (-not (Install-SsmImportExcel)) { return }
+    $ownerMap = $null; $note = @()
+    if ($Tab['OneDrive']) {
+        # OneDrive owner Entra object ids come from Graph at export time, so
+        # cached and CSV-imported lists resolve too. Failure leaves the
+        # columns blank instead of blocking the report.
+        $ownerMap = @{}
+        $title = 'Resolving OneDrive owners'
+        if (Connect-SsmAdmin) {
+            Start-LoadSpinner
+            Write-ProgressModal -Title $title -Done 0 -Total 0 -Label 'Querying Graph for users' -Ok 0 -Failed 0
+            try {
+                $ownerMap = Get-SsmUserIdMap -Progress { param($n)
+                    Write-ProgressModal -Title $title -Done $n -Total 0 -Label 'Querying Graph for users' -Ok 0 -Failed 0 }
+            } catch {
+                Write-SsmErrorLog -Context 'Excel report: Graph user query failed' -ErrorRecord $_
+                $note = @('', 'Owner Object ID column is blank: the Graph user query failed', '(needs User.Read.All). See the Log tab.')
+            } finally { Stop-LoadSpinner }
+        } else {
+            $note = @('', 'Owner Object ID column is blank: no tenant connection.')
+        }
+    }
     try {
-        $path = Export-FindingsXlsx -Findings $scope.Findings -Targets $scope.Targets -TabName $Tab['Name'] -ScopeLabel $scope.ScopeLabel -SiteTag $scope.SiteTag -IncludeSites $scope.IncludeSites
-        Show-MsgModal -Title 'Exported' -Lines @('Excel report written to:', $path)
+        $path = Export-FindingsXlsx -Findings $scope.Findings -Targets $scope.Targets -TabName $Tab['Name'] -ScopeLabel $scope.ScopeLabel -SiteTag $scope.SiteTag -IncludeSites $scope.IncludeSites -OwnerMap $ownerMap
+        Show-MsgModal -Title 'Exported' -Lines (@('Excel report written to:', $path) + $note)
     } catch {
         Write-SsmErrorLog -Context 'Excel report export failed' -ErrorRecord $_
         Show-MsgModal -Title 'Export failed' -Lines @($_.Exception.Message, 'See the Log tab. CSV export is still available.') -Kind Error

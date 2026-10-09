@@ -18,11 +18,12 @@ function ConvertTo-SsmCacheObject {
             $libsScanned  = 0; if ($it.Contains('LibrariesScanned')) { $libsScanned = [int]$it['LibrariesScanned'] }
             $filesScanned = 0; if ($it.Contains('FilesScanned')) { $filesScanned = [int]$it['FilesScanned'] }
             $storageMB    = 0; if ($it.Contains('StorageMB')) { $storageMB = [long]$it['StorageMB'] }
+            $owner        = ''; if ($it.Contains('Owner')) { $owner = [string]$it['Owner'] }
             $items.Add([ordered]@{
                 Url = $it.Url; Title = $it.Title; Template = $it.Template
                 Status = $it.Status; FindingCount = $it.FindingCount
                 ItemsScanned = $itemsScanned; LibrariesScanned = $libsScanned
-                FilesScanned = $filesScanned; StorageMB = $storageMB
+                FilesScanned = $filesScanned; StorageMB = $storageMB; Owner = $owner
                 Findings = @($it.Findings)
             })
         }
@@ -59,11 +60,12 @@ function ConvertFrom-SsmCacheObject {
             $scannedFiles = 0; $storageMB = [long]0
             if ($ci.PSObject.Properties['FilesScanned']) { $scannedFiles = [int]$ci.FilesScanned }
             if ($ci.PSObject.Properties['StorageMB']) { $storageMB = [long]$ci.StorageMB }
+            $owner = ''; if ($ci.PSObject.Properties['Owner']) { $owner = [string]$ci.Owner }
             $items.Add(@{
                 Url = $ci.Url; Title = $ci.Title; Template = $ci.Template
                 Status = $ci.Status; FindingCount = $ci.FindingCount
                 ItemsScanned = $scannedItems; LibrariesScanned = $scannedLibs
-                FilesScanned = $scannedFiles; StorageMB = $storageMB
+                FilesScanned = $scannedFiles; StorageMB = $storageMB; Owner = $owner
                 Findings = $findings.ToArray(); Selected = $false
             })
         }

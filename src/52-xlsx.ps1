@@ -114,11 +114,65 @@ function Get-ReportFileName {
     return ("SSM_REPORT_{0}_{1}_{2}.xlsx" -f $kind, $SiteTag, (Get-Date -Format 'yyyyMMdd-HHmmss'))
 }
 
+function Get-SsmUserIdMap {
+    # Directory users for the OneDrive report's owner columns. Keys: UPN and
+    # personal-site slug (user_contoso_com), both case-insensitive; value
+    # @{ Id; Upn }. A slug shared by two users maps to $null (ambiguous).
+    # One Graph request per 999 users; needs User.Read.All. Throws on failure.
+    param([scriptblock]$Progress)
+    $map = @{}
+    $url = "users?`$select=id,userPrincipalName&`$top=999"
+    $n = 0
+    do {
+        $resp = Invoke-PnPGraphMethod -Method Get -Url $url -ErrorAction Stop
+        $items = @()
+        if ($resp.PSObject.Properties['value']) { $items = @($resp.value) }
+        foreach ($u in $items) {
+            $upn = [string]$u.userPrincipalName
+            if (-not $upn) { continue }
+            $entry = @{ Id = [string]$u.id; Upn = $upn }
+            $map[$upn] = $entry
+            $slug = ConvertTo-SsmPersonalSlug -Upn $upn
+            $map[$slug] = if ($map.ContainsKey($slug)) { $null } else { $entry }
+        }
+        $n += $items.Count
+        $url = if ($resp.PSObject.Properties['@odata.nextLink']) { [string]$resp.'@odata.nextLink' } else { $null }
+        if ($Progress) { & $Progress $n }
+    } while ($url)
+    Write-SsmLog -Message ("Excel report: {0} directory users loaded for OneDrive owner ids." -f $n)
+    return $map
+}
+
+function Resolve-SsmOwner {
+    # OneDrive owner from a Get-SsmUserIdMap map: the enumerated Owner UPN
+    # first, then the /personal/<slug> segment of the URL. $null if unresolved.
+    param($Target, [hashtable]$Map)
+    if (-not $Target -or -not $Map) { return $null }
+    foreach ($k in @('Owner', 'Upn')) {
+        $v = if ($Target.Contains($k)) { [string]$Target[$k] } else { '' }
+        if ($v -and $Map.ContainsKey($v) -and $Map[$v]) { return $Map[$v] }
+    }
+    $url = ([string]$Target.Url).TrimEnd('/')
+    if ($url -notmatch '/personal/([^/]+)$') { return $null }
+    $slug = $Matches[1]
+    if ($Map.ContainsKey($slug)) { return $Map[$slug] }
+    return $null
+}
+
+function Add-SsmOwnerColumns {
+    # Insert 'Owner UPN' / 'Owner Object ID' at $Index of an ordered row.
+    param([System.Collections.Specialized.OrderedDictionary]$Row, [int]$Index, $Owner)
+    $Row.Insert($Index, 'Owner UPN', $(if ($Owner) { [string]$Owner.Upn } else { '' }))
+    $Row.Insert($Index + 1, 'Owner Object ID', $(if ($Owner) { [string]$Owner.Id } else { '' }))
+}
+
 function ConvertTo-ReportRows {
     # Findings sheet rows. Richer than the CSV: title, sharing type, reach, ids.
-    param([object[]]$Findings, [object[]]$Targets)
+    # -OwnerMap (OneDrive reports): adds Owner UPN / Owner Object ID after Site URL.
+    param([object[]]$Findings, [object[]]$Targets, [hashtable]$OwnerMap)
     $titleByUrl = @{}
-    foreach ($t in @($Targets)) { if ($t) { $titleByUrl[[string]$t.Url] = [string]$t.Title } }
+    $targetByUrl = @{}
+    foreach ($t in @($Targets)) { if ($t) { $titleByUrl[[string]$t.Url] = [string]$t.Title; $targetByUrl[[string]$t.Url] = $t } }
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($f in @($Findings)) {
         if (-not $f) { continue }
@@ -130,7 +184,7 @@ function ConvertTo-ReportRows {
         $reach = 1
         $p = $f.PSObject.Properties['Reach']
         if ($p -and $null -ne $p.Value) { $reach = [int]$p.Value }
-        $rows.Add([pscustomobject]@{
+        $row = [ordered]@{
             'Site Title'    = $title
             'Site URL'      = $site
             'Location'      = [string]$f.Location
@@ -146,7 +200,12 @@ function ConvertTo-ReportRows {
             'Link Id'       = [string]$f.LinkId
             'List Id'       = [string]$f.ListId
             'Item Id'       = [string]$f.ItemId
-        })
+        }
+        if ($null -ne $OwnerMap) {
+            $tgt = if ($targetByUrl.ContainsKey($site)) { $targetByUrl[$site] } else { @{ Url = $site } }
+            Add-SsmOwnerColumns -Row $row -Index 2 -Owner (Resolve-SsmOwner -Target $tgt -Map $OwnerMap)
+        }
+        $rows.Add([pscustomobject]$row)
     }
     return $rows.ToArray()
 }
@@ -155,7 +214,10 @@ function Export-FindingsXlsx {
     # Three sheets: Summary (KPIs + exposure indicator), Findings (table), Sites (whole-tab only).
     # Temp file (.tmp.xlsx, ImportExcel requires an .xlsx extension) + Move-Item so a
     # failed write never leaves a half workbook at the final path.
-    param([object[]]$Findings, [object[]]$Targets, [string]$TabName, [string]$ScopeLabel, [string]$SiteTag, [bool]$IncludeSites)
+    # -OwnerMap (OneDrive reports, from Get-SsmUserIdMap): adds Owner UPN and
+    # Owner Object ID columns to the Findings and Sites sheets. An empty map
+    # still adds the columns (blank) so the layout does not depend on Graph.
+    param([object[]]$Findings, [object[]]$Targets, [string]$TabName, [string]$ScopeLabel, [string]$SiteTag, [bool]$IncludeSites, [hashtable]$OwnerMap)
     if (-not (Test-Path -LiteralPath $script:ExportDir)) { New-Item -ItemType Directory -Path $script:ExportDir -Force | Out-Null }
     $path = Join-Path $script:ExportDir (Get-ReportFileName -TabName $TabName -SiteTag $SiteTag)
     $tmp = [IO.Path]::ChangeExtension($path, '.tmp.xlsx')
@@ -214,7 +276,7 @@ function Export-FindingsXlsx {
         Close-ExcelPackage $pkg
 
         # --- Findings sheet ------------------------------------------------
-        ConvertTo-ReportRows -Findings $Findings -Targets $Targets |
+        ConvertTo-ReportRows -Findings $Findings -Targets $Targets -OwnerMap $OwnerMap |
             Export-Excel -Path $tmp -WorksheetName 'Findings' -TableName 'Findings' -TableStyle Medium2 -AutoSize -FreezeTopRow -AutoFilter
 
         # --- Sites sheet (whole-tab export only) ---------------------------
@@ -225,12 +287,14 @@ function Export-FindingsXlsx {
                 $te = Get-ExposureScore -Findings $tf -ItemsScanned ([int]$t.ItemsScanned)
                 $files = 0; if ($t.Contains('FilesScanned')) { $files = [int]$t.FilesScanned }
                 $mb = [long]0; if ($t.Contains('StorageMB')) { $mb = [long]$t.StorageMB }
-                [pscustomobject]@{
+                $row = [ordered]@{
                     'Title' = [string]$t.Title; 'URL' = [string]$t.Url; 'Status' = [string]$t.Status
                     'Findings' = $tf.Count; 'Items Scanned' = [int]$t.ItemsScanned
                     'Files' = $files; 'Storage (GB)' = [Math]::Round($mb / 1024, 2)
                     'Exposure Score' = $te.Score; 'Band' = $te.Band
                 }
+                if ($null -ne $OwnerMap) { Add-SsmOwnerColumns -Row $row -Index 2 -Owner (Resolve-SsmOwner -Target $t -Map $OwnerMap) }
+                [pscustomobject]$row
             }
             @($siteRows) | Export-Excel -Path $tmp -WorksheetName 'Sites' -TableName 'Sites' -TableStyle Medium2 -AutoSize -FreezeTopRow -AutoFilter
         }

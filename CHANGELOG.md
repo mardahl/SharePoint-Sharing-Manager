@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- New: OneDrive Excel reports (`E` → `X` on the OneDrives tab) add `Owner UPN`
+  and `Owner Object ID` (Entra ID user object id) columns after the URL on the
+  Findings and Sites sheets. Ids come from one Graph user query at export time
+  (one request per 999 users, needs `User.Read.All`), matched on the
+  enumerated OneDrive owner and, failing that, on the `/personal/<slug>` URL
+  segment, so cached and CSV-imported lists resolve too. If the query fails
+  the columns stay blank and the export still completes. Tenant enumeration
+  now keeps each site's Owner in the target list and session cache.
+
 - Fix: long lines in pop-up windows (help `?`, reports) lost their column
   alignment when wrapped. Spacing is now kept and continuation lines line up
   under the description. The help screen was reflowed to fit without wrapping.
