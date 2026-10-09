@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.12.0-rc.1] - 2026-10-09
+
 - New: OneDrive Excel reports (`E` → `X` on the OneDrives tab) add `Owner UPN`
   and `Owner Object ID` (Entra ID user object id) columns after the URL on the
   Findings and Sites sheets. Ids come from one Graph user query at export time
