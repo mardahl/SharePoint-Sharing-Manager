@@ -23,6 +23,14 @@ Invoke-SsmTest 'Add-TargetsToTab dedupes by URL' {
     Add-TargetsToTab -Tab $tab -Targets @((New-Target -Url 'https://a'), (New-Target -Url 'https://a/'), (New-Target -Url 'https://b'))
     Assert-Equal 2 @($tab.Items).Count
 }
+Invoke-SsmTest 'Add-TargetsToTab ignores the empty result of a failed enumeration' {
+    # Get-TenantTargets returns nothing when the admin connection fails; a function
+    # that emits nothing binds to a parameter as $null, and @($null) has one element.
+    $tab = @{ Items = @(); View = @(); Cursor = 0; Search=''; Filter='All'; SortCol='Url'; SortDesc=$false }
+    $none = & { return @() }
+    Add-TargetsToTab -Tab $tab -Targets $none
+    Assert-Equal 0 @($tab.Items).Count
+}
 Invoke-SsmTest 'Add-TargetsToTab clears the from-cache marker' {
     $tab = @{ Items = @(); View = @(); Cursor = 0; Search=''; Filter='All'; SortCol='Url'; SortDesc=$false; CachedAt='2026-01-01T00:00:00' }
     Add-TargetsToTab -Tab $tab -Targets @((New-Target -Url 'https://a'))

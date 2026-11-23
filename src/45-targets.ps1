@@ -34,6 +34,9 @@ function Add-TargetsToTab {
     foreach ($t in @($Tab['Items'])) { $known[$t.Url.TrimEnd('/')] = $true }
     $items = [System.Collections.ArrayList]@($Tab['Items'])
     foreach ($t in @($Targets)) {
+        # A failed enumeration emits nothing, which binds here as $null and
+        # @($null) is a one-element array.
+        if (-not $t) { continue }
         $key = $t.Url.TrimEnd('/')
         if (-not $key -or $known.ContainsKey($key)) { continue }
         $known[$key] = $true

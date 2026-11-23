@@ -97,6 +97,47 @@ Invoke-SsmTest 'Add-SsmKeyCredentialToApp sends base64 DER, keeps existing keys'
     Assert-Equal 'REVJQg==' $body.keyCredentials[1].key
 }
 
+# Root cause under test: New-PnPAzureCertificate only writes the PFX file. On Windows the
+# config stores a Thumbprint (CertPath cleared), so the cert must be in CurrentUser\My
+# or Connect-PnPOnline fails with "Cannot find certificate with this thumbprint".
+$script:StoreImports = @()
+function Import-SsmPfxToStore { param([string]$PfxPath) $script:StoreImports += $PfxPath }
+
+Invoke-SsmTest 'Add-SsmCertToExistingApp on Windows imports the new PFX into the cert store' {
+    Reset-AdoptState
+    $script:IsWin = $true
+    $script:StoreImports = @()
+    try {
+        Add-SsmCertToExistingApp -Tenant 't.onmicrosoft.com'
+        Assert-Equal 1 @($script:StoreImports).Count
+        Assert-Equal 'SharePoint-Sharing-Manager-t.pfx' (Split-Path $script:StoreImports[0] -Leaf)
+        Assert-Equal 'THUMB123' $script:Auth.Thumbprint
+    } finally { $script:IsWin = $false }
+}
+
+Invoke-SsmTest 'Add-SsmCertToExistingApp off Windows keeps the PFX path and skips the store' {
+    Reset-AdoptState
+    $script:StoreImports = @()
+    Add-SsmCertToExistingApp -Tenant 't.onmicrosoft.com'
+    Assert-Equal 0 @($script:StoreImports).Count
+    Assert-Equal '' $script:Auth.Thumbprint
+    Assert-Equal 'SharePoint-Sharing-Manager-t.pfx' (Split-Path $script:Auth.CertPath -Leaf)
+}
+
+Invoke-SsmTest 'Update-SsmCertificate on Windows imports the renewed PFX into the cert store' {
+    Reset-AdoptState
+    $script:IsWin = $true
+    $script:Auth.AuthMode = 'AppOnly'
+    $script:Auth.ClientId = 'real-app-id-123'
+    $script:StoreImports = @()
+    try {
+        Update-SsmCertificate 6>$null
+        Assert-Equal 1 @($script:StoreImports).Count
+        Assert-Equal 'True' ((Split-Path $script:StoreImports[0] -Leaf) -like 'renewed-t-*.pfx')
+        Assert-Equal 'THUMB123' $script:Auth.Thumbprint
+    } finally { $script:IsWin = $false }
+}
+
 Invoke-SsmTest 'Add-SsmCertToExistingApp does nothing when the operator cancels' {
     Reset-AdoptState
     $script:ConfirmAnswer = $false

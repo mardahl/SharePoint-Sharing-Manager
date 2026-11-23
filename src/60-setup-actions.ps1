@@ -280,6 +280,14 @@ function Add-SsmKeyCredentialToApp {
     Invoke-RestMethod -Method Patch -Uri ("{0}/applications(appId='{1}')" -f $graph, $AppId) -Headers $headers -Body $bodyJson -ErrorAction Stop | Out-Null
 }
 
+function Import-SsmPfxToStore {
+    # New-PnPAzureCertificate only writes the PFX file. On Windows the config
+    # keeps a Thumbprint, and Connect-PnPOnline -Thumbprint needs the cert in
+    # CurrentUser\My. The generated PFX has an empty password.
+    param([Parameter(Mandatory)][string]$PfxPath)
+    Import-PfxCertificate -FilePath $PfxPath -CertStoreLocation 'Cert:\CurrentUser\My' -ErrorAction Stop | Out-Null
+}
+
 function Add-SsmCertToExistingApp {
     # Fallback when Register-PnPAzureADApp fails with "already exists": the app
     # from a previous (possibly clobbered) registration is still in Entra. Look
@@ -301,6 +309,8 @@ function Add-SsmCertToExistingApp {
         $appId = Find-SsmAppClientId -Tenant $Tenant
         Invoke-OnMainBuffer {
             $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx $pfx -OutCert ($pfx -replace '\.pfx$', '.cer')
+            # Import before uploading, so a store failure leaves no orphan key in Entra.
+            if ($script:IsWin) { Import-SsmPfxToStore -PfxPath $pfx }
             Add-SsmKeyCredentialToApp -AppId $appId -Cert $cert
             $script:RekeyThumb = [string]$cert.Thumbprint
         }
@@ -362,8 +372,10 @@ function Update-SsmCertificate {
         $outDir = Join-Path $HOME '.sharepoint-sharing-manager-cert'
         $stamp = Get-Date -Format 'yyyyMMdd'
         $slug  = ConvertTo-SsmTenantSlug -Name ($script:Auth.Tenant -replace '\.onmicrosoft\.com$', '')
+        $renewedPfx = Join-Path $outDir "renewed-$slug-$stamp.pfx"
         Invoke-OnMainBuffer {
-            $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx (Join-Path $outDir "renewed-$slug-$stamp.pfx") -OutCert (Join-Path $outDir "renewed-$slug-$stamp.cer")
+            $cert = New-PnPAzureCertificate -CommonName 'SharePoint-Sharing-Manager' -ValidYears 1 -OutPfx $renewedPfx -OutCert (Join-Path $outDir "renewed-$slug-$stamp.cer")
+            if ($script:IsWin) { Import-SsmPfxToStore -PfxPath $renewedPfx }
             Write-Host 'New certificate generated. Uploading to the app registration...' -ForegroundColor Yellow
             Connect-SsmOperatorGraph -Tenant $script:Auth.Tenant
             Add-SsmKeyCredentialToApp -AppId $script:Auth.ClientId -Cert $cert

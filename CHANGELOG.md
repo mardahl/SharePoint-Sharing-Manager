@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Fix: on Windows, re-keying an existing app and renewing the certificate saved
+  the new certificate's thumbprint but never put the certificate in
+  `CurrentUser\My`, so every connection failed with "Cannot find certificate
+  with this thumbprint in the certificate store". Both flows now import the
+  generated PFX into `CurrentUser\My` before the public key is uploaded.
+- Fix: a failed tenant enumeration (for example the admin connection could not
+  be made) crashed the app with "The property 'Url' cannot be found". The empty
+  result is now ignored.
+
 ## [1.12.0-rc.1] - 2026-10-09
 
 - New: OneDrive Excel reports (`E` → `X` on the OneDrives tab) add `Owner UPN`
