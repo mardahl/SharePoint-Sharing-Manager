@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fix: when reading a library's items failed (for example "Error while copying
+  content to a stream" on the first page of a very large library) the scan
+  logged "0 scanned, 0 with unique permissions", counted the library as
+  scanned and showed the site as `Clean`. Failed reads of an items page, a
+  permission state or a role-assignment list (site, library or item) are now
+  retried up to 3 times with a short pause; an items page is retried from the
+  last item Id it reached, never from the start of the library. If a read still
+  fails, the target is marked `Incomplete` (the failed library is named in the
+  `ERROR` log line, and no clean "0 scanned" line is written for it). Items
+  read before the failure are still checked, and a partly read library is not
+  counted in the target's library total.
 - Fix: a library whose root folder could not be read (for example "The request
   was canceled due to the configured HttpClient.Timeout of 100 seconds
   elapsing") was skipped and the site was still reported as scanned and clean.

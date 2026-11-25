@@ -113,6 +113,8 @@ $script:DefineScanStubs = {
             'Library B' = @((New-ScanItem 1 'b1.docx' $true))
         }
         RootFail  = @{}      # library title -> number of root-folder reads that still fail
+        RestFail  = [System.Collections.Generic.List[object]]::new()   # @{ Match = <regex on the URL>; Remaining = <n> }: throws while Remaining > 0
+        ItemUrls  = [System.Collections.Generic.List[string]]::new()   # every items-page request
         RootCalls = @{ 'Library A' = 0; 'Library B' = 0 }
         Sleeps    = [System.Collections.Generic.List[object]]::new()
         Log       = [System.Collections.Generic.List[string]]::new()
@@ -139,6 +141,18 @@ $script:DefineScanStubs = {
     }
     function Invoke-PnPSPRestMethod { param($Url, $Method)
         $null = $Method
+        if ($Url -match "guid'0{8}-0{4}-0{4}-0{4}-0{11}1'\)/items\?") { $script:Sim.ItemUrls.Add($Url) }
+        foreach ($rule in $script:Sim.RestFail) {
+            if ($rule.Remaining -gt 0 -and $Url -match $rule.Match) {
+                $rule.Remaining--
+                throw 'One or more errors occurred. (Error while copying content to a stream.)'
+            }
+        }
+        if ($Url -match "guid'0{8}-0{4}-0{4}-0{4}-0{11}1'\)/items\(2\)/roleassignments") {
+            return [pscustomobject]@{ value = @([pscustomobject]@{ PrincipalId = 7
+                Member = [pscustomobject]@{ LoginName = 'c:0-.f|rolemanager|spo-grid-all-users/00000000-0000-0000-0000-000000000000'; Title = 'Everyone except external users' }
+                RoleDefinitionBindings = @([pscustomobject]@{ Name = 'Read'; RoleTypeKind = 2 }) }) }
+        }
         if ($Url -match "/lists\(guid'0{8}-0{4}-0{4}-0{4}-(\d{12})'\)/items\?") {
             $title = $script:Sim.Libs[[int]$Matches[1] - 1]
             $last = [int][regex]::Match($Url, 'Id%20gt%20(\d+)').Groups[1].Value
@@ -211,4 +225,110 @@ Invoke-SsmTest 'Invoke-TabScan: an incomplete scan is never marked Clean, and ke
     Assert-Equal 'Incomplete' $some.Status
     Assert-Equal 1 $some.FindingCount
     Assert-Equal 1 @($some.Findings).Count
+}
+
+# Library A with 5001 items (two pages); items 2 and 5001 carry an anonymous link.
+function Set-ScanSimBigLibrary {
+    $items = @(1..5001 | ForEach-Object { New-ScanItem $_ "a$_.docx" ($_ -eq 2 -or $_ -eq 5001) })
+    $script:Sim.Items['Library A'] = $items
+}
+$script:LibAItems = "guid'00000000-0000-0000-0000-000000000001'\)/items\?"
+$script:LibARoot  = "guid'00000000-0000-0000-0000-000000000001'\)\?"
+
+Invoke-SsmTest 'Invoke-SiteScan: a failed items page is retried, resumes from the last Id, and finds the same items' {
+    . $script:DefineScanStubs
+    Set-ScanSimBigLibrary
+    $ref = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('AnonymousLink'))
+    Assert-Equal 3 $ref.Count 'Library A items 2 and 5001, Library B item 1'
+
+    $script:Sim.ItemUrls.Clear()
+    $script:Sim.RestFail.Add(@{ Match = "$script:LibAItems.*Id%20gt%205000"; Remaining = 1 })
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal (($ref | ForEach-Object { "$($_.Name)" } | Sort-Object) -join ',') (($out | ForEach-Object { "$($_.Name)" } | Sort-Object) -join ',')
+    Assert-Equal 0 @($t['IncompleteParts']).Count
+    Assert-Equal 2 $t.LibrariesScanned
+    Assert-Equal 5002 $t.ItemsScanned 'no item counted twice, none lost'
+    $gt = @($script:Sim.ItemUrls | ForEach-Object { [regex]::Match($_, 'Id%20gt%20(\d+)').Groups[1].Value })
+    Assert-Equal '0,5000,5000' ($gt -join ',') 'retry resumes at the last Id, not from scratch'
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: items enumeration that fails on the first page is incomplete, not a clean 0-item library' {
+    . $script:DefineScanStubs
+    $script:Sim.RestFail.Add(@{ Match = "$script:LibAItems"; Remaining = 99 })
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    $gt = @($script:Sim.ItemUrls | ForEach-Object { [regex]::Match($_, 'Id%20gt%20(\d+)').Groups[1].Value })
+    Assert-Equal '0,0,0' ($gt -join ',') 'bounded: 3 attempts'
+    Assert-Equal 1 $out.Count 'Library B is still scanned'
+    Assert-Equal 1 $t.LibrariesScanned 'the failed library is not counted as scanned'
+    $parts = @($t['IncompleteParts'])
+    Assert-Equal 1 $parts.Count
+    if ($parts[0] -notlike '*Library A*') { throw "incomplete part does not name the library: $($parts[0])" }
+    if (@($script:Sim.Log | Where-Object { $_ -match '^\[(WARN|ERROR)\]' -and $_ -match 'Library A' }).Count -lt 1) { throw "no WARN/ERROR line names the library: $($script:Sim.Log -join ' / ')" }
+    $clean = @($script:Sim.Log | Where-Object { $_ -match "0 scanned, 0 with unique permissions in 'Library A'" })
+    Assert-Equal 0 $clean.Count 'must not log a clean-looking 0 scanned result for a library that was never read'
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: failure on a later page keeps the findings read so far and marks the library incomplete' {
+    . $script:DefineScanStubs
+    Set-ScanSimBigLibrary
+    $script:Sim.RestFail.Add(@{ Match = "$script:LibAItems.*Id%20gt%205000"; Remaining = 99 })
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 2 $out.Count 'item 2 of Library A (page 1) and item 1 of Library B'
+    Assert-Equal 1 $t.LibrariesScanned
+    Assert-Equal 5001 $t.ItemsScanned 'the 5000 items of page 1 plus Library B'
+    Assert-Equal 1 @($t['IncompleteParts']).Count
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: library-level permission read that keeps failing is flagged, enumeration still runs' {
+    . $script:DefineScanStubs
+    $script:Sim.RestFail.Add(@{ Match = "$script:LibARoot.*HasUniqueRoleAssignments"; Remaining = 99 })
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink', 'EEEU'))
+    Assert-Equal 2 $t.LibrariesScanned
+    Assert-Equal 1 @($t['IncompleteParts']).Count
+    if (@($t['IncompleteParts'])[0] -notlike '*Library A*') { throw "not named: $(@($t['IncompleteParts'])[0])" }
+    Assert-Equal 3 $out.Count 'two links plus the item-level EEEU grant are still found'
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: web-level permission read that keeps failing is flagged' {
+    . $script:DefineScanStubs
+    $script:Sim.RestFail.Add(@{ Match = '/_api/web\?'; Remaining = 99 })
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    [void](Invoke-SiteScan -Target $t -Categories @('EEEU'))
+    Assert-Equal 1 @($t['IncompleteParts']).Count
+    if (@($t['IncompleteParts'])[0] -notlike '*site*') { throw "unexpected part: $(@($t['IncompleteParts'])[0])" }
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: item grant read that fails once is retried; one that keeps failing marks the target incomplete' {
+    . $script:DefineScanStubs
+    $item2 = "$script:LibAItems".Replace('/items\?', '/items\(2\)/roleassignments')
+    $cats = @('AnonymousLink', 'EEEU')
+    $ref = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories $cats)
+    Assert-Equal 3 $ref.Count 'link + EEEU grant on A2, link on B1'
+
+    $script:Sim.RestFail.Add(@{ Match = $item2; Remaining = 1 })
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories $cats)
+    Assert-Equal 3 $out.Count
+    Assert-Equal 0 @($t['IncompleteParts']).Count
+
+    $script:Sim.RestFail[0].Remaining = 99
+    $t2 = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out2 = @(Invoke-SiteScan -Target $t2 -Categories $cats)
+    Assert-Equal 1 @($t2['IncompleteParts']).Count
+    if (@($t2['IncompleteParts'])[0] -notlike '*Library A*') { throw "not named: $(@($t2['IncompleteParts'])[0])" }
+    if (@($out2 | Where-Object { $_.RemovalKind -eq 'DirectGrant' }).Count -ne 0) { throw 'grant must be missing when its read failed' }
+}
+
+Invoke-SsmTest 'Complete-SiteScan: the incomplete summary lists at most 5 parts' {
+    . $script:DefineScanStubs
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    1..8 | ForEach-Object { $t['IncompleteParts'].Add("part $_") }
+    [void](Complete-SiteScan -Target $t -Bag ([System.Collections.Generic.List[object]]::new()) -TotalItems 0 -LibCount 0 -FileCount 0)
+    $line = @($script:Sim.Log | Where-Object { $_ -match 'INCOMPLETE' })
+    Assert-Equal 1 $line.Count
+    if ($line[0] -notmatch 'part 5' -or $line[0] -match 'part 6' -or $line[0] -notmatch '\+3 more') { throw "unexpected summary: $($line[0])" }
 }

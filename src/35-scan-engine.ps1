@@ -60,9 +60,9 @@ function Invoke-SsmRetry {
     # backoff) so a transient timeout or dropped connection does not lose
     # data, then rethrow. $Action runs in the caller's scope, so it sees the
     # caller's variables as they are at each attempt.
-    param([scriptblock]$Action, [string]$What, [int]$MaxAttempts = 3)
+    param([scriptblock]$Action, [object[]]$ArgumentList, [string]$What, [int]$MaxAttempts = 3)
     for ($attempt = 1; ; $attempt++) {
-        try { return (& $Action) }
+        try { return (& $Action @ArgumentList) }
         catch {
             if ($attempt -ge $MaxAttempts) { throw }
             Write-SsmLog -Message ("{0} failed (attempt {1}/{2}), retrying: {3}" -f $What, $attempt, $MaxAttempts, $_.Exception.Message) -Level WARN
@@ -76,14 +76,16 @@ function Set-ScanIncomplete {
     # reported Incomplete and never looks like a clean scan.
     param($Target, [string]$Part, $ErrorRecord)
     $Target['IncompleteParts'].Add($Part)
-    Write-SsmErrorLog -Context ("Scan incomplete - {0} could not be checked" -f $Part) -ErrorRecord $ErrorRecord
+    Write-SsmErrorLog -Context ("Scan incomplete: {0}" -f $Part) -ErrorRecord $ErrorRecord
 }
 
 function Get-RestUnique {
-    # Read HasUniqueRoleAssignments for a securable via REST (bool).
+    # Read HasUniqueRoleAssignments for a securable via REST (bool). Retried;
+    # throws if it still fails, because $false would read as 'inherits, nothing
+    # to check' - the caller must mark the scan incomplete instead.
     param([string]$Url)
-    try { $r = Invoke-PnPSPRestMethod -Url $Url -Method Get; return [bool]$r.HasUniqueRoleAssignments }
-    catch { return $false }
+    $r = Invoke-SsmRetry -What 'Reading permission state' -ArgumentList $Url -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
+    return [bool]$r.HasUniqueRoleAssignments
 }
 
 function Get-SharingLinkInfo {
@@ -112,8 +114,9 @@ function Get-SharingLinkInfo {
 
 function Add-GrantsRest {
     # Read a roleassignments collection via REST and add bad direct grants to $Bag.
+    # Retried; throws if the read still fails (the caller marks the scan incomplete).
     param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag, [int]$Reach = 1)
-    try { $resp = Invoke-PnPSPRestMethod -Url $RaUrl -Method Get } catch { return }
+    $resp = Invoke-SsmRetry -What 'Reading role assignments' -ArgumentList $RaUrl -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
     foreach ($ra in @($resp.value)) {
         $key = Get-PrincipalCategory -Login $ra.Member.LoginName -Title $ra.Member.Title
         if (-not $key) { continue }
@@ -147,7 +150,7 @@ function Complete-SiteScan {
     foreach ($f in $Bag) { if ($f.Location -eq 'Web') { $f.Reach = $TotalItems } }
     $parts = $Target['IncompleteParts']
     if ($null -ne $parts -and @($parts).Count -gt 0) {
-        Write-SsmLog -Message ("Scan of {0} is INCOMPLETE - not fully checked: {1}" -f $Target.Url, (@($parts) -join '; ')) -Level WARN
+        Write-SsmLog -Message ("Scan of {0} is INCOMPLETE - not fully checked: {1}" -f $Target.Url, ((@($parts | Select-Object -First 5) -join '; ') + $(if (@($parts).Count -gt 5) { ' (+{0} more)' -f (@($parts).Count - 5) }))) -Level WARN
     }
     return $Bag.ToArray()
 }
@@ -170,34 +173,44 @@ function Invoke-SiteScan {
     $raSelect = "`$expand=Member,RoleDefinitionBindings&`$select=PrincipalId,Member/LoginName,Member/Title,RoleDefinitionBindings/Name,RoleDefinitionBindings/RoleTypeKind"
 
     # Web-root direct grants
-    if ($scanGrants -and (Get-RestUnique "$base/_api/web?`$select=HasUniqueRoleAssignments")) {
-        Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
-    }
+    try {
+        if ($scanGrants -and (Get-RestUnique "$base/_api/web?`$select=HasUniqueRoleAssignments")) {
+            Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
+        }
+    } catch { Set-ScanIncomplete -Target $Target -Part 'site-level permissions unreadable, direct grants on the site not checked' -ErrorRecord $_ }
 
     if (-not ($scanGrants -or $scanLinks)) { return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount -FileCount $fileCount }
 
     $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
         try { $rootUrl = Invoke-SsmRetry -What ("Reading the root folder of library '{0}'" -f $lib.Title) -Action { (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl } }
-        catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}' (root folder unreadable, library not scanned)" -f $lib.Title) -ErrorRecord $_; continue }
+        catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': root folder unreadable, library not scanned" -f $lib.Title) -ErrorRecord $_; continue }
         if ($rootUrl.Split('/')[-1] -in $script:ExcludedUrlNames) { continue }
         $listId = $lib.Id.ToString()
         $total = 0; try { $total = [int](Get-PnPProperty -ClientObject $lib -Property ItemCount) } catch {}
         Write-SsmLog -Message ("Library '{0}' (~{1} items)" -f $lib.Title, $total)
 
         # Library-root direct grants
-        if ($scanGrants -and (Get-RestUnique "$base/_api/web/lists(guid'$listId')?`$select=HasUniqueRoleAssignments")) {
-            Add-GrantsRest "$base/_api/web/lists(guid'$listId')/roleassignments?$raSelect" $site 'Library' $lib.Title $rootUrl $listId $null $Categories $bag $total
-        }
+        try {
+            if ($scanGrants -and (Get-RestUnique "$base/_api/web/lists(guid'$listId')?`$select=HasUniqueRoleAssignments")) {
+                Add-GrantsRest "$base/_api/web/lists(guid'$listId')/roleassignments?$raSelect" $site 'Library' $lib.Title $rootUrl $listId $null $Categories $bag $total
+            }
+        } catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': library-level permissions unreadable, direct grants on the library not checked" -f $lib.Title) -ErrorRecord $_ }
 
         # Enumerate items by indexed Id range, collecting only unique-permission items
         $unique = New-Object System.Collections.Generic.List[object]
         $lastId = 0
         $scanned = 0
+        $enumFailed = $false
         do {
+            # Each page is retried on its own and starts at the current $lastId,
+            # so a failed page never restarts the library from the beginning.
             $u = "$base/_api/web/lists(guid'$listId')/items?`$select=Id,FileRef,FileLeafRef,FSObjType,HasUniqueRoleAssignments&`$filter=Id%20gt%20$lastId&`$orderby=Id&`$top=5000"
-            try { $resp = Invoke-PnPSPRestMethod -Url $u -Method Get }
-            catch { Write-SsmLog -Message ("Enumeration error in '{0}': {1}" -f $lib.Title, $_.Exception.Message) -Level ERROR; break }
+            try { $resp = Invoke-SsmRetry -What ("Reading items of library '{0}' after Id {1}" -f $lib.Title, $lastId) -Action { Invoke-PnPSPRestMethod -Url $u -Method Get } }
+            catch {
+                Set-ScanIncomplete -Target $Target -Part ("library '{0}': item enumeration failed after {1} items, the rest of the library was not checked" -f $lib.Title, $scanned) -ErrorRecord $_
+                $enumFailed = $true; break
+            }
             $rows = @($resp.value)
             foreach ($r in $rows) {
                 $scanned++
@@ -207,8 +220,13 @@ function Invoke-SiteScan {
             }
             if ($Progress) { & $Progress -Count $scanned -Label ("Enumerating '{0}': {1} / ~{2} scanned" -f $lib.Title, $scanned, $total) }
         } while ($rows.Count -eq 5000)
-        Write-SsmLog -Message ("{0} scanned, {1} with unique permissions in '{2}'" -f $scanned, $unique.Count, $lib.Title)
-        $totalItems += $scanned; $libCount++
+        if ($enumFailed) {
+            Write-SsmLog -Message ("'{0}' only partly scanned: {1} items read, {2} with unique permissions (the rest of the library was not checked)" -f $lib.Title, $scanned, $unique.Count) -Level WARN
+            $totalItems += $scanned
+        } else {
+            Write-SsmLog -Message ("{0} scanned, {1} with unique permissions in '{2}'" -f $scanned, $unique.Count, $lib.Title)
+            $totalItems += $scanned; $libCount++
+        }
 
         # Check each unique-permission item: sharing links + direct grants
         $idx = 0
@@ -260,7 +278,7 @@ function Invoke-SiteScan {
                 Add-GrantsRest "$base/_api/web/lists(guid'$listId')/items($($it.Id))/roleassignments?$raSelect" $site $loc $name $fileRef $listId $it.Id $Categories $bag
             }
             } catch {
-                Write-SsmErrorLog -Context ("Skipping item {0} in '{1}' - unexpected error while checking its sharing" -f $it.Id, $lib.Title) -ErrorRecord $_
+                Set-ScanIncomplete -Target $Target -Part ("library '{0}': item {1} skipped, an error stopped its sharing check" -f $lib.Title, $it.Id) -ErrorRecord $_
             }
         }
     }
