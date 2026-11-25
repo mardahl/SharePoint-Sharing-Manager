@@ -1697,3 +1697,48 @@ Invoke-SsmTest 'Invoke-SsmOneDriveProvision aborts quietly when the admin connec
     Invoke-SsmOneDriveProvision -Tab @{ OneDrive = $true; Items = @() }
     Assert-Equal $false $script:Graphed
 }
+
+Invoke-SsmTest 'Incomplete targets: badge, Failed/Findings filters, Enter opens findings, summary line counts them' {
+    $prevT = Get-Variable -Name T -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    $prevG = Get-Variable -Name G -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    $prevUI = Get-Variable -Name UI -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    $script:T = @{ Ctx = ''; Muted = ''; Row = ''; Warn = '<W>'; Danger = '<D>'; CtxHi = ''; Cloud = ''; Good = ''; Pending = ''; CursorBg = ''; CursorFg = ''; RowDim = ''; SelMark = ''; ColHead = ''; Attention = '' }
+    $script:G = @{ Ring = 'o'; Dot = '*'; Half = '~'; Bang = '!'; Up = '^'; Down = 'v'; ChkOn = 'x'; ChkOff = '_' }
+    $script:UI = @{ Dirty = $false; SearchMode = $false; H = 24 }
+    $script:Captured = @{}
+    function Add-FrameLine { param($Sb, [int]$Row, [string]$Content) $null = $Sb; $script:Captured[$Row] = $Content }
+    $script:Entered = $null
+    function Enter-FindingsMode { param($Tab, $Target) $null = $Tab; $script:Entered = $Target.Url }
+    try {
+        $badge = Get-StatusBadge -Status 'Incomplete' -Width 15
+        if ($badge -notlike '<D>! Incomplete*') { throw "unexpected badge: $badge" }
+
+        $items = @(
+            @{ Url = 'https://x/a'; Title = 'a'; Status = 'Clean'; FindingCount = 0; Selected = $false },
+            @{ Url = 'https://x/b'; Title = 'b'; Status = 'Incomplete'; FindingCount = 0; Selected = $false },
+            @{ Url = 'https://x/c'; Title = 'c'; Status = 'Incomplete'; FindingCount = 2; Selected = $false; Findings = @(1, 2) }
+        )
+        $tab = @{ Kind = 'Targets'; Noun = 'sites'; Loaded = $true; Items = $items; Filter = 'Failed'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; Scroll = 0; View = @() }
+        Update-TabView -Tab $tab
+        Assert-Equal 2 @($tab['View']).Count 'Failed filter lists incomplete targets'
+        $tab['Filter'] = 'Findings'; Update-TabView -Tab $tab
+        Assert-Equal 1 @($tab['View']).Count 'Findings filter lists only incomplete targets that have findings'
+        Assert-Equal 'https://x/c' $tab['View'][0].Url
+
+        $k = [System.ConsoleKeyInfo]::new([char]13, [System.ConsoleKey]::Enter, $false, $false, $false)
+        Invoke-TargetsKey -Tab $tab -K $k
+        Assert-Equal 'https://x/c' $script:Entered
+        $tab['Filter'] = 'Failed'; Update-TabView -Tab $tab; $tab['Cursor'] = 0
+        $script:Entered = $null
+        Invoke-TargetsKey -Tab $tab -K $k   # first row is the incomplete one without findings
+        Assert-Equal '' ([string]$script:Entered) 'nothing to open without findings'
+
+        $tab['Filter'] = 'All'; Update-TabView -Tab $tab
+        Add-TargetsView -Sb ([System.Text.StringBuilder]::new()) -Tab $tab -W 160 -H 24
+        $line3 = $script:Captured[3] -replace '<[A-Z]>', ''
+        if ($line3 -notmatch 'scanned:1 \(1 clean, 0 with findings, 0 total findings\)') { throw "scanned summary must not count incomplete as clean: $line3" }
+        if ($line3 -notmatch 'incomplete:2') { throw "summary line does not show incomplete:2: $line3" }
+    } finally {
+        $script:T = $prevT; $script:G = $prevG; $script:UI = $prevUI
+    }
+}

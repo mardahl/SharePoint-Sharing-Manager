@@ -11,6 +11,7 @@ function New-Target {
         Status = 'NotScanned'; FindingCount = 0
         Findings = @(); Selected = $false
         ItemsScanned = 0; LibrariesScanned = 0; FilesScanned = 0
+        IncompleteParts = [System.Collections.Generic.List[string]]::new()   # session-only; Status 'Incomplete' is what persists
         StorageMB = $StorageMB; Owner = $Owner
     }
 }

@@ -91,3 +91,124 @@ Invoke-SsmTest 'Complete-SiteScan sets ItemsScanned and web Reach' {
     Assert-Equal 1 $out[1].Reach
 }
 
+
+# --- Invoke-SiteScan with stubbed PnP cmdlets ------------------------------
+# Dot-source this inside a test block: the stubs then live in that block's
+# scope and vanish with it. $script:Sim holds the scripted scenario and the
+# call log. Two libraries: 'Library A' (item 2 carries an anonymous link) and
+# 'Library B' (item 1 carries an anonymous link).
+$script:DefineScanStubs = {
+    if (-not (Get-Variable -Name RuleCategories -Scope Script -ErrorAction SilentlyContinue)) {
+        $script:RuleCategories = [ordered]@{ AnonymousLink = 'Anonymous link'; OrgLink = 'Organization link'; GuestLink = 'Guest link'; GuestGrant = 'Guest grant'; EEEU = 'EEEU grant'; Everyone = 'Everyone grant' }
+    }
+    if (-not (Get-Variable -Name ExcludedUrlNames -Scope Script -ErrorAction SilentlyContinue)) {
+        $script:ExcludedUrlNames = @('SiteAssets', 'SitePages')
+    }
+    function New-ScanItem { param([int]$Id, [string]$Leaf, [bool]$Unique = $false, [int]$Type = 0)
+        [pscustomobject]@{ Id = $Id; FileRef = "/sites/x/$Leaf"; FileLeafRef = $Leaf; FSObjType = $Type; HasUniqueRoleAssignments = $Unique } }
+    $script:Sim = @{
+        Libs      = @('Library A', 'Library B')
+        Items     = @{
+            'Library A' = @((New-ScanItem 1 'a1.docx'), (New-ScanItem 2 'a2.docx' $true), (New-ScanItem 3 'folder' $false 1))
+            'Library B' = @((New-ScanItem 1 'b1.docx' $true))
+        }
+        RootFail  = @{}      # library title -> number of root-folder reads that still fail
+        RootCalls = @{ 'Library A' = 0; 'Library B' = 0 }
+        Sleeps    = [System.Collections.Generic.List[object]]::new()
+        Log       = [System.Collections.Generic.List[string]]::new()
+    }
+    function Wait-SsmRetry { param([int]$Seconds) $script:Sim.Sleeps.Add($Seconds) }
+    function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') $script:Sim.Log.Add("[$Level] $Message") }
+    function Write-SsmErrorLog { param([string]$Context, $ErrorRecord) $script:Sim.Log.Add("[ERROR] $Context | $($ErrorRecord.Exception.Message)") }
+    function Get-PnPWeb { [pscustomobject]@{ Url = 'https://contoso.sharepoint.com/sites/x'; Title = 'Site X' } }
+    function Get-PnPList {
+        $i = 0
+        foreach ($t in $script:Sim.Libs) { $i++; [pscustomobject]@{ Title = $t; Id = [guid]("00000000-0000-0000-0000-{0:D12}" -f $i); BaseType = 'DocumentLibrary'; Hidden = $false } }
+    }
+    function Get-PnPProperty { param($ClientObject, $Property)
+        if ($Property -eq 'RootFolder') {
+            $title = $ClientObject.Title
+            $script:Sim.RootCalls[$title]++
+            if ($script:Sim.RootFail.ContainsKey($title) -and $script:Sim.RootFail[$title] -gt 0) {
+                $script:Sim.RootFail[$title]--
+                throw 'The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.'
+            }
+            return [pscustomobject]@{ ServerRelativeUrl = "/sites/x/$title" }
+        }
+        if ($Property -eq 'ItemCount') { return @($script:Sim.Items[$ClientObject.Title]).Count }
+    }
+    function Invoke-PnPSPRestMethod { param($Url, $Method)
+        $null = $Method
+        if ($Url -match "/lists\(guid'0{8}-0{4}-0{4}-0{4}-(\d{12})'\)/items\?") {
+            $title = $script:Sim.Libs[[int]$Matches[1] - 1]
+            $last = [int][regex]::Match($Url, 'Id%20gt%20(\d+)').Groups[1].Value
+            return [pscustomobject]@{ value = @($script:Sim.Items[$title] | Where-Object { $_.Id -gt $last } | Select-Object -First 5000) }
+        }
+        if ($Url -match 'HasUniqueRoleAssignments') { return [pscustomobject]@{ HasUniqueRoleAssignments = $false } }
+        return [pscustomobject]@{ value = @() }
+    }
+    function Get-PnPFileSharingLink { [CmdletBinding()] param($Identity)
+        $null = $Identity
+        @([pscustomobject]@{ Id = 'lnk'; Link = [pscustomobject]@{ Scope = 'anonymous'; Type = 'View'; WebUrl = 'https://contoso.sharepoint.com/s/x' } }) }
+    function Get-PnPFolderSharingLink { [CmdletBinding()] param($Folder) $null = $Folder; @() }
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: root-folder timeout that succeeds on retry gives the same findings as no failure' {
+    . $script:DefineScanStubs
+    $base = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $ref = @(Invoke-SiteScan -Target $base -Categories @('AnonymousLink'))
+    Assert-Equal 2 $ref.Count
+    Assert-Equal 2 $base.LibrariesScanned
+
+    $script:Sim.RootFail['Library A'] = 1
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $t['IncompleteParts'] = @('stale entry from an earlier scan')
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 2 $out.Count
+    Assert-Equal (($ref | ForEach-Object { $_.Name } | Sort-Object) -join ',') (($out | ForEach-Object { $_.Name } | Sort-Object) -join ',')
+    Assert-Equal 2 $t.LibrariesScanned
+    Assert-Equal 0 @($t['IncompleteParts']).Count 'a successful rescan clears the incomplete marker'
+    Assert-Equal 1 $script:Sim.Sleeps.Count 'one backoff pause before the retry'
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: library whose root folder keeps failing is marked incomplete and named in the log' {
+    . $script:DefineScanStubs
+    $script:Sim.RootFail['Library A'] = 99
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 3 $script:Sim.RootCalls['Library A'] 'bounded: 3 attempts, then give up'
+    Assert-Equal 2 $script:Sim.Sleeps.Count
+    Assert-Equal 1 $out.Count 'Library B is still scanned'
+    Assert-Equal 'b1.docx' $out[0].Name
+    Assert-Equal 1 $t.LibrariesScanned
+    $parts = @($t['IncompleteParts'])
+    Assert-Equal 1 $parts.Count
+    if ($parts[0] -notlike "*Library A*") { throw "incomplete part does not name the library: $($parts[0])" }
+    $hit = @($script:Sim.Log | Where-Object { $_ -match '^\[(WARN|ERROR)\]' -and $_ -match 'Library A' })
+    if ($hit.Count -lt 1) { throw "no WARN/ERROR log line names the failed library: $($script:Sim.Log -join ' / ')" }
+}
+
+Invoke-SsmTest 'Invoke-TabScan: an incomplete scan is never marked Clean, and keeps its findings' {
+    function Connect-SsmSite { param($Url) $null = $Url; $true }
+    function Write-Screen { }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Write-ProgressModal { }
+    function New-SsmProgressCallback { param($Title, $State, $CancelMode) $null = $Title, $State, $CancelMode; { } }
+    function Save-SsmCache { param([switch]$Throttle) $null = $Throttle }
+    function Export-FindingsCsv { param($Findings, $SiteUrl, $Phase) $null = $Findings, $SiteUrl, $Phase; 'x.csv' }
+    function Show-MsgModal { param($Title, $Lines, $Kind) $null = $Title, $Lines, $Kind }
+    $script:Fake = @{ 'https://x/sites/none' = @(); 'https://x/sites/some' = @([pscustomobject]@{ Name = 'f' }) }
+    function Invoke-SiteScan { param($Target, $Categories, $Progress)
+        $null = $Categories, $Progress
+        $Target['IncompleteParts'] = @("library 'Library A'")
+        return $script:Fake[$Target.Url] }
+    $none = New-Target -Url 'https://x/sites/none'; $none.Selected = $true
+    $some = New-Target -Url 'https://x/sites/some'; $some.Selected = $true
+    $tab = @{ Items = @($none, $some); Categories = @('AnonymousLink'); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @() }
+    Invoke-TabScan -Tab $tab
+    Assert-Equal 'Incomplete' $none.Status
+    Assert-Equal 'Incomplete' $some.Status
+    Assert-Equal 1 $some.FindingCount
+    Assert-Equal 1 @($some.Findings).Count
+}

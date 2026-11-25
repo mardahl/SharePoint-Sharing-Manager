@@ -43,6 +43,7 @@ function Get-StatusBadge {
         'Findings'      { $style = $t.Warn;    $glyph = [string]$g.Dot;  $text = 'Findings'   }
         'ConnectFailed' { $style = $t.Danger;  $glyph = [string]$g.Dot;  $text = 'Conn fail'  }
         'ScanFailed'    { $style = $t.Danger;  $glyph = [string]$g.Dot;  $text = 'Scan fail'  }
+        'Incomplete'    { $style = $t.Danger;  $glyph = [string]$g.Bang; $text = 'Incomplete'  }
         'Skipped'       { $style = $t.Muted;   $glyph = [string]$g.Ring; $text = 'Skipped'    }
         'Revoked'       { $style = $t.Cloud;   $glyph = [string]$g.Dot;  $text = 'Revoked'    }
         'Unprovisioned'      { $style = $t.Attention; $glyph = [string]$g.Bang; $text = 'Unprovisioned' }

@@ -35,6 +35,8 @@ A practical sequence:
 
 Per-site failure isolation: a site that will not connect or scan is logged and the run continues.
 
+**Retries and incomplete scans.** Reads that fail with a transient error (for example an HTTP timeout) are tried up to 3 times with a short pause (2 s, then 4 s). If a part of a site still cannot be read, for example a library whose root folder is unreadable, that part is skipped, the failure is logged at `ERROR` level with the library name, and the target is shown with a red `! Incomplete` status instead of `Clean`. An incomplete target is never reported as clean: it is left out of the `scanned:` summary, counted in `incomplete:N` on the status line, listed under the `Failed` filter, and kept as `Incomplete` after its findings are revoked. Findings found in the parts that could be read are kept (`Enter` opens them, and they are listed under the `Findings` filter). Select the target and press `S` to scan it again.
+
 Once anything is scanned, the status line above the target list always shows a running summary: `scanned:N (X clean, Y with findings, Z total findings)`. Per-target counts live in the Findings column; `Enter` drills into one target, `G` aggregates all findings.
 
 The target list also shows **Files** and **Storage** columns. Storage is the tenant-reported usage (`StorageUsage`, includes version history and recycle bin), filled in at enumeration with no extra calls; blank for manually added or CSV-imported targets. Files is the count of files (folders excluded) across the scanned document libraries, filled in by the scan.

@@ -78,7 +78,7 @@ function Invoke-TargetsKey {
             }
             if ($Tab['Cursor'] -lt $view.Count) {
                 $item = $view[$Tab['Cursor']]
-                if ($item.Status -eq 'Findings' -or $item.Status -eq 'Revoked') { Enter-FindingsMode -Tab $Tab -Target $item }
+                if ($item.Status -eq 'Findings' -or $item.Status -eq 'Revoked' -or ($item.Status -eq 'Incomplete' -and [int]$item.FindingCount -gt 0)) { Enter-FindingsMode -Tab $Tab -Target $item }
             }
             return
         }

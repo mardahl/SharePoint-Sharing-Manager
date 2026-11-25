@@ -45,8 +45,8 @@ function Update-TabView {
                 'Unprovisioned' { $placeholder }
                 'NotScanned'    { -not $placeholder -and $s -eq 'NotScanned' }
                 'Clean'         { -not $placeholder -and $s -eq 'Clean' }
-                'Findings'      { -not $placeholder -and ($s -eq 'Findings' -or $s -eq 'Revoked') }
-                'Failed'        { -not $placeholder -and $s -like '*Failed' }
+                'Findings'      { -not $placeholder -and ($s -eq 'Findings' -or $s -eq 'Revoked' -or ($s -eq 'Incomplete' -and [int]$it.FindingCount -gt 0)) }
+                'Failed'        { -not $placeholder -and ($s -like '*Failed' -or $s -eq 'Incomplete') }
                 default         { -not $placeholder }
             }
             if (-not $keep) { continue }
@@ -210,7 +210,7 @@ function Add-TargetsView {
     # One pass for every context-line count. Runs on every redraw (each arrow
     # key), so no pipelines here: six Where-Object passes over 15k targets
     # cost ~1.2 s per frame.
-    $selCount = 0; $doneCount = 0; $cleanCount = 0; $withFindings = 0; $totalFindings = 0; $unprov = 0
+    $selCount = 0; $doneCount = 0; $cleanCount = 0; $withFindings = 0; $totalFindings = 0; $unprov = 0; $incomplete = 0
     foreach ($it in @($Tab['Items'])) {
         if ($it.Selected) { $selCount++ }
         $s = [string]$it.Status
@@ -220,6 +220,7 @@ function Add-TargetsView {
             $totalFindings += $fc
             if ($fc -gt 0) { $withFindings++ } else { $cleanCount++ }
         } elseif ($s -eq 'Unprovisioned') { $unprov++ }
+        elseif ($s -eq 'Incomplete') { $incomplete++ }
     }
     $dir = [string]$g.Up
     if ($Tab['SortDesc']) { $dir = [string]$g.Down }
@@ -228,6 +229,7 @@ function Add-TargetsView {
     if ($doneCount -gt 0) {
         $ctx += ('   scanned:{0} ({1} clean, {2} with findings, {3} total findings)' -f (Get-CtxHi $t.Cloud $doneCount), (Get-CtxHi $t.Good $cleanCount), (Get-CtxHi $t.Warn $withFindings), (Get-CtxHi $t.Warn $totalFindings))
     }
+    if ($incomplete -gt 0) { $ctx += ('   incomplete:{0} (not fully scanned, see filter Failed)' -f (Get-CtxHi $t.Danger $incomplete)) }
     if ($unprov -gt 0) { $ctx += ('   unprovisioned:{0} (F to view)' -f (Get-CtxHi $t.Attention $unprov)) }
     if (-not [string]::IsNullOrEmpty($Tab['Search'])) { $ctx += ('   search:"' + (Get-CtxHi $t.Warn $Tab['Search']) + '"') }
     if ($Tab['CachedAt']) {
@@ -397,7 +399,8 @@ function Invoke-TabScan {
             $findings = @(Invoke-SiteScan -Target $t -Categories $cats -Progress $cb)
             $t.Findings = $findings
             $t.FindingCount = $findings.Count
-            $t.Status = if ($findings.Count -eq 0) { 'Clean' } else { 'Findings' }
+            $parts = $t['IncompleteParts']   # set by Invoke-SiteScan for anything it could not check
+            $t.Status = if ($null -ne $parts -and @($parts).Count -gt 0) { 'Incomplete' } elseif ($findings.Count -eq 0) { 'Clean' } else { 'Findings' }
             if ($findings.Count -gt 0) { [void](Export-FindingsCsv -Findings $findings -SiteUrl $t.Url -Phase 'BEFORE') }
         } catch [System.OperationCanceledException] {
             $t.Status = 'NotScanned'
@@ -530,7 +533,7 @@ function Invoke-FindingsRevoke {
     }
     [void](Export-FindingsCsv -Findings @($ft['Items']) -SiteUrl $target.Url -Phase 'REVOKED')
     $target.FindingCount = @($target.Findings | Where-Object { $_.RevokeStatus -ne 'Removed' -and $_.RevokeStatus -ne 'AlreadyRevoked' }).Count
-    if ($target.FindingCount -eq 0) { $target.Status = 'Revoked' }
+    if ($target.FindingCount -eq 0 -and $target.Status -ne 'Incomplete') { $target.Status = 'Revoked' }
     if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
     $report = @(("Removed {0} of {1}. Evidence CSV written." -f $removed, $sel.Count))
     if ($state.Cancel) { $report += 'Cancelled by operator; the remaining findings were not processed.' }
@@ -547,7 +550,7 @@ function Update-TabTargetStatuses {
         $remaining = 0
         foreach ($f in $all) { if ($f.RevokeStatus -ne 'Removed' -and $f.RevokeStatus -ne 'AlreadyRevoked') { $remaining++ } }
         $it.FindingCount = $remaining
-        if ($remaining -eq 0) { $it.Status = 'Revoked' }
+        if ($remaining -eq 0 -and $it.Status -ne 'Incomplete') { $it.Status = 'Revoked' }
     }
 }
 

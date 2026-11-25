@@ -49,6 +49,36 @@ function Get-LinkCategory {
 #region Scan engine - live (PnP-bound, no unit tests)
 # ============================================================================
 
+function Wait-SsmRetry {
+    # The backoff pause between retries (a function so tests can skip the wait).
+    param([int]$Seconds)
+    Start-Sleep -Seconds $Seconds
+}
+
+function Invoke-SsmRetry {
+    # Run a read; on failure try again (3 attempts in total, 2 s then 4 s
+    # backoff) so a transient timeout or dropped connection does not lose
+    # data, then rethrow. $Action runs in the caller's scope, so it sees the
+    # caller's variables as they are at each attempt.
+    param([scriptblock]$Action, [string]$What, [int]$MaxAttempts = 3)
+    for ($attempt = 1; ; $attempt++) {
+        try { return (& $Action) }
+        catch {
+            if ($attempt -ge $MaxAttempts) { throw }
+            Write-SsmLog -Message ("{0} failed (attempt {1}/{2}), retrying: {3}" -f $What, $attempt, $MaxAttempts, $_.Exception.Message) -Level WARN
+            Wait-SsmRetry -Seconds (2 * $attempt)
+        }
+    }
+}
+
+function Set-ScanIncomplete {
+    # Record a part of the site that could not be checked, so the target is
+    # reported Incomplete and never looks like a clean scan.
+    param($Target, [string]$Part, $ErrorRecord)
+    $Target['IncompleteParts'].Add($Part)
+    Write-SsmErrorLog -Context ("Scan incomplete - {0} could not be checked" -f $Part) -ErrorRecord $ErrorRecord
+}
+
 function Get-RestUnique {
     # Read HasUniqueRoleAssignments for a securable via REST (bool).
     param([string]$Url)
@@ -115,6 +145,10 @@ function Complete-SiteScan {
     $Target.FilesScanned = $FileCount
     $Target.LibrariesScanned = $LibCount
     foreach ($f in $Bag) { if ($f.Location -eq 'Web') { $f.Reach = $TotalItems } }
+    $parts = $Target['IncompleteParts']
+    if ($null -ne $parts -and @($parts).Count -gt 0) {
+        Write-SsmLog -Message ("Scan of {0} is INCOMPLETE - not fully checked: {1}" -f $Target.Url, (@($parts) -join '; ')) -Level WARN
+    }
     return $Bag.ToArray()
 }
 
@@ -123,6 +157,7 @@ function Invoke-SiteScan {
     param($Target, [string[]]$Categories, [scriptblock]$Progress)
     $bag = New-Object System.Collections.Generic.List[object]
     $totalItems = 0; $libCount = 0; $fileCount = 0
+    $Target['IncompleteParts'] = [System.Collections.Generic.List[string]]::new()
     $site = $Target.Url
     $grantKeys = @('GuestGrant', 'EEEU', 'Everyone')
     $linkKeys = @('AnonymousLink', 'OrgLink', 'GuestLink')
@@ -143,8 +178,8 @@ function Invoke-SiteScan {
 
     $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
-        try { $rootUrl = (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl }
-        catch { Write-SsmErrorLog -Context ("Skipping library '{0}' - could not read its root folder" -f $lib.Title) -ErrorRecord $_; continue }
+        try { $rootUrl = Invoke-SsmRetry -What ("Reading the root folder of library '{0}'" -f $lib.Title) -Action { (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl } }
+        catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}' (root folder unreadable, library not scanned)" -f $lib.Title) -ErrorRecord $_; continue }
         if ($rootUrl.Split('/')[-1] -in $script:ExcludedUrlNames) { continue }
         $listId = $lib.Id.ToString()
         $total = 0; try { $total = [int](Get-PnPProperty -ClientObject $lib -Property ItemCount) } catch {}

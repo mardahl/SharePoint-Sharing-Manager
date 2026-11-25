@@ -225,3 +225,33 @@ Invoke-SsmTest 'Invoke-BulkRevoke saves the cache with the recomputed Status, no
     Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:ExportDir -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+Invoke-SsmTest 'Revoking every finding of an incomplete target keeps it Incomplete, not Revoked' {
+    $script:Version = '9.9.9'
+    $script:CacheDir  = Join-Path ([IO.Path]::GetTempPath()) ("ssmcache-{0}" -f [guid]::NewGuid())
+    $script:CacheFile = Join-Path $script:CacheDir 'session.json'
+    $script:CacheWarning = 'test-warning'
+    $script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) ("ssmexport-{0}" -f [guid]::NewGuid())
+
+    # single-target path
+    $tab = New-SsmRevokeTestTab
+    $target = $tab['Items'][0]
+    $target.Status = 'Incomplete'
+    $script:Tabs = @($tab)
+    Enter-FindingsMode -Tab $tab -Target $target
+    Invoke-FindingsRevoke -Tab $tab
+    Assert-Equal 0 $target.FindingCount
+    Assert-Equal 'Incomplete' $target.Status
+
+    # bulk path
+    $tab2 = New-SsmRevokeTestTab
+    $target2 = $tab2['Items'][0]
+    $target2.Status = 'Incomplete'
+    $script:Tabs = @($tab2)
+    Invoke-BulkRevoke -Findings @($target2.Findings) -Tab $tab2
+    Assert-Equal 0 $target2.FindingCount
+    Assert-Equal 'Incomplete' $target2.Status
+
+    Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $script:ExportDir -Recurse -Force -ErrorAction SilentlyContinue
+}

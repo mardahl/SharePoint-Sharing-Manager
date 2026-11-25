@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fix: a library whose root folder could not be read (for example "The request
+  was canceled due to the configured HttpClient.Timeout of 100 seconds
+  elapsing") was skipped and the site was still reported as scanned and clean.
+  The read is now retried up to 3 times; if it still fails, the library is
+  named in an `ERROR` log line and the target gets a new red `Incomplete`
+  status instead of `Clean`. Incomplete targets are counted separately on the
+  status line, listed under the `Failed` filter, stay `Incomplete` after
+  revoking, and keep any findings from the parts that were read.
 - Fix: on PowerShell 7.7 every CSV export printed "Parameter
   'NoTypeInformation' is obsolete". The parameter is removed; PowerShell 7.4+
   already writes CSV files without a `#TYPE` line, so the files are unchanged.
