@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fix: when a library's item count could not be read, it silently became 0, so
+  library-level findings got a reach of 0 and understated the exposure score.
+  The read is now retried up to 3 times; if it still fails, a `WARN` line names
+  the library and the reach falls back to the number of items actually scanned.
 - Fix: during a revoke, any error message containing "Cannot find" (including
   "Cannot find certificate with this thumbprint in the certificate store")
   was recorded as `AlreadyRevoked` and counted as removed although nothing

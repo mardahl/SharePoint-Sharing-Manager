@@ -208,7 +208,14 @@ function Invoke-SiteScan {
         catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': root folder unreadable, library not scanned" -f $lib.Title) -ErrorRecord $_; continue }
         if ($rootUrl.Split('/')[-1] -in $script:ExcludedUrlNames) { continue }
         $listId = $lib.Id.ToString()
-        $total = 0; try { $total = [int](Get-PnPProperty -ClientObject $lib -Property ItemCount) } catch {}
+        # ItemCount feeds the progress text and the Reach of library-level findings
+        # (the exposure score), so a failed read must not silently become 0.
+        $total = 0; $countFailed = $false
+        try { $total = [int](Invoke-SsmRetry -What ("Reading the item count of library '{0}'" -f $lib.Title) -Action { Get-PnPProperty -ClientObject $lib -Property ItemCount }) }
+        catch {
+            $countFailed = $true
+            Write-SsmLog -Message ("Library '{0}': item count could not be read ({1}); the reach of library-level findings uses the number of items scanned instead" -f $lib.Title, $_.Exception.Message) -Level WARN
+        }
         Write-SsmLog -Message ("Library '{0}' (~{1} items)" -f $lib.Title, $total)
 
         # Library-root direct grants
@@ -241,6 +248,9 @@ function Invoke-SiteScan {
             }
             if ($Progress) { & $Progress -Count $scanned -Label ("Enumerating '{0}': {1} / ~{2} scanned" -f $lib.Title, $scanned, $total) }
         } while ($rows.Count -eq 5000)
+        if ($countFailed) {
+            foreach ($f in $bag) { if ($f.Location -eq 'Library' -and $f.ListId -eq $listId) { $f.Reach = $scanned } }
+        }
         if ($enumFailed) {
             Write-SsmLog -Message ("'{0}' only partly scanned: {1} items read, {2} with unique permissions (the rest of the library was not checked)" -f $lib.Title, $scanned, $unique.Count) -Level WARN
             $totalItems += $scanned

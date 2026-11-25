@@ -117,6 +117,8 @@ $script:DefineScanStubs = {
         ItemUrls  = [System.Collections.Generic.List[string]]::new()   # every items-page request
         LinkFail  = @{}      # item FileRef -> @{ Remaining = <n>; Make = <scriptblock returning the exception to throw> }
         LinkCalls = @{}      # item FileRef -> number of sharing-link reads
+        CountFail = 0        # number of ItemCount reads that still fail
+        LibAUnique = $false # Library A has its own permissions, with one EEEU grant
         RootCalls = @{ 'Library A' = 0; 'Library B' = 0 }
         Sleeps    = [System.Collections.Generic.List[object]]::new()
         Log       = [System.Collections.Generic.List[string]]::new()
@@ -139,7 +141,10 @@ $script:DefineScanStubs = {
             }
             return [pscustomobject]@{ ServerRelativeUrl = "/sites/x/$title" }
         }
-        if ($Property -eq 'ItemCount') { return @($script:Sim.Items[$ClientObject.Title]).Count }
+        if ($Property -eq 'ItemCount') {
+            if ($script:Sim.CountFail -gt 0) { $script:Sim.CountFail--; throw 'The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.' }
+            return 1000
+        }
     }
     function Invoke-PnPSPRestMethod { param($Url, $Method)
         $null = $Method
@@ -149,6 +154,12 @@ $script:DefineScanStubs = {
                 $rule.Remaining--
                 throw 'One or more errors occurred. (Error while copying content to a stream.)'
             }
+        }
+        if ($script:Sim.LibAUnique -and $Url -match "guid'0{8}-0{4}-0{4}-0{4}-0{11}1'\)\?.*HasUniqueRoleAssignments") { return [pscustomobject]@{ HasUniqueRoleAssignments = $true } }
+        if ($Url -match "guid'0{8}-0{4}-0{4}-0{4}-0{11}1'\)/roleassignments\?") {
+            return [pscustomobject]@{ value = @([pscustomobject]@{ PrincipalId = 8
+                Member = [pscustomobject]@{ LoginName = 'c:0-.f|rolemanager|spo-grid-all-users/00000000-0000-0000-0000-000000000000'; Title = 'Everyone except external users' }
+                RoleDefinitionBindings = @([pscustomobject]@{ Name = 'Read'; RoleTypeKind = 2 }) }) }
         }
         if ($Url -match "guid'0{8}-0{4}-0{4}-0{4}-0{11}1'\)/items\(2\)/roleassignments") {
             return [pscustomobject]@{ value = @([pscustomobject]@{ PrincipalId = 7
@@ -426,4 +437,29 @@ Invoke-SsmTest 'Invoke-SiteScan: many failing sharing-link reads in one library 
     Assert-Equal 1 $parts.Count
     if ($parts[0] -notmatch '8 items') { throw "count missing: $($parts[0])" }
     if ($parts[0] -notmatch 'first: 1, 2, 3' -or $parts[0] -match '\b4\b') { throw "id list not capped at 3: $($parts[0])" }
+}
+
+# --- ItemCount (Reach of library-level findings) ------------------------------
+Invoke-SsmTest 'Invoke-SiteScan: an ItemCount read that fails once is retried and sets the library finding Reach' {
+    . $script:DefineScanStubs
+    $script:Sim.LibAUnique = $true
+    $script:Sim.CountFail = 1
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('EEEU'))
+    $lib = @($out | Where-Object { $_.Location -eq 'Library' })
+    Assert-Equal 1 $lib.Count
+    Assert-Equal 1000 $lib[0].Reach
+    Assert-Equal 0 @($t['IncompleteParts']).Count
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: when ItemCount keeps failing the library finding gets the scanned item count, not 0, and the failure is logged' {
+    . $script:DefineScanStubs
+    $script:Sim.LibAUnique = $true
+    $script:Sim.CountFail = 99
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('EEEU'))
+    $lib = @($out | Where-Object { $_.Location -eq 'Library' })
+    Assert-Equal 1 $lib.Count
+    Assert-Equal 3 $lib[0].Reach 'Library A has 3 items'
+    if (@($script:Sim.Log | Where-Object { $_ -match '^\[WARN\]' -and $_ -match 'Library A' -and $_ -match 'item count' }).Count -lt 1) { throw "no WARN line: $($script:Sim.Log -join ' / ')" }
 }
