@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Faster scans, same results: all lists of a site, with each library's root
+  folder, item count and own-permission flag, are now read with one request
+  (paged if the site has many lists) instead of three extra calls per library.
+  Excluded system libraries (Site Assets, Site Pages and so on) no longer cost
+  any request. In a test with 2 libraries plus 1 excluded library, a site took
+  9 requests instead of 16, and a typical library took 1 request (its first
+  items page) instead of 4. If the single request fails or leaves out a value,
+  the scan falls back to the previous per-call reads for that site or library,
+  so findings, statuses and counts do not change; the `Scan stats` line shows
+  how often that happened. Every library's first items page is still read, so
+  no library is skipped because of its item count.
 - New: every scan run (`S` / `X`) now ends with one `INFO` log line, "Scan
   stats", with the number of targets, requests, wall time and requests per
   second, plus the count, total seconds, average and maximum duration for each

@@ -388,6 +388,7 @@ function Invoke-TabScan {
     if ($cats.Count -eq 0) { Show-MsgModal -Title 'Scan' -Lines @('No rule categories enabled. Press T to enable some.') -Kind Warn; return }
     $i = 0
     Start-SsmScanStats
+    $script:SsmBulkFailures = @{}   # a bulk read switched off earlier gets a fresh chance each run
     foreach ($t in $sel) {
         $i++
         $t.Status = 'Scanning'; Write-Screen

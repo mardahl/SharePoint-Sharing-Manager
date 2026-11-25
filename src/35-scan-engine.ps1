@@ -60,7 +60,14 @@ function Wait-SsmRetry {
 $script:ScanStats = $null
 
 function Start-SsmScanStats {
-    $script:ScanStats = @{ Clock = [System.Diagnostics.Stopwatch]::StartNew(); Kinds = @{} }
+    $script:ScanStats = @{ Clock = [System.Diagnostics.Stopwatch]::StartNew(); Kinds = @{}; Fallbacks = @{} }
+}
+
+function Add-SsmScanFallback {
+    # Count one use of a per-call read because the bulk read did not give the data.
+    param([string]$Kind)
+    if ($null -eq $script:ScanStats) { return }
+    $script:ScanStats.Fallbacks[$Kind] = 1 + [int]$script:ScanStats.Fallbacks[$Kind]
 }
 
 function Add-SsmScanStat {
@@ -92,8 +99,10 @@ function Write-SsmScanStats {
             $k.Total.ToString('0.0', $inv), ($k.Total / $k.Count).ToString('0.000', $inv), $k.Max.ToString('0.00', $inv),
             $(if ($k.Failed -gt 0) { ", $($k.Failed) failed" } else { '' })
     }
+    $fb = ''
+    if ($s.Fallbacks.Count -gt 0) { $fb = '; fell back to per-call reads: ' + (($s.Fallbacks.Keys | Sort-Object | ForEach-Object { '{0} {1}' -f $_, $s.Fallbacks[$_] }) -join ', ') }
     Write-SsmLog -Message ('Scan stats: {0} {1}, {2} requests in {3} s ({4} req/s); {5}' -f $Targets, $(if ($Targets -eq 1) { 'target' } else { 'targets' }),
-        $calls, $wall.ToString('0.0', $inv), $rate.ToString('0.0', $inv), ($parts -join '; ')) -Level INFO
+        $calls, $wall.ToString('0.0', $inv), $rate.ToString('0.0', $inv), (($parts -join '; ') + $fb)) -Level INFO
 }
 
 function Invoke-SsmRetry {
@@ -128,6 +137,115 @@ function Set-ScanIncomplete {
     param($Target, [string]$Part, $ErrorRecord)
     $Target['IncompleteParts'].Add($Part)
     Write-SsmErrorLog -Context ("Scan incomplete: {0}" -f $Part) -ErrorRecord $ErrorRecord
+}
+
+# Bulk reads (one REST call for a whole site / all its lists) replace several
+# per-call reads. Anything the bulk answer does not give reliably is read the
+# per-call way, exactly as before. If a bulk read fails 3 times in a row while the
+# per-call path then works, it is switched off for the rest of the run (it
+# would otherwise add a failed call, plus retries, to every site).
+$script:SsmBulkFailures = @{}
+
+function Test-SsmBulkOk {
+    param([string]$Kind)
+    return ([int]$script:SsmBulkFailures[$Kind] -lt 3)
+}
+
+function Set-SsmBulkResult {
+    param([string]$Kind, [bool]$Ok)
+    if ($Ok) { $script:SsmBulkFailures[$Kind] = 0; return }
+    $n = 1 + [int]$script:SsmBulkFailures[$Kind]
+    $script:SsmBulkFailures[$Kind] = $n
+    Add-SsmScanFallback -Kind $Kind
+    if ($n -eq 3) {
+        Write-SsmLog -Message ("The bulk '{0}' read failed 3 times in a row; it is switched off for the rest of this run and the per-call reads are used instead." -f $Kind) -Level WARN
+    }
+}
+
+function Get-SsmProp {
+    # Value of a property that may be missing (StrictMode-safe); $null when absent.
+    param($Object, [string]$Name)
+    if ($null -eq $Object) { return $null }
+    $p = $Object.PSObject.Properties[$Name]
+    if ($p) { return $p.Value }
+    return $null
+}
+
+function New-SsmLibraryDesc {
+    # Id/Title of a document library plus what is already known about it.
+    # Lib = the CSOM list object (needed only for the per-call reads); RootUrl,
+    # Total and Unique are $null when unknown, which means "read it".
+    param($Id, $Title, $Lib, $RootUrl, $Total, $Unique)
+    return [pscustomobject]@{ Id = [string]$Id; Title = [string]$Title; Lib = $Lib; RootUrl = $RootUrl; Total = $Total; Unique = $Unique }
+}
+
+function Get-SsmListObject {
+    # The CSOM list object of a library found by the bulk read (the per-call reads need it).
+    param($Desc)
+    if (-not $Desc.Lib) {
+        $Desc.Lib = Invoke-SsmRetry -Kind 'Lists' -What ("Reading library '{0}'" -f $Desc.Title) -ArgumentList $Desc.Id -Action { param($id) Get-PnPList -Identity $id }
+        if (-not $Desc.Lib) { throw ("library '{0}' not found" -f $Desc.Title) }
+    }
+    return $Desc.Lib
+}
+
+function Read-SsmBulkLibraries {
+    # All lists of the site in one (paged) REST read; returns the visible document
+    # libraries. Throws when the answer is unusable (no value, empty, or a list
+    # without Id/Title/BaseType/Hidden): membership cannot be decided, so the
+    # caller falls back to Get-PnPList for the whole site.
+    param([string]$Base)
+    $url = "$Base/_api/web/lists?`$select=Id,Title,BaseType,Hidden,ItemCount,HasUniqueRoleAssignments,RootFolder/ServerRelativeUrl&`$expand=RootFolder"
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $pages = 0
+    while ($url) {
+        if (++$pages -gt 1000) { throw 'the lists answer has more than 1000 pages' }
+        $resp = Invoke-SsmRetry -Kind 'Lists' -What 'Reading the lists' -ArgumentList $url -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
+        $vp = $null
+        if ($null -ne $resp) { $vp = $resp.PSObject.Properties['value'] }
+        if (-not $vp) { throw 'unexpected answer: no value' }
+        foreach ($r in @($vp.Value)) { if ($null -ne $r) { $rows.Add($r) } }
+        $next = Get-SsmProp $resp 'odata.nextLink'
+        $url = if ($next) { [string]$next } else { $null }
+    }
+    if ($rows.Count -eq 0) { throw 'the lists answer is empty' }
+    $out = [System.Collections.Generic.List[object]]::new()
+    foreach ($r in $rows) {
+        $guid = [guid]::Empty
+        if (-not [guid]::TryParse([string](Get-SsmProp $r 'Id'), [ref]$guid)) { throw 'a list without a valid Id' }
+        $title = Get-SsmProp $r 'Title'; $bt = Get-SsmProp $r 'BaseType'; $hidden = Get-SsmProp $r 'Hidden'
+        if ($null -eq $title -or $null -eq $bt -or $hidden -isnot [bool] -or "$bt" -notmatch '^(\d+|[A-Za-z]+)$') { throw 'a list without Title, BaseType or Hidden' }
+        if (("$bt" -ne '1' -and "$bt" -ne 'DocumentLibrary') -or $hidden) { continue }
+        $ru = Get-SsmProp (Get-SsmProp $r 'RootFolder') 'ServerRelativeUrl'
+        $rootUrl = if ($ru -is [string] -and $ru.Trim()) { $ru } else { $null }
+        $ic = Get-SsmProp $r 'ItemCount'; $total = $null; $n = 0L
+        if ($null -ne $ic -and $ic -isnot [bool] -and [long]::TryParse([string]$ic, [ref]$n) -and $n -ge 0 -and $n -le [int]::MaxValue) { $total = [int]$n }
+        $hu = Get-SsmProp $r 'HasUniqueRoleAssignments'
+        $unique = if ($hu -is [bool]) { $hu } else { $null }
+        $out.Add((New-SsmLibraryDesc -Id $guid.ToString() -Title $title -Lib $null -RootUrl $rootUrl -Total $total -Unique $unique))
+    }
+    return , $out.ToArray()
+}
+
+function Get-SsmSiteLibraries {
+    # The visible document libraries of the site (BaseType DocumentLibrary, not
+    # Hidden): from the bulk read when it works, else from Get-PnPList as before.
+    param([string]$Base)
+    $libs = $null; $bulkTried = $false
+    if (Test-SsmBulkOk 'Lists') {
+        $bulkTried = $true
+        try { $libs = Read-SsmBulkLibraries -Base $Base }
+        catch {
+            $libs = $null
+            Write-SsmLog -Message ("Bulk read of the lists failed ({0}); using the per-call reads." -f $_.Exception.Message) -Level INFO
+        }
+    }
+    if ($null -ne $libs) { Set-SsmBulkResult 'Lists' $true; return $libs }   # the caller wraps the result in @()
+    $all = @(Invoke-SsmRetry -Kind 'Lists' -MaxAttempts 1 -What 'Reading the lists' -Action { Get-PnPList })
+    if ($bulkTried) { Set-SsmBulkResult 'Lists' $false }
+    $out = @($all | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden } |
+        ForEach-Object { New-SsmLibraryDesc -Id $_.Id.ToString() -Title $_.Title -Lib $_ -RootUrl $null -Total $null -Unique $null })
+    return $out
 }
 
 function Test-SsmItemGone {
@@ -255,26 +373,51 @@ function Invoke-SiteScan {
 
     if (-not ($scanGrants -or $scanLinks)) { return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount -FileCount $fileCount }
 
-    $libs = @(Invoke-SsmRetry -Kind 'Lists' -MaxAttempts 1 -What 'Reading the lists' -Action { Get-PnPList } | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
+    # $lib is a library descriptor (Id, Title and what the bulk read already told us).
+    # Whatever it did not tell us is read the per-call way, exactly as before.
+    $libs = @(Get-SsmSiteLibraries -Base $base)
     foreach ($lib in $libs) {
-        try { $rootUrl = Invoke-SsmRetry -What ("Reading the root folder of library '{0}'" -f $lib.Title) -Kind 'LibRoot' -Action { (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl } }
-        catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': root folder unreadable, library not scanned" -f $lib.Title) -ErrorRecord $_; continue }
+        $fromBulk = ($null -eq $lib.Lib)   # no CSOM list object yet: needed only by the per-call reads
+        $rootUrl = $lib.RootUrl
+        if (-not $rootUrl) {
+            if ($fromBulk) { Add-SsmScanFallback -Kind 'LibRoot' }
+            try {
+                $csom = Get-SsmListObject $lib
+                $rootUrl = Invoke-SsmRetry -What ("Reading the root folder of library '{0}'" -f $lib.Title) -Kind 'LibRoot' -Action { (Get-PnPProperty -ClientObject $csom -Property RootFolder).ServerRelativeUrl }
+            }
+            catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': root folder unreadable, library not scanned" -f $lib.Title) -ErrorRecord $_; continue }
+        }
+        # Excluded system libraries are dropped here, before any further per-library read.
         if ($rootUrl.Split('/')[-1] -in $script:ExcludedUrlNames) { continue }
         $listId = $lib.Id.ToString()
         # ItemCount feeds the progress text and the Reach of library-level findings
         # (the exposure score), so a failed read must not silently become 0.
         $total = 0; $countFailed = $false
-        try { $total = [int](Invoke-SsmRetry -What ("Reading the item count of library '{0}'" -f $lib.Title) -Kind 'ItemCount' -Action { Get-PnPProperty -ClientObject $lib -Property ItemCount }) }
-        catch {
-            $countFailed = $true
-            Write-SsmLog -Message ("Library '{0}': item count could not be read ({1}); the reach of library-level findings uses the number of items scanned instead" -f $lib.Title, $_.Exception.Message) -Level WARN
+        if ($null -ne $lib.Total) { $total = $lib.Total }
+        else {
+            if ($fromBulk) { Add-SsmScanFallback -Kind 'ItemCount' }
+            try {
+                $csom = Get-SsmListObject $lib
+                $total = [int](Invoke-SsmRetry -What ("Reading the item count of library '{0}'" -f $lib.Title) -Kind 'ItemCount' -Action { Get-PnPProperty -ClientObject $csom -Property ItemCount })
+            }
+            catch {
+                $countFailed = $true
+                Write-SsmLog -Message ("Library '{0}': item count could not be read ({1}); the reach of library-level findings uses the number of items scanned instead" -f $lib.Title, $_.Exception.Message) -Level WARN
+            }
         }
         Write-SsmLog -Message ("Library '{0}' (~{1} items)" -f $lib.Title, $total)
 
         # Library-root direct grants
         try {
-            if ($scanGrants -and (Get-RestUnique "$base/_api/web/lists(guid'$listId')?`$select=HasUniqueRoleAssignments")) {
-                Add-GrantsRest "$base/_api/web/lists(guid'$listId')/roleassignments?$raSelect" $site 'Library' $lib.Title $rootUrl $listId $null $Categories $bag $total
+            if ($scanGrants) {
+                $libUnique = $lib.Unique   # $null = the bulk read did not say: never assume "inherits"
+                if ($null -eq $libUnique) {
+                    if ($fromBulk) { Add-SsmScanFallback -Kind 'PermState' }
+                    $libUnique = Get-RestUnique "$base/_api/web/lists(guid'$listId')?`$select=HasUniqueRoleAssignments"
+                }
+                if ($libUnique) {
+                    Add-GrantsRest "$base/_api/web/lists(guid'$listId')/roleassignments?$raSelect" $site 'Library' $lib.Title $rootUrl $listId $null $Categories $bag $total
+                }
             }
         } catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': library-level permissions unreadable, direct grants on the library not checked" -f $lib.Title) -ErrorRecord $_ }
 
