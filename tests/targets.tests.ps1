@@ -60,3 +60,27 @@ Invoke-SsmTest 'Get-TenantTargets maps CSOM SiteProperties.StorageUsage (MB) to 
     Assert-Equal 2048 $t[0].StorageMB
     Assert-Equal 'a@x.com' $t[0].Owner
 }
+
+Invoke-SsmTest 'Get-TenantTargets: every locked or inaccessible site that is left out is logged by URL and LockState' {
+    $script:TgtLog = [System.Collections.Generic.List[string]]::new()
+    function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') $script:TgtLog.Add("[$Level] $Message") }
+    function Connect-SsmAdmin { $true }
+    function Get-SsmTenantSiteProperties { param($IncludePersonal, $Progress)
+        $null = $IncludePersonal, $Progress
+        @(
+            [pscustomobject]@{ Url = 'https://contoso.sharepoint.com/sites/open'; Title = 'Open'; Template = 'GROUP#0'; LockState = 'Unlock'; StorageUsage = 1; Owner = 'a' },
+            [pscustomobject]@{ Url = 'https://contoso.sharepoint.com/sites/locked1'; Title = 'L1'; Template = 'GROUP#0'; LockState = 'NoAccess'; StorageUsage = 1; Owner = 'a' },
+            [pscustomobject]@{ Url = 'https://contoso.sharepoint.com/sites/locked2'; Title = 'L2'; Template = 'STS#3'; LockState = 'ReadOnly'; StorageUsage = 1; Owner = 'a' },
+            [pscustomobject]@{ Url = 'https://contoso-my.sharepoint.com/personal/other'; Title = 'P'; Template = 'SPSPERS#10'; LockState = 'NoAccess'; StorageUsage = 1; Owner = 'a' }
+        )
+    }
+    $out = @(Get-TenantTargets -OneDrive $false)
+    Assert-Equal 1 $out.Count
+    Assert-Equal 'https://contoso.sharepoint.com/sites/open' $out[0].Url
+    foreach ($u in 'locked1', 'locked2') {
+        $hit = @($script:TgtLog | Where-Object { $_ -match '^\[WARN\]' -and $_ -match "sites/$u" })
+        Assert-Equal 1 $hit.Count "one WARN line for $u"
+    }
+    if (@($script:TgtLog | Where-Object { $_ -match 'NoAccess' -and $_ -match 'locked1' }).Count -ne 1) { throw 'LockState missing from the line' }
+    if (@($script:TgtLog | Where-Object { $_ -match 'sites/open|personal/other' -and $_ -match '^\[WARN\]' }).Count -ne 0) { throw 'only locked sites of the requested kind may be listed' }
+}

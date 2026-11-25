@@ -98,7 +98,12 @@ function Get-TenantTargets {
     foreach ($s in $sites) {
         $isPersonal = ($s.Template -like 'SPSPERS*')
         if ($OneDrive -ne $isPersonal) { continue }
-        if ([string]$s.LockState -ne 'Unlock') { $locked++; continue }
+        if ([string]$s.LockState -ne 'Unlock') {
+            # Never scanned, so list each one: they must not just vanish from the result.
+            $locked++
+            Write-SsmLog -Message ("Not listed (never scanned): {0} - LockState '{1}'" -f $s.Url, [string]$s.LockState) -Level WARN
+            continue
+        }
         $out.Add((New-Target -Url $s.Url -Title $s.Title -Template $s.Template -StorageMB ([long]$s.StorageUsage) -Owner ([string]$s.Owner)))
     }
     if ($locked -gt 0) {

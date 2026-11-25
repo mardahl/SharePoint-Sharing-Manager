@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fix: locked or inaccessible sites and OneDrives (LockState other than
+  `Unlock`) were dropped from the enumerated list with only a count in the
+  log. They cannot be scanned, but they were invisible. Each one is now logged
+  at `WARN` level with its URL and LockState ("Not listed (never scanned)").
 - Fix: when a library's item count could not be read, it silently became 0, so
   library-level findings got a reach of 0 and understated the exposure score.
   The read is now retried up to 3 times; if it still fails, a `WARN` line names
