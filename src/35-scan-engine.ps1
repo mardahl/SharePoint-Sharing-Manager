@@ -171,6 +171,34 @@ function Get-SsmProp {
     return $null
 }
 
+function Get-SsmSiteInfo {
+    # Site Url, Title and own-permission flag in ONE REST read. Falls back to
+    # Get-PnPWeb (today's call, whose errors - e.g. a locked site - propagate
+    # unchanged) when the read fails or lacks Url or Title. Unique is $null when
+    # the answer did not carry HasUniqueRoleAssignments: the caller then reads it.
+    # One attempt only: a locked site fails here too and must not wait for retries
+    # before Get-PnPWeb reports it.
+    $web = $null; $unique = $null; $bulkTried = $false
+    if (Test-SsmBulkOk 'Web') {
+        $bulkTried = $true
+        try {
+            $w = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Invoke-PnPSPRestMethod -Url "/_api/web?`$select=Url,Title,HasUniqueRoleAssignments" -Method Get }
+            $url = [string](Get-SsmProp $w 'Url'); $title = Get-SsmProp $w 'Title'
+            if ($url.Trim() -and $null -ne $title) {
+                $web = [pscustomobject]@{ Url = $url; Title = [string]$title }
+                $hu = Get-SsmProp $w 'HasUniqueRoleAssignments'
+                if ($hu -is [bool]) { $unique = $hu }
+            }
+        } catch {
+            Write-SsmLog -Message ("Bulk read of the site failed ({0}); using the per-call read." -f $_.Exception.Message) -Level INFO
+        }
+    }
+    if ($web) { Set-SsmBulkResult 'Web' $true; return [pscustomobject]@{ Web = $web; Unique = $unique } }
+    $web = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Get-PnPWeb }
+    if ($bulkTried) { Set-SsmBulkResult 'Web' $false }
+    return [pscustomobject]@{ Web = $web; Unique = $null }
+}
+
 function New-SsmLibraryDesc {
     # Id/Title of a document library plus what is already known about it.
     # Lib = the CSOM list object (needed only for the per-call reads); RootUrl,
@@ -360,14 +388,19 @@ function Invoke-SiteScan {
     $scanLinks = ([bool]@($Categories | Where-Object { $linkKeys -contains $_ }).Count)
     $wantLinkDates = ($script:Auth -and $script:Auth.Contains('IncludeLinkDates') -and $script:Auth.IncludeLinkDates -eq 'True')
 
-    $web = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Get-PnPWeb }
+    $info = Get-SsmSiteInfo
+    $web = $info.Web
     $base = $web.Url.TrimEnd('/')
     $raSelect = "`$expand=Member,RoleDefinitionBindings&`$select=PrincipalId,Member/LoginName,Member/Title,RoleDefinitionBindings/Name,RoleDefinitionBindings/RoleTypeKind"
 
     # Web-root direct grants
     try {
-        if ($scanGrants -and (Get-RestUnique "$base/_api/web?`$select=HasUniqueRoleAssignments")) {
-            Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
+        if ($scanGrants) {
+            $webUnique = $info.Unique
+            if ($null -eq $webUnique) { $webUnique = Get-RestUnique "$base/_api/web?`$select=HasUniqueRoleAssignments" }
+            if ($webUnique) {
+                Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
+            }
         }
     } catch { Set-ScanIncomplete -Target $Target -Part 'site-level permissions unreadable, direct grants on the site not checked' -ErrorRecord $_ }
 

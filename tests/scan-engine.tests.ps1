@@ -695,8 +695,8 @@ Invoke-SsmTest 'Bulk reads: call budget per site and per library; excluded libra
     $afterTotal = (($script:ScanStats.Kinds.Values | ForEach-Object { $_.Count }) | Measure-Object -Sum).Sum
 
     Assert-Equal 'Grants=2;ItemCount=2;ItemsPage=2;LibRoot=3;Links=2;Lists=1;PermState=3;Web=1' $before
-    Assert-Equal 'Grants=2;ItemsPage=2;Links=2;Lists=1;PermState=1;Web=1' $after
-    Assert-Equal 9 $afterTotal 'was 16 reads for this site'
+    Assert-Equal 'Grants=2;ItemsPage=2;Links=2;Lists=1;Web=1' $after
+    Assert-Equal 8 $afterTotal 'was 16 reads for this site'
     Assert-Equal 4 $beforeLibA 'root folder + item count + permission state + first items page'
     Assert-Equal 1 $afterLibA 'the first items page only'
     Assert-Equal 1 $beforeExcluded 'the excluded library cost a root-folder read before'
@@ -832,6 +832,62 @@ Invoke-SsmTest 'Bulk reads: a transient failure of the bulk lists read is retrie
     Assert-Equal $true (-not $script:ScanStats.Kinds.ContainsKey('LibRoot'))
 }
 
+Invoke-SsmTest 'Bulk reads: site name and own-permission flag come from one read; no Get-PnPWeb' {
+    . $script:DefineScanStubs
+    $script:Sim.WebUnique = $true
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('EEEU'))
+    $webFinding = @($out | Where-Object { $_.Location -eq 'Web' })
+    Assert-Equal 1 $webFinding.Count
+    Assert-Equal 'Site X' $webFinding[0].Name
+    Assert-Equal 'https://contoso.sharepoint.com/sites/x' $webFinding[0].Path
+    Assert-Equal 0 @($script:Sim.Calls | Where-Object { $_ -eq 'CSOM Get-PnPWeb' }).Count
+    Assert-Equal 0 @($script:Sim.Calls | Where-Object { $_ -match '^REST https://.*/_api/web\?' }).Count 'no separate permission-state read for the site'
+    Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -match '^REST /_api/web\?' }).Count
+}
+
+Invoke-SsmTest 'Bulk reads: when the bulk site read fails, Get-PnPWeb and the separate permission read give the same result' {
+    . $script:DefineScanStubs
+    $script:Sim.WebUnique = $true
+    $ref = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('EEEU'))
+    $script:SsmBulkFailures = @{}
+    $script:Sim.Calls.Clear()
+    $script:Sim.RestFail.Add(@{ Match = '^/_api/web\?'; Remaining = 99 })
+    $out = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('EEEU'))
+    Assert-Equal (ConvertTo-ScanFingerprint $ref) (ConvertTo-ScanFingerprint $out)
+    Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -match '^REST /_api/web\?' }).Count 'one attempt, no retry delay for a site that may be locked'
+    Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -eq 'CSOM Get-PnPWeb' }).Count
+    Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -match '^REST https://.*/_api/web\?\$select=HasUniqueRoleAssignments' }).Count
+}
+
+Invoke-SsmTest 'Bulk reads: a site answer without Url or Title falls back to Get-PnPWeb; without HasUniqueRoleAssignments only the permission read is added' {
+    foreach ($omit in 'Url', 'Title') {
+        . $script:DefineScanStubs
+        $script:Sim.WebOmit = @($omit)
+        $out = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('AnonymousLink'))
+        Assert-Equal 2 $out.Count "omit $omit"
+        Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -eq 'CSOM Get-PnPWeb' }).Count "omit $omit"
+    }
+    . $script:DefineScanStubs
+    $script:Sim.WebOmit = @('HasUniqueRoleAssignments')
+    $script:Sim.WebUnique = $true
+    $out = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('EEEU'))
+    Assert-Equal 1 @($out | Where-Object { $_.Location -eq 'Web' }).Count 'the site grant is not lost'
+    Assert-Equal 0 @($script:Sim.Calls | Where-Object { $_ -eq 'CSOM Get-PnPWeb' }).Count
+    Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -match '^REST https://.*/_api/web\?\$select=HasUniqueRoleAssignments' }).Count
+}
+
+Invoke-SsmTest 'Bulk reads: a locked site still fails with the Get-PnPWeb error, so it is still reported as locked' {
+    . $script:DefineScanStubs
+    $script:Sim.RestFail.Add(@{ Match = '^/_api/web\?'; Remaining = 99 })
+    function Get-PnPWeb { throw 'The remote server returned an error: (403) Forbidden. The content type of the response is "" ' }
+    $err = $null
+    try { [void](Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('AnonymousLink')) } catch { $err = $_ }
+    Assert-Equal $true ($null -ne $err)
+    Assert-Equal $true (Test-SsmSiteLocked -ErrorRecord $err)
+    Assert-Equal 0 ([int]($script:SsmBulkFailures['Web'])) 'a site that fails both ways says nothing about the bulk read'
+}
+
 Invoke-SsmTest 'Bulk reads: after 3 failed bulk reads in a row (the per-call path then worked) the bulk read is switched off for the run' {
     . $script:DefineScanStubs
     $script:Sim.RestFail.Add(@{ Match = '/_api/web/lists\?'; Remaining = 999 })
@@ -856,4 +912,26 @@ Invoke-SsmTest 'Bulk reads: a success resets the failure count, and a site that 
     function Get-PnPList { param($Identity) $null = $Identity; throw 'site unreachable' }
     foreach ($i in 1..5) { try { [void](Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('AnonymousLink')) } catch { $null = $_ } }
     Assert-Equal 0 ([int]$script:SsmBulkFailures['Lists']) 'the per-call path failed too, so the bulk read is not to blame'
+}
+
+Invoke-SsmTest 'Invoke-TabScan gives a bulk read that was switched off in an earlier run a fresh chance' {
+    function Connect-SsmSite { param($Url) $null = $Url; $true }
+    function Write-Screen { }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Write-ProgressModal { }
+    function New-SsmProgressCallback { param($Title, $State, $CancelMode) $null = $Title, $State, $CancelMode; { } }
+    function Save-SsmCache { param([switch]$Throttle) $null = $Throttle }
+    function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') $null = $Message, $Level }
+    function Invoke-SiteScan { param($Target, $Categories, $Progress)
+        $null = $Categories, $Progress
+        $Target['IncompleteParts'] = [System.Collections.Generic.List[string]]::new()
+        return @()
+    }
+    $script:SsmBulkFailures = @{ Lists = 3; Web = 3 }
+    $a = New-Target -Url 'https://x/sites/a'; $a.Selected = $true
+    $tab = @{ Items = @($a); Categories = @('AnonymousLink'); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @() }
+    Invoke-TabScan -Tab $tab
+    Assert-Equal 0 ([int]$script:SsmBulkFailures['Lists'])
+    Assert-Equal 0 ([int]$script:SsmBulkFailures['Web'])
 }
