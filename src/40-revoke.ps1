@@ -89,9 +89,11 @@ function Invoke-Revoke {
             $f.RevokeStatus = 'Removed'; $removed++
         } catch {
             $msg = $_.Exception.Message
-            if ($msg -match 'find the principal' -or $msg -match 'does not exist' -or $msg -match 'Cannot find') {
+            if ($msg -match 'find the principal' -or $msg -match 'does not exist') {
                 # Principal already gone (e.g. a single claim like EEEU removed at its leaf grant
                 # cascades away site-wide). End state is what we wanted, so count it as success.
+                # Deliberately NOT a bare 'Cannot find': that also matches connection and
+                # auth errors (e.g. a missing certificate), where nothing was revoked.
                 $f.RevokeStatus = 'AlreadyRevoked'; $removed++
             } else {
                 $f.RevokeStatus = "Failed: $msg"

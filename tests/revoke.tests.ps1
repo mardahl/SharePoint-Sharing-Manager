@@ -255,3 +255,22 @@ Invoke-SsmTest 'Revoking every finding of an incomplete target keeps it Incomple
     Remove-Item -LiteralPath $script:CacheDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:ExportDir -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+Invoke-SsmTest 'Invoke-Revoke: only a vanished principal/item counts as AlreadyRevoked; a connection or auth error is Failed' {
+    $script:RevokeError = ''
+    function Remove-PnPFileSharingLink { [CmdletBinding()] param($FileUrl, $Identity, [switch]$Force) $null = $FileUrl, $Identity, $Force; throw $script:RevokeError }
+    $cases = @(
+        @{ Msg = 'Cannot find certificate with this thumbprint in the certificate store'; Expect = 'Failed: Cannot find certificate with this thumbprint in the certificate store' },
+        @{ Msg = 'Cannot find path to the requested resource'; Expect = 'Failed: Cannot find path to the requested resource' },
+        @{ Msg = 'Access denied. You do not have permission to perform this action'; Expect = 'Failed: Access denied. You do not have permission to perform this action' },
+        @{ Msg = 'Cannot find the principal with ID 12'; Expect = 'AlreadyRevoked' },
+        @{ Msg = 'Item does not exist. It may have been deleted by another user.'; Expect = 'AlreadyRevoked' }
+    )
+    foreach ($c in $cases) {
+        $script:RevokeError = $c.Msg
+        $f = [pscustomobject]@{ RemovalKind = 'Link'; Location = 'File'; Path = '/sites/x/f.docx'; LinkId = 'l1'; Name = 'f'; RevokeStatus = 'NotAttempted' }
+        $removed = Invoke-Revoke -Findings @($f)
+        Assert-Equal $c.Expect $f.RevokeStatus "for message [$($c.Msg)]"
+        Assert-Equal $(if ($c.Expect -eq 'AlreadyRevoked') { 1 } else { 0 }) $removed
+    }
+}

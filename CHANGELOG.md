@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fix: during a revoke, any error message containing "Cannot find" (including
+  "Cannot find certificate with this thumbprint in the certificate store")
+  was recorded as `AlreadyRevoked` and counted as removed although nothing
+  had been revoked. Only "find the principal" and "does not exist" messages
+  are treated as already gone now; every other error is `Failed: <message>`
+  and the finding stays open.
 - Fix: a failed sharing-link read for a single file or folder was treated as
   "no links", so the item could be missed with no sign of it. These reads are
   now retried up to 3 times. An item that no longer exists (HTTP 404, deleted

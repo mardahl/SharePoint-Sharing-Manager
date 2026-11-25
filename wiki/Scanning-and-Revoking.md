@@ -75,7 +75,7 @@ The target list also shows **Files** and **Storage** columns. Storage is the ten
 
 - Multi-select revoke with a **typed `REVOKE` confirmation**. In the all-findings view (`G`), revoking works across every affected site with one confirmation.
 - Removal ordering: **links before direct grants, leaf items (File/Folder) before Library before Web**, so claim principals (EEEU, for example) are not de-provisioned out from under a later removal step.
-- `AlreadyRevoked` responses are handled gracefully; re-running over the same scope is safe.
+- `AlreadyRevoked` responses are handled gracefully; re-running over the same scope is safe. A finding is marked `AlreadyRevoked` only when SharePoint reports that the principal or item no longer exists. Any other error (for example a connection or sign-in problem) is recorded as `Failed: <message>`, counts as not removed, and keeps the finding open.
 
 ## Evidence
 
