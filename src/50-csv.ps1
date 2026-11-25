@@ -9,7 +9,7 @@ function Export-FindingsCsv {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $path  = Join-Path $script:ExportDir ("SSM_{0}_{1}_{2}.csv" -f $Phase, $tag, $stamp)
     $Findings | Select-Object Site, Location, Category, Name, Access, Principal, Path, LinkCreated, RevokeStatus |
-        Export-Csv -Path $path -NoTypeInformation -Encoding UTF8BOM
+        Export-Csv -Path $path -Encoding UTF8BOM
     Write-SsmLog -Message ("{0} evidence: {1}" -f $Phase, $path)
     return $path
 }
@@ -37,7 +37,7 @@ function Export-SsmAdminCsv {
     $path = Join-Path $script:ExportDir ("SSM_ADMIN_{0}_{1}.csv" -f $Phase, $OperationId)
     $tmp = "$path.tmp"
     try {
-        $Rows | Select-Object $columns | Export-Csv -LiteralPath $tmp -NoTypeInformation -Encoding UTF8BOM -ErrorAction Stop
+        $Rows | Select-Object $columns | Export-Csv -LiteralPath $tmp -Encoding UTF8BOM -ErrorAction Stop
         Move-Item -LiteralPath $tmp -Destination $path -Force -ErrorAction Stop
     } catch {
         if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
@@ -55,11 +55,11 @@ function Export-ViewCsv {
     if ($Tab['Mode'] -eq 'Findings' -and $Tab['FTab']) {
         $path = Join-Path $script:ExportDir ("{0}_findings_{1}.csv" -f $Tab['Name'], $stamp)
         @($Tab['FTab']['View']) | Select-Object Site, Location, Category, Name, Access, Principal, Path, LinkCreated, RevokeStatus |
-            Export-Csv -Path $path -NoTypeInformation -Encoding UTF8BOM
+            Export-Csv -Path $path -Encoding UTF8BOM
     } else {
         $path = Join-Path $script:ExportDir ("{0}_targets_{1}.csv" -f $Tab['Name'], $stamp)
         @($Tab['View']) | ForEach-Object { [pscustomobject]@{ Url=$_.Url; Title=$_.Title; Status=$_.Status; Findings=$_.FindingCount } } |
-            Export-Csv -Path $path -NoTypeInformation -Encoding UTF8BOM
+            Export-Csv -Path $path -Encoding UTF8BOM
     }
     Show-MsgModal -Title 'Exported' -Lines @('View exported to:', $path)
 }
@@ -76,7 +76,7 @@ function Export-SsmProvisionCsv {
     $columns = if ($Phase -eq 'UNPROVISIONED') { @('Upn','DisplayName') } else { @('Upn','Batch','Status','Error') }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $path = Join-Path $script:ExportDir ("SSM_ONEDRIVE_{0}_{1}.csv" -f $Phase, $stamp)
-    @($Rows) | Select-Object $columns | Export-Csv -LiteralPath $path -NoTypeInformation -Encoding UTF8BOM
+    @($Rows) | Select-Object $columns | Export-Csv -LiteralPath $path -Encoding UTF8BOM
     Write-SsmLog -Message ("Pre-provision {0} evidence: {1}" -f $Phase, $path)
     return $path
 }

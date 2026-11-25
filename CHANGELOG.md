@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fix: on PowerShell 7.7 every CSV export printed "Parameter
+  'NoTypeInformation' is obsolete". The parameter is removed; PowerShell 7.4+
+  already writes CSV files without a `#TYPE` line, so the files are unchanged.
 - Fix: on Windows, re-keying an existing app and renewing the certificate saved
   the new certificate's thumbprint but never put the certificate in
   `CurrentUser\My`, so every connection failed with "Cannot find certificate

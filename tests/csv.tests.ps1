@@ -95,3 +95,33 @@ Invoke-SsmTest 'Export-SsmProvisionCsv writes phase-specific columns' {
     }
 }
 
+Invoke-SsmTest 'CSV exports emit no obsolete-parameter warning, no #TYPE line, and keep the UTF8 BOM' {
+    $prev = $script:ExportDir
+    $script:ExportDir = Join-Path ([IO.Path]::GetTempPath()) ("ssm-warn-{0}" -f ([guid]::NewGuid()))
+    function Show-MsgModal { param($Title, $Lines, $Kind) $null = $Title, $Lines, $Kind }
+    try {
+        $finding = [pscustomobject]@{ Site='https://x/sites/a'; Location='File'; Category='Organization link'; Name='doc.docx'; Access='View'; Principal='P'; Path='/a/doc.docx'; LinkCreated=''; RevokeStatus='NotAttempted' }
+        $adminRow = [pscustomobject]@{ OperationId='44444444-4444-4444-4444-444444444444'; Result='Success' }
+        $target = [pscustomobject]@{ Url='https://x/sites/a'; Title='A'; Status='Scanned'; FindingCount=1 }
+        $opId = [guid]'44444444-4444-4444-4444-444444444444'
+        $out = & {
+            Export-FindingsCsv -Findings @($finding) -SiteUrl 'https://x/sites/a' -Phase BEFORE
+            Export-SsmAdminCsv -Rows @($adminRow) -OperationId $opId -Phase BEFORE
+            Export-SsmProvisionCsv -Rows @([pscustomobject]@{ Upn='a@x.com'; DisplayName='A' }) -Phase UNPROVISIONED
+            Export-ViewCsv -Tab @{ Name='T'; Mode='Findings'; FTab=@{ View=@($finding) } }
+            Export-ViewCsv -Tab @{ Name='T'; Mode='Targets'; View=@($target) }
+        } 3>&1
+        $warnings = @($out | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        Assert-Equal 0 $warnings.Count "warnings: $(($warnings | ForEach-Object { $_.Message }) -join ' | ')"
+        $files = @(Get-ChildItem -LiteralPath $script:ExportDir -Filter '*.csv')
+        Assert-Equal 5 $files.Count
+        foreach ($file in $files) {
+            $bytes = [IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes[0] -ne 0xEF -or $bytes[1] -ne 0xBB -or $bytes[2] -ne 0xBF) { throw "no UTF8 BOM: $($file.Name)" }
+            if ((Get-Content -LiteralPath $file.FullName -Raw) -match '#TYPE') { throw "#TYPE line in $($file.Name)" }
+        }
+    } finally {
+        if (Test-Path -LiteralPath $script:ExportDir) { Remove-Item -LiteralPath $script:ExportDir -Recurse -Force }
+        $script:ExportDir = $prev
+    }
+}
