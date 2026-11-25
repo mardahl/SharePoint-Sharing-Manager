@@ -60,11 +60,12 @@ function Invoke-SsmRetry {
     # backoff) so a transient timeout or dropped connection does not lose
     # data, then rethrow. $Action runs in the caller's scope, so it sees the
     # caller's variables as they are at each attempt.
-    param([scriptblock]$Action, [object[]]$ArgumentList, [string]$What, [int]$MaxAttempts = 3)
+    # -Permanent: optional test ($ErrorRecord) for errors that retrying cannot fix.
+    param([scriptblock]$Action, [object[]]$ArgumentList, [string]$What, [int]$MaxAttempts = 3, [scriptblock]$Permanent)
     for ($attempt = 1; ; $attempt++) {
         try { return (& $Action @ArgumentList) }
         catch {
-            if ($attempt -ge $MaxAttempts) { throw }
+            if ($attempt -ge $MaxAttempts -or ($Permanent -and (& $Permanent $_))) { throw }
             Write-SsmLog -Message ("{0} failed (attempt {1}/{2}), retrying: {3}" -f $What, $attempt, $MaxAttempts, $_.Exception.Message) -Level WARN
             Wait-SsmRetry -Seconds (2 * $attempt)
         }
@@ -77,6 +78,26 @@ function Set-ScanIncomplete {
     param($Target, [string]$Part, $ErrorRecord)
     $Target['IncompleteParts'].Add($Part)
     Write-SsmErrorLog -Context ("Scan incomplete: {0}" -f $Part) -ErrorRecord $ErrorRecord
+}
+
+function Test-SsmItemGone {
+    # $true when the error is an HTTP 404: the item was deleted or moved after
+    # it was enumerated. That is the only sharing-link read failure treated as
+    # benign. Get-PnPFileSharingLink / Get-PnPFolderSharingLink return an empty
+    # set (no error) for an item without links, so any other failure is a real
+    # failure to read. PnP Core service errors carry the status in
+    # Error.HttpResponseCode (the exception message is generic); plain HTTP
+    # exceptions carry StatusCode. Inner exceptions are searched as well.
+    param($ErrorRecord)
+    $ex = $ErrorRecord.Exception
+    while ($ex) {
+        $err = $ex.PSObject.Properties['Error']
+        if ($err -and $err.Value -and $err.Value.PSObject.Properties['HttpResponseCode'] -and [int]$err.Value.HttpResponseCode -eq 404) { return $true }
+        $sc = $ex.PSObject.Properties['StatusCode']
+        if ($sc -and $null -ne $sc.Value -and "$($sc.Value)" -in @('404', 'NotFound')) { return $true }
+        $ex = $ex.InnerException
+    }
+    return $false
 }
 
 function Get-RestUnique {
@@ -230,6 +251,7 @@ function Invoke-SiteScan {
 
         # Check each unique-permission item: sharing links + direct grants
         $idx = 0
+        $linkFailIds = [System.Collections.Generic.List[object]]::new()
         foreach ($it in $unique) {
             $idx++
             if ($Progress -and ($idx % 25 -eq 0 -or $idx -eq $unique.Count)) {
@@ -245,10 +267,22 @@ function Invoke-SiteScan {
 
             # 1) Sharing links (Graph)
             if ($scanLinks) {
+                # A failed read must never look like "no links": retry, then either
+                # skip a deleted item (404, logged by id) or flag the target incomplete.
+                $links = @()
                 try {
-                    $links = if ($isFolder) { Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop }
-                             else { Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop }
-                } catch { $links = @() }
+                    $links = @(Invoke-SsmRetry -What ("Reading sharing links of item {0}" -f $it.Id) -Permanent { param($e) Test-SsmItemGone $e } -Action {
+                        if ($isFolder) { Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop }
+                        else { Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop }
+                    })
+                } catch {
+                    if (Test-SsmItemGone $_) {
+                        Write-SsmLog -Message ("Item {0} in '{1}' no longer exists (404), skipped" -f $it.Id, $lib.Title) -Level WARN
+                    } else {
+                        Write-SsmErrorLog -Context ("Sharing links of item {0} in '{1}' could not be read" -f $it.Id, $lib.Title) -ErrorRecord $_
+                        $linkFailIds.Add($it.Id)
+                    }
+                }
                 # Optional per-tenant: one extra CSOM call per item for link Created date.
                 $infoMap = $null
                 if ($wantLinkDates -and @($links).Count -gt 0) { $infoMap = Get-SharingLinkInfo -ListId $listId -ItemId $it.Id }
@@ -280,6 +314,10 @@ function Invoke-SiteScan {
             } catch {
                 Set-ScanIncomplete -Target $Target -Part ("library '{0}': item {1} skipped, an error stopped its sharing check" -f $lib.Title, $it.Id) -ErrorRecord $_
             }
+        }
+        # One short part per library however many items failed (each failure was logged in full above).
+        if ($linkFailIds.Count -gt 0) {
+            $Target['IncompleteParts'].Add(("library '{0}': sharing links could not be read for {1} {3} (first: {2})" -f $lib.Title, $linkFailIds.Count, (@($linkFailIds | Select-Object -First 3) -join ', '), $(if ($linkFailIds.Count -eq 1) { 'item' } else { 'items' })))
         }
     }
     return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount -FileCount $fileCount

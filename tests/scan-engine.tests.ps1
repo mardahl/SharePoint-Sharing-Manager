@@ -115,6 +115,8 @@ $script:DefineScanStubs = {
         RootFail  = @{}      # library title -> number of root-folder reads that still fail
         RestFail  = [System.Collections.Generic.List[object]]::new()   # @{ Match = <regex on the URL>; Remaining = <n> }: throws while Remaining > 0
         ItemUrls  = [System.Collections.Generic.List[string]]::new()   # every items-page request
+        LinkFail  = @{}      # item FileRef -> @{ Remaining = <n>; Make = <scriptblock returning the exception to throw> }
+        LinkCalls = @{}      # item FileRef -> number of sharing-link reads
         RootCalls = @{ 'Library A' = 0; 'Library B' = 0 }
         Sleeps    = [System.Collections.Generic.List[object]]::new()
         Log       = [System.Collections.Generic.List[string]]::new()
@@ -161,10 +163,15 @@ $script:DefineScanStubs = {
         if ($Url -match 'HasUniqueRoleAssignments') { return [pscustomobject]@{ HasUniqueRoleAssignments = $false } }
         return [pscustomobject]@{ value = @() }
     }
+    function Invoke-SimLinkRead { param([string]$Path)
+        $script:Sim.LinkCalls[$Path] = 1 + [int]$script:Sim.LinkCalls[$Path]
+        $rule = $script:Sim.LinkFail[$Path]
+        if ($rule -and $rule.Remaining -gt 0) { $rule.Remaining--; throw (& $rule.Make) }
+    }
     function Get-PnPFileSharingLink { [CmdletBinding()] param($Identity)
-        $null = $Identity
+        Invoke-SimLinkRead -Path $Identity
         @([pscustomobject]@{ Id = 'lnk'; Link = [pscustomobject]@{ Scope = 'anonymous'; Type = 'View'; WebUrl = 'https://contoso.sharepoint.com/s/x' } }) }
-    function Get-PnPFolderSharingLink { [CmdletBinding()] param($Folder) $null = $Folder; @() }
+    function Get-PnPFolderSharingLink { [CmdletBinding()] param($Folder) Invoke-SimLinkRead -Path $Folder; @() }
 }
 
 Invoke-SsmTest 'Invoke-SiteScan: root-folder timeout that succeeds on retry gives the same findings as no failure' {
@@ -331,4 +338,92 @@ Invoke-SsmTest 'Complete-SiteScan: the incomplete summary lists at most 5 parts'
     $line = @($script:Sim.Log | Where-Object { $_ -match 'INCOMPLETE' })
     Assert-Equal 1 $line.Count
     if ($line[0] -notmatch 'part 5' -or $line[0] -match 'part 6' -or $line[0] -notmatch '\+3 more') { throw "unexpected summary: $($line[0])" }
+}
+
+# --- Sharing-link read failures (per item) -----------------------------------
+if (-not ('SsmTestServiceException' -as [type])) {
+    Add-Type -TypeDefinition @"
+public class SsmTestServiceError { public int HttpResponseCode { get; set; } }
+public class SsmTestServiceException : System.Exception {
+    public SsmTestServiceError Error { get; set; }
+    public SsmTestServiceException(string message, int code) : base(message) { Error = new SsmTestServiceError { HttpResponseCode = code }; }
+}
+public class SsmTestHttpException : System.Exception {
+    public System.Net.HttpStatusCode? StatusCode { get; set; }
+    public SsmTestHttpException(string message, System.Net.HttpStatusCode code) : base(message) { StatusCode = code; }
+}
+"@
+}
+
+Invoke-SsmTest 'Test-SsmItemGone: only a 404 is "item gone" (PnP Core service error, HttpClient status, or wrapped)' {
+    $caught = { param([scriptblock]$Throw) try { & $Throw } catch { $_ } }
+    Assert-Equal $true  (Test-SsmItemGone (& $caught { throw [SsmTestServiceException]::new('Microsoft Graph service exception', 404) }))
+    Assert-Equal $true  (Test-SsmItemGone (& $caught { throw [SsmTestHttpException]::new('Not found', [System.Net.HttpStatusCode]::NotFound) }))
+    Assert-Equal $true  (Test-SsmItemGone (& $caught { throw [System.AggregateException]::new('wrapper', [SsmTestServiceException]::new('inner', 404)) }))
+    Assert-Equal $false (Test-SsmItemGone (& $caught { throw [SsmTestServiceException]::new('Microsoft Graph service exception', 403) }))
+    Assert-Equal $false (Test-SsmItemGone (& $caught { throw [SsmTestServiceException]::new('Microsoft Graph service exception', 429) }))
+    Assert-Equal $false (Test-SsmItemGone (& $caught { throw [SsmTestHttpException]::new('Timeout', [System.Net.HttpStatusCode]::RequestTimeout) }))
+    Assert-Equal $false (Test-SsmItemGone (& $caught { throw 'The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.' }))
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: a sharing-link read that fails once is retried and gives the same findings' {
+    . $script:DefineScanStubs
+    $ref = @(Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('AnonymousLink'))
+    $script:Sim.LinkCalls.Clear()
+    $script:Sim.LinkFail['/sites/x/a2.docx'] = @{ Remaining = 1; Make = { [SsmTestServiceException]::new('Microsoft Graph service exception', 503) } }
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 2 $ref.Count
+    Assert-Equal (($ref | ForEach-Object { "$($_.Name)" } | Sort-Object) -join ',') (($out | ForEach-Object { "$($_.Name)" } | Sort-Object) -join ',')
+    Assert-Equal 0 @($t['IncompleteParts']).Count
+    Assert-Equal 2 $script:Sim.LinkCalls['/sites/x/a2.docx']
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: a sharing-link read that keeps failing marks the target incomplete and logs the item id, not the file name' {
+    . $script:DefineScanStubs
+    $script:Sim.LinkFail['/sites/x/a2.docx'] = @{ Remaining = 99; Make = { [SsmTestServiceException]::new('Microsoft Graph service exception', 403) } }
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 3 $script:Sim.LinkCalls['/sites/x/a2.docx'] 'bounded: 3 attempts'
+    Assert-Equal 1 $out.Count 'the unaffected item in Library B is still reported'
+    $parts = @($t['IncompleteParts'])
+    Assert-Equal 1 $parts.Count
+    if ($parts[0] -notlike '*sharing links*' -or $parts[0] -notlike '*2*' -or $parts[0] -notlike '*Library A*') { throw "unexpected part: $($parts[0])" }
+    $errs = @($script:Sim.Log | Where-Object { $_ -match '^\[(WARN|ERROR)\]' -and $_ -match 'item 2' })
+    if ($errs.Count -lt 1) { throw "no WARN/ERROR line with the item id: $($script:Sim.Log -join ' / ')" }
+    if (@($script:Sim.Log | Where-Object { $_ -match 'a2\.docx' }).Count -ne 0) { throw 'the file name must not be logged' }
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: a unique folder whose sharing-link read keeps failing is incomplete too' {
+    . $script:DefineScanStubs
+    $script:Sim.Items['Library A'] = @((New-ScanItem 1 'folder1' $true 1))
+    $script:Sim.LinkFail['/sites/x/folder1'] = @{ Remaining = 99; Make = { [SsmTestServiceException]::new('Microsoft Graph service exception', 500) } }
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    [void](Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 3 $script:Sim.LinkCalls['/sites/x/folder1']
+    Assert-Equal 1 @($t['IncompleteParts']).Count
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: an item deleted during the scan (404) is skipped without retry or incomplete mark, logged by id' {
+    . $script:DefineScanStubs
+    $script:Sim.LinkFail['/sites/x/a2.docx'] = @{ Remaining = 99; Make = { [SsmTestServiceException]::new('Microsoft Graph service exception', 404) } }
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    Assert-Equal 1 $script:Sim.LinkCalls['/sites/x/a2.docx'] 'a 404 is not retried'
+    Assert-Equal 0 @($t['IncompleteParts']).Count
+    Assert-Equal 1 $out.Count
+    if (@($script:Sim.Log | Where-Object { $_ -match '^\[WARN\]' -and $_ -match 'item 2' -and $_ -match '404|no longer exists' }).Count -ne 1) { throw "expected exactly one WARN line for the gone item: $($script:Sim.Log -join ' / ')" }
+    if (@($script:Sim.Log | Where-Object { $_ -match 'a2\.docx' }).Count -ne 0) { throw 'the file name must not be logged' }
+}
+
+Invoke-SsmTest 'Invoke-SiteScan: many failing sharing-link reads in one library give one short incomplete part' {
+    . $script:DefineScanStubs
+    $script:Sim.Items['Library A'] = @(1..8 | ForEach-Object { New-ScanItem $_ "a$_.docx" $true })
+    foreach ($i in 1..8) { $script:Sim.LinkFail["/sites/x/a$i.docx"] = @{ Remaining = 99; Make = { [SsmTestServiceException]::new('Microsoft Graph service exception', 500) } } }
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    [void](Invoke-SiteScan -Target $t -Categories @('AnonymousLink'))
+    $parts = @($t['IncompleteParts'])
+    Assert-Equal 1 $parts.Count
+    if ($parts[0] -notmatch '8 items') { throw "count missing: $($parts[0])" }
+    if ($parts[0] -notmatch 'first: 1, 2, 3' -or $parts[0] -match '\b4\b') { throw "id list not capped at 3: $($parts[0])" }
 }

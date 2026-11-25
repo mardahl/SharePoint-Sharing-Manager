@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fix: a failed sharing-link read for a single file or folder was treated as
+  "no links", so the item could be missed with no sign of it. These reads are
+  now retried up to 3 times. An item that no longer exists (HTTP 404, deleted
+  during the scan) is skipped with a `WARN` log line that names the item id,
+  never the file name. Any other failure marks the target `Incomplete` (one
+  short entry per library with the number of items and the first three item
+  ids) and is logged at `ERROR` level.
 - Fix: when reading a library's items failed (for example "Error while copying
   content to a stream" on the first page of a very large library) the scan
   logged "0 scanned, 0 with unique permissions", counted the library as
