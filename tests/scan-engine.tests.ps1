@@ -463,3 +463,76 @@ Invoke-SsmTest 'Invoke-SiteScan: when ItemCount keeps failing the library findin
     Assert-Equal 3 $lib[0].Reach 'Library A has 3 items'
     if (@($script:Sim.Log | Where-Object { $_ -match '^\[WARN\]' -and $_ -match 'Library A' -and $_ -match 'item count' }).Count -lt 1) { throw "no WARN line: $($script:Sim.Log -join ' / ')" }
 }
+
+# --- Scan statistics (Phase 0: measurement only) -------------------------------
+Invoke-SsmTest 'Scan stats: every network read is counted by kind, with failed attempts and retries included' {
+    . $script:DefineScanStubs
+    Start-SsmScanStats
+    $script:Sim.LinkFail['/sites/x/a2.docx'] = @{ Remaining = 1; Make = { [SsmTestServiceException]::new('Microsoft Graph service exception', 503) } }
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'
+    [void](Invoke-SiteScan -Target $t -Categories @('AnonymousLink', 'EEEU'))
+    $k = $script:ScanStats.Kinds
+    Assert-Equal 1 $k['Web'].Count
+    Assert-Equal 1 $k['Lists'].Count
+    Assert-Equal 2 $k['LibRoot'].Count
+    Assert-Equal 2 $k['ItemCount'].Count
+    Assert-Equal 2 $k['ItemsPage'].Count
+    Assert-Equal 3 $k['Links'].Count 'two unique items, one of them retried once'
+    Assert-Equal 1 $k['Links'].Failed
+    Assert-Equal 3 $k['PermState'].Count 'web plus two libraries'
+    Assert-Equal 2 $k['Grants'].Count 'item-level role assignments of the two unique items'
+}
+
+Invoke-SsmTest 'Scan stats: totals and max durations are recorded per kind' {
+    Start-SsmScanStats
+    Add-SsmScanStat -Kind 'ItemsPage' -Seconds 0.5 -Failed $false
+    Add-SsmScanStat -Kind 'ItemsPage' -Seconds 1.5 -Failed $true
+    $p = $script:ScanStats.Kinds['ItemsPage']
+    Assert-Equal 2 $p.Count
+    Assert-Equal 1 $p.Failed
+    Assert-Equal 2 $p.Total
+    Assert-Equal 1.5 $p.Max
+    $script:ScanStats = $null
+    Add-SsmScanStat -Kind 'ItemsPage' -Seconds 1 -Failed $false   # not started: must be a harmless no-op
+}
+
+Invoke-SsmTest 'Scan stats: one INFO line with per-kind count, total, average and requests per second, without URLs or titles' {
+    . $script:DefineScanStubs
+    Start-SsmScanStats
+    [void](Invoke-SiteScan -Target (New-Target -Url 'https://contoso.sharepoint.com/sites/x') -Categories @('AnonymousLink'))
+    $script:Sim.Log.Clear()
+    Write-SsmScanStats -Targets 1
+    $lines = @($script:Sim.Log | Where-Object { $_ -match 'Scan stats' })
+    Assert-Equal 1 $script:Sim.Log.Count
+    Assert-Equal 1 $lines.Count
+    $line = $lines[0]
+    if ($line -notmatch '^\[INFO\]') { throw "not INFO: $line" }
+    foreach ($needle in 'ItemsPage 2 calls', 'LibRoot 2 calls', 'Web 1 call', 'req/s', '1 target', 'avg') { if ($line -notmatch [regex]::Escape($needle)) { throw "missing [$needle]: $line" } }
+    foreach ($bad in 'http', 'contoso', 'sites/x', 'Library A', 'Library B', 'Site X', '_api') { if ($line -match [regex]::Escape($bad)) { throw "line leaks [$bad]: $line" } }
+    Assert-Equal $true ($null -eq $script:ScanStats) 'stats are reset after they are written'
+}
+
+Invoke-SsmTest 'Scan stats: Invoke-TabScan writes exactly one stats line per run' {
+    function Connect-SsmSite { param($Url) $null = $Url; $true }
+    function Write-Screen { }
+    function Start-LoadSpinner { }
+    function Stop-LoadSpinner { }
+    function Write-ProgressModal { }
+    function New-SsmProgressCallback { param($Title, $State, $CancelMode) $null = $Title, $State, $CancelMode; { } }
+    function Save-SsmCache { param([switch]$Throttle) $null = $Throttle }
+    $script:StatLog = [System.Collections.Generic.List[string]]::new()
+    function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') $script:StatLog.Add("[$Level] $Message") }
+    function Invoke-SiteScan { param($Target, $Categories, $Progress)
+        $null = $Categories, $Progress
+        $Target['IncompleteParts'] = [System.Collections.Generic.List[string]]::new()
+        [void](Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -Action { 1 })
+        return @()
+    }
+    $a = New-Target -Url 'https://x/sites/a'; $a.Selected = $true
+    $b = New-Target -Url 'https://x/sites/b'; $b.Selected = $true
+    $tab = @{ Items = @($a, $b); Categories = @('AnonymousLink'); Filter = 'All'; Search = ''; SortCol = 'Url'; SortDesc = $false; Cursor = 0; View = @() }
+    Invoke-TabScan -Tab $tab
+    $lines = @($script:StatLog | Where-Object { $_ -match 'Scan stats' })
+    Assert-Equal 1 $lines.Count
+    if ($lines[0] -notmatch 'Web 2 calls' -or $lines[0] -notmatch '2 targets') { throw "unexpected: $($lines[0])" }
+}

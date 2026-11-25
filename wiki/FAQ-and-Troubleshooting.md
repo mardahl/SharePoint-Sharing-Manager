@@ -51,6 +51,19 @@ on a build older than the fix; update SharePoint Sharing Manager. It fails close
 (Blocked, no write) rather than guessing membership, so no mutation could
 have happened while this was present.
 
+## How do I read the "Scan stats" log line?
+
+Every scan run (`S` or `X` on the Sites and OneDrives tabs) ends with one `INFO` line in the log, for example:
+
+`Scan stats: 25 targets, 1204 requests in 62.4 s (19.3 req/s); ItemsPage 410 calls total 31.2s avg 0.076s max 1.20s; LibRoot 400 calls total ...; Links 12 calls total 5.1s avg 0.425s max 1.10s, 1 failed`
+
+- **targets** is how many targets the run started; **requests** counts every network read the scan engine made, including retries; **req/s** is requests divided by the wall time of the whole run (which also includes time spent between requests, so it is lower than the server round-trip rate).
+- After that, one entry per kind of read, slowest total first: `Web` (the site itself), `Lists`, `LibRoot` (a library's root folder), `ItemCount`, `PermState` (does this site, library or item have its own permissions), `ItemsPage` (one page of up to 5000 items), `Grants` (role assignments), `Links` (sharing links of one file or folder), `LinkDates` (the optional link-date lookup).
+- Each entry shows how many calls were made, their total seconds, the average and the longest single call. `N failed` counts attempts that raised an error; a failed attempt that is retried and then succeeds is still counted there.
+- The line holds counts and timings only: no URLs, site names, library names or item names.
+
+Use it to see where a slow run spends its time: a large `total` for one kind is the place to look, and a high `failed` count points at throttling or an unstable connection.
+
 ## Where things live
 
 | Location | Content |

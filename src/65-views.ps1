@@ -387,6 +387,7 @@ function Invoke-TabScan {
     $cats = @($Tab['Categories'])
     if ($cats.Count -eq 0) { Show-MsgModal -Title 'Scan' -Lines @('No rule categories enabled. Press T to enable some.') -Kind Warn; return }
     $i = 0
+    Start-SsmScanStats
     foreach ($t in $sel) {
         $i++
         $t.Status = 'Scanning'; Write-Screen
@@ -420,6 +421,7 @@ function Invoke-TabScan {
             if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache -Throttle }
         }
     }
+    Write-SsmScanStats -Targets $i
     if (Get-Command Save-SsmCache -ErrorAction SilentlyContinue) { Save-SsmCache }
     Update-TabView -Tab $Tab
 }

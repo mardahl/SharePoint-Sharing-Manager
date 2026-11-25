@@ -55,16 +55,66 @@ function Wait-SsmRetry {
     Start-Sleep -Seconds $Seconds
 }
 
+# Per-run request statistics: counts and durations per call KIND only (no URLs,
+# site or library names). $null = not collecting; Start-SsmScanStats begins a run.
+$script:ScanStats = $null
+
+function Start-SsmScanStats {
+    $script:ScanStats = @{ Clock = [System.Diagnostics.Stopwatch]::StartNew(); Kinds = @{} }
+}
+
+function Add-SsmScanStat {
+    param([string]$Kind, [double]$Seconds, [bool]$Failed)
+    if ($null -eq $script:ScanStats) { return }
+    $k = $script:ScanStats.Kinds[$Kind]
+    if (-not $k) { $k = @{ Count = 0; Failed = 0; Total = 0.0; Max = 0.0 }; $script:ScanStats.Kinds[$Kind] = $k }
+    $k.Count++
+    if ($Failed) { $k.Failed++ }
+    $k.Total += $Seconds
+    if ($Seconds -gt $k.Max) { $k.Max = $Seconds }
+}
+
+function Write-SsmScanStats {
+    # One INFO line for the run: requests, wall time, requests/s, then per kind
+    # the count, total seconds, average and max. Resets the collector.
+    param([int]$Targets)
+    $s = $script:ScanStats
+    $script:ScanStats = $null
+    if ($null -eq $s) { return }
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $wall = $s.Clock.Elapsed.TotalSeconds
+    $calls = 0; $failed = 0
+    foreach ($k in $s.Kinds.Values) { $calls += $k.Count; $failed += $k.Failed }
+    $rate = if ($wall -gt 0) { $calls / $wall } else { 0 }
+    $parts = foreach ($name in ($s.Kinds.Keys | Sort-Object { -$s.Kinds[$_].Total })) {
+        $k = $s.Kinds[$name]
+        '{0} {1} {2} total {3}s avg {4}s max {5}s{6}' -f $name, $k.Count, $(if ($k.Count -eq 1) { 'call' } else { 'calls' }),
+            $k.Total.ToString('0.0', $inv), ($k.Total / $k.Count).ToString('0.000', $inv), $k.Max.ToString('0.00', $inv),
+            $(if ($k.Failed -gt 0) { ", $($k.Failed) failed" } else { '' })
+    }
+    Write-SsmLog -Message ('Scan stats: {0} {1}, {2} requests in {3} s ({4} req/s); {5}' -f $Targets, $(if ($Targets -eq 1) { 'target' } else { 'targets' }),
+        $calls, $wall.ToString('0.0', $inv), $rate.ToString('0.0', $inv), ($parts -join '; ')) -Level INFO
+}
+
 function Invoke-SsmRetry {
     # Run a read; on failure try again (3 attempts in total, 2 s then 4 s
     # backoff) so a transient timeout or dropped connection does not lose
     # data, then rethrow. $Action runs in the caller's scope, so it sees the
     # caller's variables as they are at each attempt.
     # -Permanent: optional test ($ErrorRecord) for errors that retrying cannot fix.
-    param([scriptblock]$Action, [object[]]$ArgumentList, [string]$What, [int]$MaxAttempts = 3, [scriptblock]$Permanent)
+    # -Kind: name of the call kind; every attempt is timed and counted under it
+    # (see Start-SsmScanStats). Network reads of the scan engine all go through here.
+    param([scriptblock]$Action, [object[]]$ArgumentList, [string]$What, [int]$MaxAttempts = 3, [scriptblock]$Permanent, [string]$Kind)
     for ($attempt = 1; ; $attempt++) {
-        try { return (& $Action @ArgumentList) }
+        $clock = [System.Diagnostics.Stopwatch]::StartNew()
+        try {
+            $result = (& $Action @ArgumentList)
+            if ($Kind) { Add-SsmScanStat -Kind $Kind -Seconds $clock.Elapsed.TotalSeconds -Failed $false }
+            if ($null -eq $result) { return }   # nothing, not a lone $null
+            return $result
+        }
         catch {
+            if ($Kind) { Add-SsmScanStat -Kind $Kind -Seconds $clock.Elapsed.TotalSeconds -Failed $true }
             if ($attempt -ge $MaxAttempts -or ($Permanent -and (& $Permanent $_))) { throw }
             Write-SsmLog -Message ("{0} failed (attempt {1}/{2}), retrying: {3}" -f $What, $attempt, $MaxAttempts, $_.Exception.Message) -Level WARN
             Wait-SsmRetry -Seconds (2 * $attempt)
@@ -105,7 +155,7 @@ function Get-RestUnique {
     # throws if it still fails, because $false would read as 'inherits, nothing
     # to check' - the caller must mark the scan incomplete instead.
     param([string]$Url)
-    $r = Invoke-SsmRetry -What 'Reading permission state' -ArgumentList $Url -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
+    $r = Invoke-SsmRetry -What 'Reading permission state' -Kind 'PermState' -ArgumentList $Url -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
     return [bool]$r.HasUniqueRoleAssignments
 }
 
@@ -117,10 +167,13 @@ function Get-SharingLinkInfo {
     param([string]$ListId, [int]$ItemId)
     try {
         $ctx = Get-PnPContext
-        $osi = [Microsoft.SharePoint.Client.ObjectSharingInformation]::GetListItemSharingInformation(
-            $ctx, [guid]$ListId, $ItemId, $false, $false, $false, $true, $true, $false)
-        $ctx.Load($osi)
-        $ctx.ExecuteQuery()
+        $osi = Invoke-SsmRetry -Kind 'LinkDates' -MaxAttempts 1 -What 'Reading link dates' -ArgumentList $ListId, $ItemId -Action { param($lid, $iid)
+            $o = [Microsoft.SharePoint.Client.ObjectSharingInformation]::GetListItemSharingInformation(
+                $ctx, [guid]$lid, $iid, $false, $false, $false, $true, $true, $false)
+            $ctx.Load($o)
+            $ctx.ExecuteQuery()
+            $o
+        }
         $map = @{}
         foreach ($sl in @($osi.SharingLinks)) {
             # Created comes back as a plain string ("2026-07-24T07:10:18.520Z") - keep as-is.
@@ -137,7 +190,7 @@ function Add-GrantsRest {
     # Read a roleassignments collection via REST and add bad direct grants to $Bag.
     # Retried; throws if the read still fails (the caller marks the scan incomplete).
     param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag, [int]$Reach = 1)
-    $resp = Invoke-SsmRetry -What 'Reading role assignments' -ArgumentList $RaUrl -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
+    $resp = Invoke-SsmRetry -What 'Reading role assignments' -Kind 'Grants' -ArgumentList $RaUrl -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
     foreach ($ra in @($resp.value)) {
         $key = Get-PrincipalCategory -Login $ra.Member.LoginName -Title $ra.Member.Title
         if (-not $key) { continue }
@@ -189,7 +242,7 @@ function Invoke-SiteScan {
     $scanLinks = ([bool]@($Categories | Where-Object { $linkKeys -contains $_ }).Count)
     $wantLinkDates = ($script:Auth -and $script:Auth.Contains('IncludeLinkDates') -and $script:Auth.IncludeLinkDates -eq 'True')
 
-    $web = Get-PnPWeb
+    $web = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Get-PnPWeb }
     $base = $web.Url.TrimEnd('/')
     $raSelect = "`$expand=Member,RoleDefinitionBindings&`$select=PrincipalId,Member/LoginName,Member/Title,RoleDefinitionBindings/Name,RoleDefinitionBindings/RoleTypeKind"
 
@@ -202,16 +255,16 @@ function Invoke-SiteScan {
 
     if (-not ($scanGrants -or $scanLinks)) { return Complete-SiteScan -Target $Target -Bag $bag -TotalItems $totalItems -LibCount $libCount -FileCount $fileCount }
 
-    $libs = @(Get-PnPList | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
+    $libs = @(Invoke-SsmRetry -Kind 'Lists' -MaxAttempts 1 -What 'Reading the lists' -Action { Get-PnPList } | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden })
     foreach ($lib in $libs) {
-        try { $rootUrl = Invoke-SsmRetry -What ("Reading the root folder of library '{0}'" -f $lib.Title) -Action { (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl } }
+        try { $rootUrl = Invoke-SsmRetry -What ("Reading the root folder of library '{0}'" -f $lib.Title) -Kind 'LibRoot' -Action { (Get-PnPProperty -ClientObject $lib -Property RootFolder).ServerRelativeUrl } }
         catch { Set-ScanIncomplete -Target $Target -Part ("library '{0}': root folder unreadable, library not scanned" -f $lib.Title) -ErrorRecord $_; continue }
         if ($rootUrl.Split('/')[-1] -in $script:ExcludedUrlNames) { continue }
         $listId = $lib.Id.ToString()
         # ItemCount feeds the progress text and the Reach of library-level findings
         # (the exposure score), so a failed read must not silently become 0.
         $total = 0; $countFailed = $false
-        try { $total = [int](Invoke-SsmRetry -What ("Reading the item count of library '{0}'" -f $lib.Title) -Action { Get-PnPProperty -ClientObject $lib -Property ItemCount }) }
+        try { $total = [int](Invoke-SsmRetry -What ("Reading the item count of library '{0}'" -f $lib.Title) -Kind 'ItemCount' -Action { Get-PnPProperty -ClientObject $lib -Property ItemCount }) }
         catch {
             $countFailed = $true
             Write-SsmLog -Message ("Library '{0}': item count could not be read ({1}); the reach of library-level findings uses the number of items scanned instead" -f $lib.Title, $_.Exception.Message) -Level WARN
@@ -234,7 +287,7 @@ function Invoke-SiteScan {
             # Each page is retried on its own and starts at the current $lastId,
             # so a failed page never restarts the library from the beginning.
             $u = "$base/_api/web/lists(guid'$listId')/items?`$select=Id,FileRef,FileLeafRef,FSObjType,HasUniqueRoleAssignments&`$filter=Id%20gt%20$lastId&`$orderby=Id&`$top=5000"
-            try { $resp = Invoke-SsmRetry -What ("Reading items of library '{0}' after Id {1}" -f $lib.Title, $lastId) -Action { Invoke-PnPSPRestMethod -Url $u -Method Get } }
+            try { $resp = Invoke-SsmRetry -What ("Reading items of library '{0}' after Id {1}" -f $lib.Title, $lastId) -Kind 'ItemsPage' -Action { Invoke-PnPSPRestMethod -Url $u -Method Get } }
             catch {
                 Set-ScanIncomplete -Target $Target -Part ("library '{0}': item enumeration failed after {1} items, the rest of the library was not checked" -f $lib.Title, $scanned) -ErrorRecord $_
                 $enumFailed = $true; break
@@ -281,7 +334,7 @@ function Invoke-SiteScan {
                 # skip a deleted item (404, logged by id) or flag the target incomplete.
                 $links = @()
                 try {
-                    $links = @(Invoke-SsmRetry -What ("Reading sharing links of item {0}" -f $it.Id) -Permanent { param($e) Test-SsmItemGone $e } -Action {
+                    $links = @(Invoke-SsmRetry -What ("Reading sharing links of item {0}" -f $it.Id) -Kind 'Links' -Permanent { param($e) Test-SsmItemGone $e } -Action {
                         if ($isFolder) { Get-PnPFolderSharingLink -Folder $fileRef -ErrorAction Stop }
                         else { Get-PnPFileSharingLink -Identity $fileRef -ErrorAction Stop }
                     })

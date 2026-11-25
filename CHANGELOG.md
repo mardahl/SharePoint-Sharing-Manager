@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- New: every scan run (`S` / `X`) now ends with one `INFO` log line, "Scan
+  stats", with the number of targets, requests, wall time and requests per
+  second, plus the count, total seconds, average and maximum duration for each
+  kind of read (site, lists, library root, item count, permission state, items
+  page, role assignments, sharing links, link dates) and how many attempts
+  failed. It contains no URLs or names. Nothing about what is scanned or
+  reported changes. See "How do I read the Scan stats log line?" in the wiki.
 - Fix: locked or inaccessible sites and OneDrives (LockState other than
   `Unlock`) were dropped from the enumerated list with only a count in the
   log. They cannot be scanned, but they were invisible. Each one is now logged
