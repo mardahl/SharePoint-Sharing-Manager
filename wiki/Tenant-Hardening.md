@@ -12,7 +12,7 @@ Keys: `Enter` loads the posture, `R` refreshes, and digits or `Enter` change the
 | `OneDriveSharingCapability` | External sharing level for OneDrive | Must be <= SharePoint |
 | `DefaultSharingLinkType` | Link type pre-selected in the sharing dialog | `AnonymousAccess` = "Anyone" |
 | `DefaultLinkPermission` | Permission pre-selected in the sharing dialog | View/Edit |
-| `RequireAnonymousLinksExpireInDays` | Expiration for anonymous ("Anyone") links | Guest/org links unaffected; `0`/blank = never |
+| `RequireAnonymousLinksExpireInDays` | Expiration for anonymous ("Anyone") links | Org-link and guest expiry are separate settings; `0`/blank = never |
 | `SharingDomainRestrictionMode` | Limit sharing by domain (AllowList/BlockList) | Domain lists editable in the SPO admin UI |
 | `FileAnonymousLinkType` | Default permission for anonymous file links | View/Edit |
 | `FolderAnonymousLinkType` | Default permission for anonymous folder links | View/Edit |
@@ -27,6 +27,12 @@ Keys: `Enter` loads the posture, `R` refreshes, and digits or `Enter` change the
 | `ShowAllUsersClaim` | Show "All Users (x)" org-wide claims in the People Picker | |
 | `ShowEveryoneExceptExternalUsersClaim` | Show EEEU in the People Picker | |
 | `AllowEveryoneExceptExternalUsersClaimInPrivateSite` | Allow the EEEU claim in private sites | |
+| `CoreOrganizationSharingLinkMaxExpirationInDays`, `OneDriveOrganizationSharingLinkMaxExpirationInDays` | Longest a new "People in your organization" link may live, for SharePoint sites and for OneDrive | 7-720 days, `0` = never. No CIS recommendation |
+| `CoreOrganizationSharingLinkRecommendedExpirationInDays`, `OneDriveOrganizationSharingLinkRecommendedExpirationInDays` | Days suggested in the sharing dialog for those links | Not above the maximum. No CIS recommendation |
+| `CoreAnyoneSharingLinkMaxExpirationInDays`, `OneDriveAnyoneSharingLinkMaxExpirationInDays` | Longest a new Anyone link may live, for SharePoint sites and for OneDrive | 1-730 days, `0` = never. No CIS recommendation |
+| `CoreAnyoneSharingLinkRecommendedExpirationInDays`, `OneDriveAnyoneSharingLinkRecommendedExpirationInDays` | Days suggested in the sharing dialog for Anyone links | Not above the maximum. No CIS recommendation |
+
+The eight link-expiration rows are new and show a blank value on a tenant that does not expose them. Only links created after a limit is set get an expiry date; Microsoft's documentation says an older "People in your organization" link is checked against its creation date the next time someone uses it. These rows are not part of the CIS baseline: the benchmark text this tool follows (v5.0.0) has no recommended value for them, and Microsoft publishes only the allowed ranges.
 
 Sharing-capability values are shown with the SharePoint admin UI wording alongside the internal enum (for example `ExternalUserAndGuestSharing (Anyone)`), both in the posture view and the value picker.
 

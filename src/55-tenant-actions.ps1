@@ -21,7 +21,7 @@ $script:TenantSettings = @(
     @{ Prop='OneDriveSharingCapability';         Values=@('Disabled','ExistingExternalUserSharingOnly','ExternalUserSharingOnly','ExternalUserAndGuestSharing'); Note='SPO admin UI: Sharing > External sharing > OneDrive (must be <= SharePoint).' },
     @{ Prop='DefaultSharingLinkType';            Values=@('None','Direct','Internal','AnonymousAccess'); Note='Link type pre-selected in the sharing dialog (AnonymousAccess = "Anyone").' },
     @{ Prop='DefaultLinkPermission';             Values=@('None','View','Edit'); Note='Permission pre-selected in the sharing dialog.' },
-    @{ Prop='RequireAnonymousLinksExpireInDays'; Values=@(); Note='Expiration for ANONYMOUS (Anyone) links only; guest/org links unaffected. 0/blank = never.' },
+    @{ Prop='RequireAnonymousLinksExpireInDays'; Values=@(); Note='Expiration for ANONYMOUS (Anyone) links. Org-link and guest expiry are separate settings below. 0/blank = never.' },
     @{ Prop='SharingDomainRestrictionMode';      Values=@('None','AllowList','BlockList'); Note='Limit sharing by domain (AllowList/BlockList); lists editable in SPO admin UI.' },
     @{ Prop='FileAnonymousLinkType';             Values=@('None','View','Edit'); Note='Default permission for anonymous file links (View/Edit).' },
     @{ Prop='FolderAnonymousLinkType';           Values=@('None','View','Edit'); Note='Default permission for anonymous folder links (View/Edit).' },
@@ -40,7 +40,20 @@ $script:TenantSettings = @(
     @{ Prop='ShowEveryoneClaim';                              Values=@('True','False'); Note='Show "Everyone" in People Picker (False = hidden, recommended).' },
     @{ Prop='ShowAllUsersClaim';                              Values=@('True','False'); Note='Show "All Users (x)" org-wide claims in People Picker.' },
     @{ Prop='ShowEveryoneExceptExternalUsersClaim';           Values=@('True','False'); Note='Show "Everyone except external users" (EEEU) in People Picker.' },
-    @{ Prop='AllowEveryoneExceptExternalUsersClaimInPrivateSite'; Values=@('True','False'); Note='Allow EEEU claim in private sites specifically.' }
+    @{ Prop='AllowEveryoneExceptExternalUsersClaimInPrivateSite'; Values=@('True','False'); Note='Allow EEEU claim in private sites specifically.' },
+    # Sharing-link expiration (SharePoint sites and OneDrive are set separately). Max = the longest
+    # a NEW link may live; Recommended = the number suggested in the sharing dialog (not above Max).
+    # Only links created after the policy is set get a date; an older link is checked against its
+    # creation date when it is next used. CIS has no recommended value for any of these, so none is
+    # applied by the CIS baseline and none gets a CIS badge. 0 = no limit.
+    @{ Prop='CoreOrganizationSharingLinkMaxExpirationInDays';             Values=@(); Note='"People in your organization" links, SharePoint sites: max days (7-720, 0 = never). No CIS recommendation.' },
+    @{ Prop='CoreOrganizationSharingLinkRecommendedExpirationInDays';     Values=@(); Note='"People in your organization" links, SharePoint sites: suggested days (7-720, not above max). No CIS recommendation.' },
+    @{ Prop='OneDriveOrganizationSharingLinkMaxExpirationInDays';         Values=@(); Note='"People in your organization" links, OneDrive: max days (7-720, 0 = never). No CIS recommendation.' },
+    @{ Prop='OneDriveOrganizationSharingLinkRecommendedExpirationInDays'; Values=@(); Note='"People in your organization" links, OneDrive: suggested days (7-720, not above max). No CIS recommendation.' },
+    @{ Prop='CoreAnyoneSharingLinkMaxExpirationInDays';                   Values=@(); Note='Anyone links, SharePoint sites: max days (1-730, 0 = never). No CIS recommendation.' },
+    @{ Prop='CoreAnyoneSharingLinkRecommendedExpirationInDays';           Values=@(); Note='Anyone links, SharePoint sites: suggested days (1-730, not above max). No CIS recommendation.' },
+    @{ Prop='OneDriveAnyoneSharingLinkMaxExpirationInDays';               Values=@(); Note='Anyone links, OneDrive: max days (1-730, 0 = never). No CIS recommendation.' },
+    @{ Prop='OneDriveAnyoneSharingLinkRecommendedExpirationInDays';       Values=@(); Note='Anyone links, OneDrive: suggested days (1-730, not above max). No CIS recommendation.' }
 )
 
 function Get-TenantPosture {
@@ -76,6 +89,13 @@ function Get-TenantPosture {
         ShowEveryoneExceptExternalUsersClaim           = [string]$t.ShowEveryoneExceptExternalUsersClaim
         AllowEveryoneExceptExternalUsersClaimInPrivateSite = [string]$t.AllowEveryoneExceptExternalUsersClaimInPrivateSite
         CheckedAt                         = Get-Date
+    }
+    # Link-expiration settings only exist on newer tenants/modules: read them
+    # tolerantly (blank when absent) so an older tenant still loads.
+    foreach ($s in $script:TenantSettings) {
+        if ($s.Prop -match 'Sharing(Link)?(Max|Recommended)ExpirationInDays$') {
+            $script:Tabs[2].Posture[$s.Prop] = [string](Get-SsmProp $t $s.Prop)
+        }
     }
     $script:Tabs[2].Loaded = $true
     Write-SsmLog -Message 'Tenant sharing posture loaded.' -Level OK

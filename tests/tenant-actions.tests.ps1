@@ -31,7 +31,48 @@ Invoke-SsmTest 'TenantSettings covers link/access expiration and resharing beyon
     foreach ($expected in @('ExternalUserExpirationRequired','ExternalUserExpireInDays','PreventExternalUsersFromResharing','SharingDomainRestrictionMode','FileAnonymousLinkType','FolderAnonymousLinkType')) {
         if ($props -notcontains $expected) { throw "TenantSettings is missing $expected" }
     }
-    if (@($script:TenantSettings).Count -ne 19) { throw "expected 19 tenant settings, got $(@($script:TenantSettings).Count)" }
+    if (@($script:TenantSettings).Count -ne 27) { throw "expected 27 tenant settings, got $(@($script:TenantSettings).Count)" }
+}
+
+$script:LinkExpiryProps = @(
+    'CoreOrganizationSharingLinkMaxExpirationInDays', 'CoreOrganizationSharingLinkRecommendedExpirationInDays',
+    'OneDriveOrganizationSharingLinkMaxExpirationInDays', 'OneDriveOrganizationSharingLinkRecommendedExpirationInDays',
+    'CoreAnyoneSharingLinkMaxExpirationInDays', 'CoreAnyoneSharingLinkRecommendedExpirationInDays',
+    'OneDriveAnyoneSharingLinkMaxExpirationInDays', 'OneDriveAnyoneSharingLinkRecommendedExpirationInDays')
+
+Invoke-SsmTest 'TenantSettings has the org-link and Anyone-link expiration settings, free-text days, marked as having no CIS recommendation' {
+    foreach ($p in $script:LinkExpiryProps) {
+        $s = @($script:TenantSettings | Where-Object { $_.Prop -eq $p })
+        Assert-Equal 1 $s.Count "row for $p"
+        Assert-Equal 0 @($s[0].Values).Count "$p is a number of days (free text)"
+        if ($s[0].Note -notmatch 'No CIS recommendation') { throw "$p note does not say there is no CIS recommendation: $($s[0].Note)" }
+        Assert-Equal '' "$(Test-CisAlignment $p '30')" "$p must not get a CIS badge"
+    }
+}
+
+Invoke-SsmTest 'The anyone-link expiry note no longer says organization links are unaffected' {
+    $note = @($script:TenantSettings | Where-Object { $_.Prop -eq 'RequireAnonymousLinksExpireInDays' })[0].Note
+    if ($note -match 'org links unaffected') { throw "outdated note: $note" }
+}
+
+Invoke-SsmTest 'Get-TenantPosture reads the link expiration settings, and tolerates a tenant object that lacks them' {
+    function Start-LoadSpinner {}; function Stop-LoadSpinner {}
+    function Write-ProgressModal { $null = $args }   # accepts and ignores the named parameters
+    function Connect-SsmAdmin { $true }
+    Reset-TestUiState
+    function Get-PnPTenant {
+        # every property the posture already read before this change, plus two of the new ones
+        $o = [ordered]@{}
+        foreach ($s in $script:TenantSettings) { if ($script:LinkExpiryProps -notcontains $s.Prop) { $o[$s.Prop] = 'x' } }
+        $o['CoreOrganizationSharingLinkMaxExpirationInDays'] = 90
+        $o['OneDriveAnyoneSharingLinkMaxExpirationInDays'] = 0
+        [pscustomobject]$o
+    }
+    [void](Get-TenantPosture)
+    Assert-Equal '90' $script:Tabs[2].Posture['CoreOrganizationSharingLinkMaxExpirationInDays']
+    Assert-Equal '0' $script:Tabs[2].Posture['OneDriveAnyoneSharingLinkMaxExpirationInDays']
+    Assert-Equal '' $script:Tabs[2].Posture['OneDriveOrganizationSharingLinkMaxExpirationInDays'] 'absent on this tenant object: blank, no exception'
+    foreach ($p in $script:LinkExpiryProps) { if (-not $script:Tabs[2].Posture.ContainsKey($p)) { throw "posture lacks $p" } }
 }
 
 Invoke-SsmTest 'SharingCapabilityLabels maps every enum value to the SPO admin UI wording' {

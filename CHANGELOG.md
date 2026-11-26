@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- New: the Sharing tab now shows and changes the sharing-link expiration
+  settings for "People in your organization" links and for Anyone links, each
+  as a maximum and a recommended number of days, separately for SharePoint
+  sites and OneDrive (8 rows). They carry no CIS badge and are not part of the
+  CIS baseline, because the benchmark text this tool follows (v5.0.0) has no
+  recommended value for them. A tenant that does not expose them shows a blank
+  value. The note on `RequireAnonymousLinksExpireInDays` no longer says org
+  links are unaffected.
+
 - Change: an "Everyone except external users" (EEEU) grant that carries only
   Read on the root of a My Sites host, a Search center or the tenant App
   catalog (templates `SPSMSITEHOST#0`, `SRCHCEN#0`, `APPCATALOG#0`) is no
