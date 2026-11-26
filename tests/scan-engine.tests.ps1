@@ -115,6 +115,9 @@ $script:DefineScanStubs = {
     if (-not (Get-Variable -Name ExcludedUrlNames -Scope Script -ErrorAction SilentlyContinue)) {
         $script:ExcludedUrlNames = @('SiteAssets', 'SitePages')
     }
+    if (-not (Get-Variable -Name SystemSiteTemplates -Scope Script -ErrorAction SilentlyContinue)) {
+        $script:SystemSiteTemplates = @('SPSMSITEHOST#0', 'SRCHCEN#0', 'APPCATALOG#0')   # mirrors src/00-globals.ps1 (checked by a test below)
+    }
     $script:SsmBulkFailures = @{}
     function New-ScanItem { param([int]$Id, [string]$Leaf, [bool]$Unique = $false, [int]$Type = 0)
         [pscustomobject]@{ Id = $Id; FileRef = "/sites/x/$Leaf"; FileLeafRef = $Leaf; FSObjType = $Type; HasUniqueRoleAssignments = $Unique } }
@@ -138,6 +141,9 @@ $script:DefineScanStubs = {
         LinkCalls = @{}      # item FileRef -> number of sharing-link reads
         CountFail = 0        # number of ItemCount reads that still fail
         LibAUnique = $false  # Library A has its own permissions, with one EEEU grant
+        WebTemplateId = ''   # site template the site read reports, e.g. 'SRCHCEN#0' (empty: the read carries none)
+        WebGrantKind  = 2    # RoleTypeKind of the site-level grant (2 = Read, 3 = Contribute)
+        WebGrantLogin = ''   # login of the site-level grant (empty: Everyone except external users)
         RootCalls = @{ 'Library A' = 0; 'Library B' = 0 }
         Sleeps    = [System.Collections.Generic.List[object]]::new()
         Log       = [System.Collections.Generic.List[string]]::new()
@@ -152,10 +158,11 @@ $script:DefineScanStubs = {
     function Get-SimList { param([string]$Url) $script:Sim.Lists[[int][regex]::Match($Url, "guid'0{8}-0{4}-0{4}-0{4}-(\d{12})'").Groups[1].Value - 1] }
     function Get-SimListUnique { param($List) return ($List.Title -eq 'Library A' -and $script:Sim.LibAUnique) }
     function Use-LegacyScan { $script:SsmBulkFailures = @{ Web = 3; Lists = 3 } }
-    function New-SimGrant { param([int]$PrincipalId)
+    function New-SimGrant { param([int]$PrincipalId, [int]$Kind = 2, [string]$Login = '')
+        $login = if ($Login) { $Login } else { 'c:0-.f|rolemanager|spo-grid-all-users/00000000-0000-0000-0000-000000000000' }
         [pscustomobject]@{ PrincipalId = $PrincipalId
-            Member = [pscustomobject]@{ LoginName = 'c:0-.f|rolemanager|spo-grid-all-users/00000000-0000-0000-0000-000000000000'; Title = 'Everyone except external users' }
-            RoleDefinitionBindings = @([pscustomobject]@{ Name = 'Read'; RoleTypeKind = 2 }) } }
+            Member = [pscustomobject]@{ LoginName = $login; Title = 'Everyone except external users' }
+            RoleDefinitionBindings = @([pscustomobject]@{ Name = $(if ($Kind -eq 2) { 'Read' } else { 'Contribute' }); RoleTypeKind = $Kind }) } }
     function Wait-SsmRetry { param([int]$Seconds) $script:Sim.Sleeps.Add($Seconds) }
     function Write-SsmLog { param([string]$Message, [string]$Level = 'INFO') $script:Sim.Log.Add("[$Level] $Message") }
     function Write-SsmErrorLog { param([string]$Context, $ErrorRecord) $script:Sim.Log.Add("[ERROR] $Context | $($ErrorRecord.Exception.Message)") }
@@ -210,11 +217,12 @@ $script:DefineScanStubs = {
         if ($Url -match '^/_api/web\?') {
             if ($script:Sim.WebBulkOff) { return [pscustomobject]@{} }
             $w = [ordered]@{ Url = 'https://contoso.sharepoint.com/sites/x'; Title = 'Site X'; HasUniqueRoleAssignments = $script:Sim.WebUnique }
+            if ($script:Sim.WebTemplateId) { $tp = $script:Sim.WebTemplateId -split '#'; $w['WebTemplate'] = $tp[0]; $w['Configuration'] = [int]$tp[1] }
             foreach ($p in $script:Sim.WebOmit) { $w.Remove($p) }
             return [pscustomobject]$w
         }
         if ($Url -match '^https://.*/_api/web\?\$select=HasUniqueRoleAssignments') { return [pscustomobject]@{ HasUniqueRoleAssignments = $script:Sim.WebUnique } }
-        if ($Url -match '/_api/web/roleassignments\?') { return [pscustomobject]@{ value = @((New-SimGrant 5)) } }
+        if ($Url -match '/_api/web/roleassignments\?') { return [pscustomobject]@{ value = @((New-SimGrant 5 $script:Sim.WebGrantKind $script:Sim.WebGrantLogin)) } }
         # bulk lists read (paged)
         if ($Url -match '/_api/web/lists\?') {
             if ($script:Sim.BulkOff) { return [pscustomobject]@{} }
@@ -875,6 +883,58 @@ Invoke-SsmTest 'Bulk reads: a site answer without Url or Title falls back to Get
     Assert-Equal 1 @($out | Where-Object { $_.Location -eq 'Web' }).Count 'the site grant is not lost'
     Assert-Equal 0 @($script:Sim.Calls | Where-Object { $_ -eq 'CSOM Get-PnPWeb' }).Count
     Assert-Equal 1 @($script:Sim.Calls | Where-Object { $_ -match '^REST https://.*/_api/web\?\$select=HasUniqueRoleAssignments' }).Count
+}
+
+# --- System sites: EEEU Read on their root is by design, not an oversharing finding ---
+Invoke-SsmTest 'System sites: the real src/00-globals.ps1 lists exactly the three system templates the tests assume' {
+    $text = Get-Content -LiteralPath (Join-Path (Split-Path $PSScriptRoot -Parent) 'src/00-globals.ps1') -Raw
+    $m = [regex]::Match($text, '\$script:SystemSiteTemplates\s*=\s*@\(([^)]*)\)')
+    Assert-Equal $true $m.Success
+    $found = @([regex]::Matches($m.Groups[1].Value, "'([^']+)'") | ForEach-Object { $_.Groups[1].Value } | Sort-Object)
+    Assert-Equal 'APPCATALOG#0,SPSMSITEHOST#0,SRCHCEN#0' ($found -join ',')
+}
+
+Invoke-SsmTest 'System sites: EEEU Read on the root of a My Sites host, Search center or App catalog is not flagged (template from the target)' {
+    foreach ($tpl in 'SPSMSITEHOST#0', 'SRCHCEN#0', 'APPCATALOG#0') {
+        . $script:DefineScanStubs
+        $script:Sim.WebUnique = $true
+        $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x' -Template $tpl
+        $out = @(Invoke-SiteScan -Target $t -Categories @('EEEU'))
+        Assert-Equal 0 @($out | Where-Object { $_.Location -eq 'Web' }).Count "template $tpl"
+        if (@($script:Sim.Log | Where-Object { $_ -match '^\[INFO\] Not flagged' -and $_ -match [regex]::Escape($tpl) }).Count -lt 1) { throw "no 'Not flagged' log line for $tpl : $($script:Sim.Log -join ' / ')" }
+    }
+}
+
+Invoke-SsmTest 'System sites: a target without a template is recognised by the template the site read reports' {
+    . $script:DefineScanStubs
+    $script:Sim.WebUnique = $true
+    $script:Sim.WebTemplateId = 'SRCHCEN#0'
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x'   # URL typed or imported: no template known
+    $out = @(Invoke-SiteScan -Target $t -Categories @('EEEU'))
+    Assert-Equal 0 @($out | Where-Object { $_.Location -eq 'Web' }).Count
+}
+
+Invoke-SsmTest 'System sites: only Read is allowed - EEEU with Contribute on a system site is still flagged' {
+    . $script:DefineScanStubs
+    $script:Sim.WebUnique = $true
+    $script:Sim.WebGrantKind = 3
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x' -Template 'SPSMSITEHOST#0'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('EEEU'))
+    Assert-Equal 1 @($out | Where-Object { $_.Location -eq 'Web' -and $_.CategoryKey -eq 'EEEU' }).Count
+}
+
+Invoke-SsmTest 'System sites: Everyone is still flagged on a system site, and EEEU Read is still flagged on an ordinary site' {
+    . $script:DefineScanStubs
+    $script:Sim.WebUnique = $true
+    $script:Sim.WebGrantLogin = 'c:0(.s|true'
+    $t = New-Target -Url 'https://contoso.sharepoint.com/sites/x' -Template 'SPSMSITEHOST#0'
+    $out = @(Invoke-SiteScan -Target $t -Categories @('Everyone'))
+    Assert-Equal 1 @($out | Where-Object { $_.Location -eq 'Web' -and $_.CategoryKey -eq 'Everyone' }).Count 'Everyone on a system site'
+    . $script:DefineScanStubs
+    $script:Sim.WebUnique = $true
+    $t2 = New-Target -Url 'https://contoso.sharepoint.com/sites/x' -Template 'STS#3'
+    $out2 = @(Invoke-SiteScan -Target $t2 -Categories @('EEEU'))
+    Assert-Equal 1 @($out2 | Where-Object { $_.Location -eq 'Web' -and $_.CategoryKey -eq 'EEEU' }).Count 'EEEU Read on an ordinary site'
 }
 
 Invoke-SsmTest 'Bulk reads: a locked site still fails with the Get-PnPWeb error, so it is still reported as locked' {

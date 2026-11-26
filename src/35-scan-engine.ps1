@@ -178,25 +178,27 @@ function Get-SsmSiteInfo {
     # the answer did not carry HasUniqueRoleAssignments: the caller then reads it.
     # One attempt only: a locked site fails here too and must not wait for retries
     # before Get-PnPWeb reports it.
-    $web = $null; $unique = $null; $bulkTried = $false
+    $web = $null; $unique = $null; $bulkTried = $false; $template = $null
     if (Test-SsmBulkOk 'Web') {
         $bulkTried = $true
         try {
-            $w = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Invoke-PnPSPRestMethod -Url "/_api/web?`$select=Url,Title,HasUniqueRoleAssignments" -Method Get }
+            $w = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Invoke-PnPSPRestMethod -Url "/_api/web?`$select=Url,Title,HasUniqueRoleAssignments,WebTemplate,Configuration" -Method Get }
             $url = [string](Get-SsmProp $w 'Url'); $title = Get-SsmProp $w 'Title'
             if ($url.Trim() -and $null -ne $title) {
                 $web = [pscustomobject]@{ Url = $url; Title = [string]$title }
                 $hu = Get-SsmProp $w 'HasUniqueRoleAssignments'
                 if ($hu -is [bool]) { $unique = $hu }
+                $wt = [string](Get-SsmProp $w 'WebTemplate'); $cf = Get-SsmProp $w 'Configuration'
+                if ($wt.Trim() -and $null -ne $cf) { $template = '{0}#{1}' -f $wt.Trim(), $cf }   # same form as the tenant listing, e.g. SRCHCEN#0
             }
         } catch {
             Write-SsmLog -Message ("Bulk read of the site failed ({0}); using the per-call read." -f $_.Exception.Message) -Level INFO
         }
     }
-    if ($web) { Set-SsmBulkResult 'Web' $true; return [pscustomobject]@{ Web = $web; Unique = $unique } }
+    if ($web) { Set-SsmBulkResult 'Web' $true; return [pscustomobject]@{ Web = $web; Unique = $unique; Template = $template } }
     $web = Invoke-SsmRetry -Kind 'Web' -MaxAttempts 1 -What 'Reading the site' -Action { Get-PnPWeb }
     if ($bulkTried) { Set-SsmBulkResult 'Web' $false }
-    return [pscustomobject]@{ Web = $web; Unique = $null }
+    return [pscustomobject]@{ Web = $web; Unique = $null; Template = $null }
 }
 
 function New-SsmLibraryDesc {
@@ -335,7 +337,9 @@ function Get-SharingLinkInfo {
 function Add-GrantsRest {
     # Read a roleassignments collection via REST and add bad direct grants to $Bag.
     # Retried; throws if the read still fails (the caller marks the scan incomplete).
-    param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag, [int]$Reach = 1)
+    # -AllowEeeuRead: the site is a system site (see $script:SystemSiteTemplates); an EEEU grant
+    # that carries only Read (RoleTypeKind 2, language-independent) is by design and not reported.
+    param($RaUrl, $Site, $Location, $Name, $Path, $ListId, $ItemId, [string[]]$Categories, $Bag, [int]$Reach = 1, [switch]$AllowEeeuRead, [string]$Template = '')
     $resp = Invoke-SsmRetry -What 'Reading role assignments' -Kind 'Grants' -ArgumentList $RaUrl -Action { param($u) Invoke-PnPSPRestMethod -Url $u -Method Get }
     foreach ($ra in @($resp.value)) {
         $key = Get-PrincipalCategory -Login $ra.Member.LoginName -Title $ra.Member.Title
@@ -346,6 +350,10 @@ function Add-GrantsRest {
         # removing the real leaf grant makes SharePoint clean the scaffolding automatically.
         $realRoles = @(@($ra.RoleDefinitionBindings) | Where-Object { [int]$_.RoleTypeKind -ne 1 })
         if ($realRoles.Count -eq 0) { continue }
+        if ($AllowEeeuRead -and $key -eq 'EEEU' -and @($realRoles | Where-Object { [int]$_.RoleTypeKind -ne 2 }).Count -eq 0) {
+            Write-SsmLog -Message ("Not flagged: 'Everyone except external users' has Read on a system site ({0}, template {1})." -f $Site, $Template) -Level INFO
+            continue
+        }
         $roles = ($realRoles | ForEach-Object { $_.Name }) -join ';'
         $principal = [string]$ra.Member.Title
         if ($key -eq 'GuestGrant') { $principal += ' [guest]' }
@@ -399,7 +407,11 @@ function Invoke-SiteScan {
             $webUnique = $info.Unique
             if ($null -eq $webUnique) { $webUnique = Get-RestUnique "$base/_api/web?`$select=HasUniqueRoleAssignments" }
             if ($webUnique) {
-                Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0
+                # Template: from the tenant listing (the target) or, when the URL was typed or imported, from the site read.
+                $tpl = [string]$Target['Template']
+                if (-not ($script:SystemSiteTemplates -contains $tpl) -and $info.Template) { $tpl = [string]$info.Template }
+                $isSystemSite = ($script:SystemSiteTemplates -contains $tpl)
+                Add-GrantsRest "$base/_api/web/roleassignments?$raSelect" $site 'Web' $web.Title $base $null $null $Categories $bag 0 -AllowEeeuRead:$isSystemSite -Template $tpl
             }
         }
     } catch { Set-ScanIncomplete -Target $Target -Part 'site-level permissions unreadable, direct grants on the site not checked' -ErrorRecord $_ }

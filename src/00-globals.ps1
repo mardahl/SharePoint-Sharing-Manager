@@ -56,6 +56,12 @@ $script:RuleCategories = [ordered]@{
     Everyone      = 'Everyone grant'
 }
 
+# System sites (My Sites host, Search center, tenant App catalog) are set up with
+# "Everyone except external users" having Read on their root by design (the apps
+# served from them, such as SPFx code and Power Automate pieces, need it). EEEU
+# Read on the root of these templates is not reported as oversharing.
+$script:SystemSiteTemplates = @('SPSMSITEHOST#0', 'SRCHCEN#0', 'APPCATALOG#0')
+
 # System libraries skipped by INVARIANT URL leaf (language-independent)
 $script:ExcludedUrlNames = @('SiteAssets','SitePages','Style Library','FormServerTemplates','Teams Wiki Data')
 

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Change: an "Everyone except external users" (EEEU) grant that carries only
+  Read on the root of a My Sites host, a Search center or the tenant App
+  catalog (templates `SPSMSITEHOST#0`, `SRCHCEN#0`, `APPCATALOG#0`) is no
+  longer reported as a finding, so a revoke run no longer removes it. These
+  system sites commonly carry it, and removing it can break SPFx web parts
+  and Power Automate pieces. EEEU with any other permission level there, the
+  Everyone claim, and EEEU on any other site are still reported. The
+  template comes from the tenant listing or, for a typed or imported URL,
+  from the site read. Each skipped grant is logged as "Not flagged".
+
 - Faster scans, same results: the site name and its own-permission flag are
   now read with one request instead of two, and all lists of a site, with each
   library's root folder, item count and own-permission flag, with one request
