@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-26
+
 - New: the Sharing tab now shows and changes the sharing-link expiration
   settings for "People in your organization" links and for Anyone links, each
   as a maximum and a recommended number of days, separately for SharePoint
